@@ -1,0 +1,28 @@
+"""Hexagon backend manifest。"""
+
+from __future__ import annotations
+
+from tilelang.backend.device_codegen import DeviceCodegen
+from tilelang.backend.host_codegen import STANDARD_HOST_CODEGENS
+from tilelang.backend.module import BackendModule, register_backend
+from tilelang.backend.pass_pipeline import PassPipeline
+
+from . import codegen, execution_backend, pipeline
+
+
+BACKEND = register_backend(
+    BackendModule(
+        name="hexagon",
+        target_kinds=("hexagon",),
+        pipelines={"hexagon": PassPipeline("hexagon", pipeline.HexagonPassPipelineBody)},
+        device_codegens={
+            "hexagon": DeviceCodegen(
+                "hexagon",
+                build=codegen.build_hexagon,
+                build_without_compile=codegen.build_hexagon_without_compile,
+            )
+        },
+        execution_backends=execution_backend.EXECUTION_BACKENDS,
+        host_codegens=STANDARD_HOST_CODEGENS,
+    )
+)

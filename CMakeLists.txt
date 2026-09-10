@@ -472,6 +472,7 @@ endif()
 # Backend-local CMake files own native source lists, stubs, include paths, and
 # compile definitions. Top-level CMake only selects and delegates.
 include("${CMAKE_CURRENT_SOURCE_DIR}/src/cpu/CMakeLists.txt")
+include("${CMAKE_CURRENT_SOURCE_DIR}/src/hexagon/CMakeLists.txt")
 include("${CMAKE_CURRENT_SOURCE_DIR}/src/cuda/CMakeLists.txt")
 include("${CMAKE_CURRENT_SOURCE_DIR}/src/rocm/CMakeLists.txt")
 include("${CMAKE_CURRENT_SOURCE_DIR}/src/metal/CMakeLists.txt")
