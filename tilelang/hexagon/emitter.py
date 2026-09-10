@@ -417,7 +417,19 @@ class HexagonEmitter(PyStmtExprVisitor):
                 wv = ctx.worker_var or "job"
                 return [self._ind(indent, f"// TIR launch_thread(blockIdx.x, extent={extent}) -> worker-pooled heads"),
                         self._ind(indent, f"const int {var} = {wv};")] + body
-            bound = ("1" if self.gdn_mode == "escape" else ("(total + PANEL - 1) / PANEL" if (self.has_vector_kernel or not self.has_gemm) else "N / NP"))
+            if self.gdn_mode == "escape":
+                bound = "1"
+            elif self.has_vector_kernel or not self.has_gemm:
+                bound = "(total + PANEL - 1) / PANEL"
+            elif self._legacy_gemm_mode():
+                bound = "N / NP"
+            else:
+                bound = "(N + NP - 1) / NP"
+                body = [
+                    self._ind(indent + 1, f"int n_rem_{var} = N - {var} * NP;"),
+                    self._ind(indent + 1, f"int nct = (n_rem_{var} < NP ? n_rem_{var} : NP) / 32;"),
+                    self._ind(indent + 1, "(void)nct;  // 部分配置下 tail 逻辑不引用,防 -Werror"),
+                ] + body
             return [self._ind(indent, f"// TIR launch_thread(blockIdx.x, extent={extent})"),
                     self._ind(indent, f"for (int {var} = 0; {var} < {bound}; {var}++) {{")] + body + [self._ind(indent, "}")]
         if "threadIdx" in tname or var in ("tx", "ty", "tz"):
@@ -441,9 +453,19 @@ class HexagonEmitter(PyStmtExprVisitor):
             raise HexagonEmitError(f"白名单: 暂只支持 min=0 的 For, {var} min={minv}{_loc(op)}")
         # For the GEMM row-block loop, keep runtime M/block_M rather than the
         # anchor shape's static trip count so one generated skel covers §5 shapes.
-        bound = "M / 32" if self._looks_like_row_loop(op) else str(extent)
-        row = var if self._looks_like_row_loop(op) else ctx.row_var
+        is_row_loop = self._looks_like_row_loop(op)
+        if is_row_loop and not self._legacy_gemm_mode():
+            bound = "(M + GM_BLOCK_M - 1) / GM_BLOCK_M"
+        else:
+            bound = "M / 32" if is_row_loop else str(extent)
+        row = var if is_row_loop else ctx.row_var
         body = self._lower_stmt(op.body, _Ctx(block_var=ctx.block_var, row_var=row, worker_var=ctx.worker_var), indent + 1)
+        if is_row_loop and not self._legacy_gemm_mode():
+            body = [
+                self._ind(indent + 1, f"int m_rem_{var} = M - {var} * GM_BLOCK_M;"),
+                self._ind(indent + 1, f"int mbt = (m_rem_{var} < GM_BLOCK_M ? m_rem_{var} : GM_BLOCK_M) / 32;"),
+                self._ind(indent + 1, "(void)mbt;  // 同上,防 -Werror"),
+            ] + body
         return [self._ind(indent, f"for (int {var} = 0; {var} < {bound}; {var}++) {{")] + body + [self._ind(indent, "}")]
 
     def _lower_if(self, op: IfThenElse, ctx: _Ctx, indent: int) -> list[str]:
@@ -541,20 +563,35 @@ class HexagonEmitter(PyStmtExprVisitor):
             dst = self._buffer_from_data_arg(call.args[2]) if len(call.args) > 2 else None
             if self._is_gemm_b_operand(dst):
                 self.has_copy = True
+                w_base = "(size_t)bx * nct * kt" if self._legacy_gemm_mode() else "(size_t)bx * (NP / 32) * kt"
                 return [self._ind(indent, "t0 = HAP_perf_get_qtimer_count();"),
                         self._ind(indent, "if (!(abl & 1))"),
-                        self._ind(indent + 1, "hrt_copy_pooled(V + GM_WA, (const uint8_t *)w + (size_t)bx * nct * kt * HRT_TILE_BYTES,"),
+                        self._ind(indent + 1, f"hrt_copy_pooled(V + GM_WA, (const uint8_t *)w + {w_base} * HRT_TILE_BYTES,"),
                         self._ind(indent + 2, "(size_t)nct * kt * HRT_TILE_BYTES);"),
                         self._ind(indent, "prof[0] += (int32_t)(HAP_perf_get_qtimer_count() - t0);")]
             self.has_copy = True
             rv = ctx.row_var or "m"
             src = self._buffer_from_data_arg(call.args[1]) if len(call.args) > 1 else None
             src_ptr = self._buffer_ptr_c(src)
+            if self._legacy_gemm_mode():
+                return [self._ind(indent, "t0 = HAP_perf_get_qtimer_count();"),
+                        self._ind(indent, "if (!(abl & 2)) {"),
+                        self._ind(indent + 1, f"hrt_copy_128_dcfetch(V + GM_LIN, (const uint8_t *)({src_ptr} + (size_t){rv} * 32 * K), (size_t)32 * K * 2);"),
+                        self._ind(indent + 1, "hrt_mask_init();"),
+                        self._ind(indent + 1, "hrt_stage_act_hvx(V + GM_LIN, V + GM_ACT, K, kt, HRT_TILE_BYTES);"),
+                        self._ind(indent, "}"),
+                        self._ind(indent, "prof[1] += (int32_t)(HAP_perf_get_qtimer_count() - t0);")]
+            bm = self.block_M_hint or 32
+            if bm == 32:
+                stage = [self._ind(indent + 1, f"hrt_stage_act_hvx_direct((const uint8_t *)({src_ptr} + (size_t){rv} * GM_BLOCK_M * K), V + GM_ACT, K, kt, HRT_TILE_BYTES, 32);")]
+            else:
+                stage = [self._ind(indent + 1, "for (int rb = 0; rb < mbt; rb++)"),
+                         self._ind(indent + 2, f"hrt_stage_act_hvx_direct((const uint8_t *)({src_ptr} + ((size_t){rv} * GM_BLOCK_M + rb * 32) * K),"),
+                         self._ind(indent + 3, "V + GM_ACT + (size_t)rb * kt * HRT_TILE_BYTES, K, kt, HRT_TILE_BYTES, 32);")]
             return [self._ind(indent, "t0 = HAP_perf_get_qtimer_count();"),
                     self._ind(indent, "if (!(abl & 2)) {"),
-                    self._ind(indent + 1, f"hrt_copy_128_dcfetch(V + GM_LIN, (const uint8_t *)({src_ptr} + (size_t){rv} * 32 * K), (size_t)32 * K * 2);"),
                     self._ind(indent + 1, "hrt_mask_init();"),
-                    self._ind(indent + 1, "hrt_stage_act_hvx(V + GM_LIN, V + GM_ACT, K, kt, HRT_TILE_BYTES);"),
+                    *stage,
                     self._ind(indent, "}"),
                     self._ind(indent, "prof[1] += (int32_t)(HAP_perf_get_qtimer_count() - t0);")]
         if callee == "hexagon.copy_ddr":
@@ -684,7 +721,7 @@ class HexagonEmitter(PyStmtExprVisitor):
             lines = [f"hrt_tlgdn_state_update32({p(0)}, {p(1)}, {p(2)}, {p(3)});"]
         else:
             raise HexagonEmitError(f"白名单: 未支持的 GDN leaf {name}")
-        return [self._ind(indent, s) for s in lines]
+        return [self._ind(indent, s.replace("(&slot->eGC)", "&slot->eGC")) for s in lines]
 
     def _emit_vector_store(self, op: BufferStore, ctx: _Ctx, indent: int) -> list[str]:
         self.has_vector_kernel = True
@@ -1235,6 +1272,45 @@ class HexagonEmitter(PyStmtExprVisitor):
     def _emit_gemm_recipe(self, ctx: _Ctx, indent: int) -> list[str]:
         rv = ctx.row_var or "m"
         bv = ctx.block_var or "bx"
+        if not self._legacy_gemm_mode():
+            bm = self.block_M_hint or 32
+            rr_open = [] if bm == 32 else [self._ind(indent, "for (int rb = 0; rb < mbt; rb++) {")]
+            rr_close = [] if bm == 32 else [self._ind(indent, "}")]
+            rr = "0" if bm == 32 else "rb"
+            ii = indent if bm == 32 else indent + 1
+            return [
+                *rr_open,
+                self._ind(ii, "t0 = HAP_perf_get_qtimer_count();"),
+                self._ind(ii, "for (int c2 = 0; c2 < nct; c2++) {"),
+                self._ind(ii + 1, "if (!(abl & 4)) {"),
+                self._ind(ii + 2, "int e = hrt_acc_clear_f16();"),
+                self._ind(ii + 2, "if (e) return e;"),
+                self._ind(ii + 2, "for (int kb = 0; kb < kt; kb++) {"),
+                self._ind(ii + 3, f"e = hrt_hmx_mm_f16(V, GM_ACT + ((size_t){rr} * kt + kb) * HRT_TILE_BYTES,"),
+                self._ind(ii + 4, "GM_WA + ((size_t)c2 * kt + kb) * HRT_TILE_BYTES);"),
+                self._ind(ii + 3, "if (e) return e;"),
+                self._ind(ii + 2, "}"),
+                self._ind(ii + 2, "if (!(abl & 16)) {"),
+                self._ind(ii + 3, "e = hrt_acc_read_f16(V, g_v.CFG, GM_OUT + (size_t)(c2 & 1) * HRT_TILE_BYTES);"),
+                self._ind(ii + 3, "if (e) return e;"),
+                self._ind(ii + 2, "}"),
+                self._ind(ii + 1, "}"),
+                self._ind(ii + 1, "prof[2] += (int32_t)(HAP_perf_get_qtimer_count() - t0);"),
+                self._ind(ii + 1, "t0 = HAP_perf_get_qtimer_count();"),
+                self._ind(ii + 1, "if (!(abl & 8) && (c2 & 1)) {"),
+                self._ind(ii + 2, f"int ncol = {bv} * NP + (c2 - 1) * 32;"),
+                self._ind(ii + 2, "hrt_mask_init();"),
+                self._ind(ii + 2, f"hrt_unperm_pair_hvx(V + GM_OUT, V + GM_OUT + HRT_TILE_BYTES, C + ((size_t){rv} * GM_BLOCK_M + {rr} * 32) * N + ncol, N);"),
+                self._ind(ii + 1, "}"),
+                self._ind(ii, "}"),
+                self._ind(ii, "if (!(abl & 8) && (nct & 1)) {"),
+                self._ind(ii + 1, f"int ncol = {bv} * NP + (nct - 1) * 32;"),
+                self._ind(ii + 1, "hrt_mask_init();"),
+                self._ind(ii + 1, f"hrt_unperm_single_hvx(V + GM_OUT, C + ((size_t){rv} * GM_BLOCK_M + {rr} * 32) * N + ncol, N);"),
+                self._ind(ii, "}"),
+                self._ind(ii, "prof[3] += (int32_t)(HAP_perf_get_qtimer_count() - t0);"),
+                *rr_close,
+            ]
         return [
             self._ind(indent, "t0 = HAP_perf_get_qtimer_count();"),
             self._ind(indent, "for (int c2 = 0; c2 < nct; c2++) {"),
@@ -1392,7 +1468,10 @@ class HexagonEmitter(PyStmtExprVisitor):
             if len(shape) >= 2 and shape[0] and shape[1]:
                 self.block_M_hint = int(shape[0])
                 self.block_N_hint = int(shape[1])
-            self.allocs.append(_Alloc(_buffer_name(buf), scope, 0, None))
+            numel = _shape_numel(buf.shape)
+            nbytes = _align((numel or 0) * 2)
+            name = _buffer_name(buf)
+            self.allocs.append(_Alloc(name, scope, nbytes if not self._legacy_gemm_mode() else 0, self._vtcm_offsets.get(name)))
             return
         if _is_vtcm(scope):
             numel = _shape_numel(buf.shape)
@@ -1417,6 +1496,12 @@ class HexagonEmitter(PyStmtExprVisitor):
                 raise HexagonEmitError(f"R3: GDN VTCM 静态预算超限 {off} > 8MB; 明细: {', '.join(details)}")
             return
         if self.has_vector_kernel or self.has_scalar_kernel:
+            off = self._assign_vtcm_offsets()
+            if off > VTCM_BUDGET:
+                details = [f"{a.name}:{a.bytes}" for a in self.allocs if a.bytes]
+                raise HexagonEmitError(f"R3: VTCM 静态预算超限 {off} > 8MB; 明细: {', '.join(details)}")
+            return
+        if not self._legacy_gemm_mode():
             off = self._assign_vtcm_offsets()
             if off > VTCM_BUDGET:
                 details = [f"{a.name}:{a.bytes}" for a in self.allocs if a.bytes]
@@ -1457,13 +1542,18 @@ class HexagonEmitter(PyStmtExprVisitor):
         assert m is not None and n is not None and k is not None
         if m % 32 or n % 32 or k % 32:
             raise HexagonEmitError(f"R5: hexagon.gemm_hmx tile 维度必须 32 整除, 实际 M={m},N={n},K={k}")
-        if n % 256:
-            raise HexagonEmitError(f"R6: GEMM N 边界必须 %256, 实际 N={n}")
         self.block_M_hint = int(m)
         self.block_N_hint = int(n)
         if self.gemm_mnk is None:
             self.gemm_mnk = (m, n, k)
         self._record_gemm_b_arg(call)
+
+    def _legacy_gemm_mode(self) -> bool:
+        """Keep the original Qwen GEMM_NT generation byte-for-byte."""
+
+        bm = self.block_M_hint or 32
+        bn = self.block_N_hint or 1024
+        return bm == 32 and bn == 1024
 
     def _record_gemm_operands(self, op: Any) -> None:
         def visit(node: Any) -> None:
@@ -1578,6 +1668,8 @@ class HexagonEmitter(PyStmtExprVisitor):
         if not self.has_gemm:
             raise HexagonEmitError("R5: v2 emitter 目前只支持包含 T.gemm 的 GEMM_NT kernel")
         m, n, k = self._infer_problem_shape()
+        if not self._legacy_gemm_mode():
+            return self._render_gemm_c_generic(m, n, k)
         if m % 32 or n % 256 or k % 64:
             raise HexagonEmitError(f"R5/R6: 入口形状必须 M%32,N%256,K%64, 实际 M={m},N={n},K={k}")
         gm_kmax = max(k, 4096)
@@ -1636,6 +1728,82 @@ int {self.func_name}(remote_handle64 h, unsigned char *slab, int slabLen,
 
     uint8_t *V = HRT_VTCM_BASE();
     int kt = K / 32, nct = NP / 32;
+    uint64_t t0, tt = HAP_perf_get_qtimer_count();
+{body}
+    prof[4] = (int32_t)(HAP_perf_get_qtimer_count() - tt);
+    return 0;
+}}
+'''
+
+    def _render_gemm_c_generic(self, m: int, n: int, k: int) -> str:
+        if m % 32 or n % 32 or k % 32:
+            raise HexagonEmitError(f"R5: 入口形状必须 M/N/K 32 整除, 实际 M={m},N={n},K={k}")
+        block_n = self.block_N_hint or 1024
+        if block_n % 32:
+            raise HexagonEmitError(f"R5: block_N 必须 32 整除, 实际 {block_n}")
+        block_m = self.block_M_hint or 32
+        if block_m % 32:
+            raise HexagonEmitError(f"R5: block_M 必须 32 整除, 实际 {block_m}")
+        gm_kmax = k
+        offsets = {a.name: a.offset for a in self.allocs if a.offset is not None}
+        vtcm = [a for a in self.allocs if a.bytes]
+        accs = [a for a in self.allocs if _is_acc(a.scope)]
+        if len(vtcm) < 2 or not accs:
+            raise HexagonEmitError("R5: GEMM 需要 A/B alloc_shared 和 C alloc_fragment")
+        gm_act = vtcm[0].offset or 0
+        gm_wa = vtcm[1].offset or 0
+        gm_out = accs[0].offset or 0
+        gm_end = max((a.offset or 0) + a.bytes for a in self.allocs if a.bytes)
+        body = "\n".join(self.body_lines)
+        body = body.replace(
+            "for (int bx = 0; bx < N / NP; bx++) {\n",
+            "for (int bx = 0; bx < (N + NP - 1) / NP; bx++) {\n"
+            "        int n_rem_bx = N - bx * NP;\n"
+            "        int nct = (n_rem_bx < NP ? n_rem_bx : NP) / 32;\n",
+            1,
+        )
+        return f'''// Generated by tilelang.hexagon.emitter: statement-level GEMM_NT v2 (user-tiled).
+// Low-level HVX/HMX recipes live in hexagon_rt.h; this file only lowers TIR control flow.
+#include <stdint.h>
+#include <stddef.h>
+#include <string.h>
+#include "attnops.h"
+#include "HAP_perf.h"
+#include "hexagon_rt.h"
+
+typedef hrt_f16 f16;
+typedef hrt_f32 f32;
+
+#define GM_TILE HRT_TILE_BYTES
+#define GM_KMAX {gm_kmax}
+#define GM_BLOCK_M {block_m}
+#define GM_BLOCK_N {block_n}
+#define GM_ACT  ((size_t){gm_act})
+#define GM_WA   ((size_t){gm_wa})
+#define GM_OUT  ((size_t){gm_out})
+#define GM_END  ((size_t){gm_end})
+
+int {self.func_name}(remote_handle64 h, unsigned char *slab, int slabLen,
+                     unsigned char *w, int wLen, int M, int N, int K, int abl) {{
+    (void)h;
+    if (!HRT_VTCM_READY()) return -3;
+    if (M <= 0 || N <= 0 || K <= 0 || M % 32 || N % 32 || K % 32 || K > GM_KMAX) return -2;
+    if ((size_t)GM_END > HRT_VTCM_SIZE()) return -4;
+    int NP = GM_BLOCK_N;
+    size_t x_sz = (size_t)M * K * 2;
+    size_t c_off = HRT_ALIGN128(x_sz);
+    size_t c_sz = (size_t)M * N * 2;
+    size_t prof_off = HRT_ALIGN128(c_off + c_sz);
+    if ((size_t)slabLen < prof_off + 20) return -1;
+    if ((size_t)wLen < (size_t)K * N * 2) return -1;
+    const f16 *A = (const f16 *)slab;
+    f16 *C = (f16 *)(slab + c_off);
+    HRT_PROF_DECL(prof, slab, prof_off);
+    HRT_PROF_CLEAR(prof, 20);
+
+    uint8_t *V = HRT_VTCM_BASE();
+    int kt = K / 32, nct = NP / 32;
+    (void)nct;  // user-tiled 路径内层循环重声明,入口副本可能不引用
     uint64_t t0, tt = HAP_perf_get_qtimer_count();
 {body}
     prof[4] = (int32_t)(HAP_perf_get_qtimer_count() - tt);

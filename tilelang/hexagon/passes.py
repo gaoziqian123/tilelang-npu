@@ -390,14 +390,17 @@ def HexagonStoragePlan():
         off = 0
         for buf in _collect_alloc_buffers(func):
             scope = _buffer_scope(buf)
-            if _is_acc(scope):
-                continue
             if not _is_vtcm(scope):
-                continue
+                if not _is_acc(scope):
+                    continue
             numel = _shape_numel(buf.shape)
             if numel is None:
                 raise HexagonEmitError(f"R3: VTCM buffer {_buffer_name(buf)} shape 必须静态")
-            nbytes = _align(numel * _dtype_bytes(str(buf.dtype)))
+            # HMX acc itself is not VTCM, but acc_read materializes fp16 AH tiles
+            # into VTCM before the final AH->RM writeback.  Plan that output
+            # scratch here so the emitter can mechanically use StoragePlan
+            # offsets instead of hard-coded GM_OUT maps.
+            nbytes = _align(numel * (2 if _is_acc(scope) else _dtype_bytes(str(buf.dtype))))
             off = _align(off)
             offsets[_buffer_name(buf)] = IntImm("int32", off)
             details.append(f"{_buffer_name(buf)}:{nbytes}")
@@ -652,8 +655,6 @@ class _Verifier:
         assert m is not None and n is not None and k is not None
         if m % 32 or n % 32 or k % 32:
             raise HexagonEmitError(f"R5: hexagon.gemm_hmx tile 维度必须 32 整除, 实际 M={m},N={n},K={k}")
-        if n % 256:
-            raise HexagonEmitError(f"R6: GEMM N 边界必须 %256, 实际 N={n}")
 
     def _buffer_from_data_arg(self, arg: Any) -> Buffer | None:
         name = _var_name(arg)

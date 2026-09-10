@@ -74,7 +74,7 @@ def emit(args: argparse.Namespace) -> str:
     os.environ["TILELANG_HEXAGON_EMIT_C"] = str(args.out)
     artifact = tilelang.engine.lower(
         gemm_nt.get_tir(M=args.m, N=args.n, K=args.k, block_M=args.block_m, block_N=args.block_n)
-        .with_attr("global_symbol", "attnops_tl_gemm_nt"),
+        .with_attr("global_symbol", getattr(args, "name", None) or "attnops_tl_gemm_nt"),
         target="hexagon",
         enable_device_compile=False,
     )

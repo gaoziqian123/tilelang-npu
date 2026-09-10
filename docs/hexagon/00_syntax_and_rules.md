@@ -109,7 +109,7 @@ RPC/主线程上的 HMX mm 链不中断——手写版 FFN 的 ACT/GBUF 双缓�
 | R3 | VTCM 静态预算 ≤ 8MB(含 HMX CFG 区) | 运行时越界踩 CFG,杀 DSP PD | 编译期求和断言,报错给出每个 buffer 的占用 |
 | R4 | HMX 序列只能出现在 kernel 主线程(RPC/executor 线程);pool worker 不得调 HMX | 跨线程 invoke 杀 PD(`AEE_EBADSTATE`) | 结构强制:`T.gemm` 只允许出现在 `T.Kernel` 主线程控制流,worker 分支里出现即编译错 |
 | R5 | `T.gemm` 的 A/B/C tile 维必须 32 的倍数;K 链长 = K/32 次 mm | HMX 指令粒度即 32×32×32 | 编译期整除检查;tailing 由 padding 或拆分处理 |
-| R6 | panel 化 GEMM:N 维 panel 宽 ∈ {1024,512,256},取满足 `K×NP×2 ≤ 5.5MB` 的最大者;NPU 切片的 N 边界 %256(性能目标 %1024) | NP 掉到 256 时激活重排 ~2.75×、per-channel ~2× | 编译器自动选 NP 并 emit 校验;手写 plan 给提示 |
+| R6 | 已废弃为性能建议:旧手写 GEMM 的 panel 宽 ∈ {1024,512,256};TileLang HMX GEMM 现在接受用户代码里 `T.alloc_shared/T.alloc_fragment` 选出的任意 32 倍数 `block_N` | 小 `block_N` 会增加 panel 数、权重 staging/写回相对开销,性能显著变慢但语义合法 | 编译器不再做 R6 硬校验;只保留 R5(32 整除)和 R3(VTCM 预算),VTCM 偏移来自 `HexagonStoragePlan` |
 | R7 | GEMM 类累加:fp16 输入、HMX 37-bit acc(≈fp32);HVX 路径累加一律 fp32 内链 | fp16 内链在 K≥2560 必炸(max_rel 0.15 级) | `T.gemm` 默认 fp32-grade acc;HVX 归约自动 fp32 链 |
 | R8 | 递推链上的 exp(逐 token/chunk 复利)必须 fp32 域 | fp16 exp 1e-3 误差 128 步复利成 14% | 当前要求用户显式使用 `T.hexagon.exp_fp32` 或 `T.hexagon.scan_exp32()` 这类 fp32 递推叶片;自动循环进位依赖识别待实现 |
 | R9 | mask 用大负数(-32768)不用 -inf | HVX fp16 乘 inf 产 NaN | `T.fill(mask, ...)` 语义即写 -32768 |
@@ -146,9 +146,9 @@ TileOp 实现:`src/hexagon/op/copy.cc` 把 `T.copy` 改写成显式
    `hrt_gdn_slot_t` 字段(S/kf/qf/vf/w/o/A/P/kkprod/qkprod/eG/eGinv/beta/eGC);
    映射结果挂 `hexagon.wscratch_slots`,emitter 只查该 attr,不再看用户 buffer 名。
 6. **HexagonVerify**(验证):在 emitter 前集中检查 TIR 层可见规则,当前覆盖 R1
-    (VTCM copy 128B 可向量化,含 `hexagon.copy_*`)、R2(VTCM 标量 load/store,
-    含 reduce 结果)、R5/R6(`hexagon.gemm_hmx` 静态 MNK/32 整除/N%256)、
-    R10(worker≤6),失败错误带规则号。
+     (VTCM copy 128B 可向量化,含 `hexagon.copy_*`)、R2(VTCM 标量 load/store,
+     含 reduce 结果)、R5(`hexagon.gemm_hmx` 静态 MNK/32 整除)、
+     R10(worker≤6),失败错误带规则号。
 
 emitter 只做机械 lowering:看到 `hexagon.copy_*` / `hexagon.gemm_hmx` 就打印
 既有 `hrt_copy_*`、HMX acc_clear/mm/acc_read/unperm recipe;不再承担 copy/gemm
@@ -166,7 +166,7 @@ recipe 选择、全局写集分析、VTCM 静态 offset 规划或 product-reduce
 ```python
 @tilelang.jit(target="hexagon")
 def gemm_nt(M, N, K, block_M=32, block_N=None, dtype=T.float16):
-    # block_N=None → 编译器按 R6 自动选 panel 宽
+    # block_N 由用户选择:任意 32 倍数;旧 block_N=1024 路径保持生成物兼容
     A: T.Tensor((M, K), dtype)          # DDR,row-major
     B: T.Tensor((N, K), dtype)          # DDR,row-major,host 侧已转 WH
     C = T.empty((M, N), dtype)
@@ -187,7 +187,11 @@ def gemm_nt(M, N, K, block_M=32, block_N=None, dtype=T.float16):
 ```
 
 生成物:单个 `.c`(hexkl micro + Q6 intrinsics,结构对照 attnops_gemm.c)+
-skel idl 方法 + host launcher stub。验证:Qwen3.5 形状(M=960,
+skel idl 方法 + host launcher stub。VTCM map 由用户声明推导:`A_sh`/ACT =
+`block_M*K*sizeof(fp16)`,`B_sh`/WA = `block_N*K*sizeof(fp16)`,acc_read 输出 scratch =
+`block_M*block_N*sizeof(fp16)`(均 128B 对齐);R3 统一由 `HexagonStoragePlan` 检查。
+`block_N=1024,block_M=32` 的 Qwen 锚点仍走兼容 lowering,生成物逐字节不变。
+验证:Qwen3.5 形状(M=960,
 (N,K) ∈ {(8192,2560),(4096,2560),(2560,4096),(12288,2560),(6144,2560)}),
 fp64 对拍 max_rel < 0.1(R12 判据),性能对照手写版 1.6–3.2 TFLOPS,
 允许差距 ≤15%,超出则归因到 lowering 差异逐项对齐。
