@@ -9,9 +9,10 @@ from tvm import IRModule, tirx
 from tvm.target import Target
 
 import tilelang
+from tilelang.transform import PassConfigKey, PassContext
 
 from .emitter import emit_hexagon_c
-from .passes import ProductReduceFusion, StoragePlan, WScratchPlan, HexagonVerify, WriteSet
+from .passes import ProductReduceFusion, StoragePlan, WScratchPlan, HexagonProfileConfig, HexagonVerify, WriteSet
 
 
 def default_emit_path() -> str:
@@ -32,11 +33,22 @@ def HexagonPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
     mod = tilelang.transform.InjectAssumes()(mod)
     mod = tilelang.transform.Simplify()(mod)
     mod = tilelang.transform.IfStmtBinding()(mod)
-    mod = tilelang.transform.LowerTileOp()(mod)
+    pass_config = PassContext.current().config
+    hexagon_prof = bool(pass_config.get(PassConfigKey.TL_HEXAGON_PROF.value, False))
+    with target:
+        with PassContext(
+            config={
+                PassConfigKey.TL_LAYOUT_INFERENCE_ANNOTATE_PARALLEL_LOOPS.value: False,
+                PassConfigKey.TL_LAYOUT_INFERENCE_FILL_DEFAULT_LAYOUT.value: True,
+            }
+        ):
+            mod = tilelang.transform.LayoutInference()(mod)
+        mod = tilelang.transform.LowerTileOp()(mod)
     mod = ProductReduceFusion()(mod)
     mod = WriteSet()(mod)
     mod = StoragePlan()(mod)
     mod = WScratchPlan()(mod)
+    mod = HexagonProfileConfig(hexagon_prof)(mod)
     mod = HexagonVerify()(mod)
 
     out = os.environ.get("TILELANG_HEXAGON_EMIT_C", default_emit_path())

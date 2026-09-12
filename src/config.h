@@ -39,6 +39,22 @@ inline std::string LayoutCostModelName() {
       .value_or(ffi::String("register-count"));
 }
 
+inline bool LayoutInferenceAnnotateParallelLoops() {
+  auto ctxt = tvm::transform::PassContext::Current();
+  return ctxt
+      ->GetConfig("tl.layout_inference.annotate_parallel_loops",
+                  ffi::Optional<Bool>())
+      .value_or(Bool(true));
+}
+
+inline bool LayoutInferenceFillDefaultLayout() {
+  auto ctxt = tvm::transform::PassContext::Current();
+  return ctxt
+      ->GetConfig("tl.layout_inference.fill_default_layout",
+                  ffi::Optional<Bool>())
+      .value_or(Bool(false));
+}
+
 /*!
  * \brief Check if vectorize planner verbose output is enabled.
  */

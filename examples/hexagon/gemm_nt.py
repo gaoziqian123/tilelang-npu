@@ -45,7 +45,7 @@ def gemm_nt(M: int, N: int, K: int, block_M: int = 32, block_N: int = 1024, dtyp
     def main(A: T.Tensor((M, K), dtype), B: T.Tensor((N, K), dtype), C: T.Tensor((M, N), dtype)):
         with T.Kernel(T.ceildiv(N, block_N), threads=6) as bx:
             A_sh = T.alloc_shared((block_M, K), dtype, layout="ah")
-            B_sh = T.alloc_shared((block_N, K), dtype, layout="ah")
+            B_sh = T.alloc_shared((block_N, K), dtype, layout="wh")
             C_fr = T.alloc_fragment((block_M, block_N), T.float32)
 
             T.copy(B[bx * block_N, 0], B_sh)

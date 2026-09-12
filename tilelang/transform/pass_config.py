@@ -141,6 +141,29 @@ class PassConfigKey(str, Enum):
     Temporarily re-enabled for backward compatibility.
     """
 
+    TL_LAYOUT_INFERENCE_ANNOTATE_PARALLEL_LOOPS = "tl.layout_inference.annotate_parallel_loops"
+    """Attach inferred parallel-loop layout annotations during LayoutInference.
+
+    Default: True. Hexagon sets this to False because T.parallel maps to a
+    runtime worker pool rather than compile-time SIMT lanes.
+    """
+
+    TL_LAYOUT_INFERENCE_FILL_DEFAULT_LAYOUT = "tl.layout_inference.fill_default_layout"
+    """Fill missing SBlock layout_map entries with per-dimension identity layouts.
+
+    Default: False. Hexagon sets this to True so LowerTileOp can rely on every
+    known buffer having a layout-map entry; ordinary row-major buffers detect as
+    the Hexagon ``rm`` layout.
+    """
+
+    TL_HEXAGON_PROF = "tl.hexagon_prof"
+    """Enable opt-in Hexagon generic-shell per-phase qtimer profiling.
+
+    Default: False. When enabled for Hexagon lowering, the pipeline annotates
+    generated PrimFuncs with the same ``tl.hexagon_prof`` kernel attribute that
+    the generic-shell C emitter recognizes. The default-off path is byte-stable.
+    """
+
     TL_DISABLE_SAFE_MEMORY_ACCESS = "tl.disable_safe_memory_legalize"
     """Disable safe memory access optimization. Default: False"""
 

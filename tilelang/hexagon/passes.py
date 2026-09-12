@@ -32,6 +32,14 @@ from tvm.tirx.stmt_functor import post_order_visit, substitute
 from tvm.tirx.transform import prim_func_pass
 
 from .emitter import HexagonEmitError, VTCM_BUDGET
+from .language.layout import detect_layout_mode
+
+
+def _bool_arg(x: Any) -> bool:
+    if isinstance(x, bool):
+        return x
+    iv = _i64(x)
+    return bool(iv) if iv is not None else bool(x)
 
 
 def _i64(x: Any) -> int | None:
@@ -103,6 +111,11 @@ def _is_wscratch(scope: str) -> bool:
 
 def _is_acc(scope: str) -> bool:
     return scope == "hmx.acc" or "fragment" in scope
+
+
+def _scope_layout_suffix(scope: str) -> str | None:
+    suffix = scope.rsplit(".", 1)[-1]
+    return suffix if suffix in ("ah", "wh") else None
 
 
 def _ann_str(obj: Any) -> str | None:
@@ -344,6 +357,8 @@ def HexagonWriteSet():
                     outs = [node.args[off + 2]]
                 elif callee == "hexagon.reduce_prod2_128" and len(node.args) >= off + 6:
                     outs = [node.args[off + 2], node.args[off + 5]]
+                elif callee in ("hexagon.copy_acc_rm", "hexagon.copy_ah_rm", "hexagon.copy_ddr") and len(node.args) >= off + 3:
+                    outs = [node.args[off + 1]]
                 for arg in outs:
                     buf = getattr(arg, "buffer", None) or data_to_buf.get(_var_name(arg))
                     if buf is not None and _buffer_scope(buf) == "global":
@@ -467,15 +482,49 @@ def HexagonWScratchPlan():
     return prim_func_pass(pass_fn, opt_level=0, name="tl.hexagon.WScratchPlan")
 
 
+def HexagonProfileConfig(enabled: bool = False):
+    """Thread pass-config profiling opt-in into the per-kernel attribute."""
+
+    def pass_fn(func: PrimFunc, mod, ctx):
+        del mod, ctx
+        if not enabled:
+            return func
+        attrs = func.attrs or {}
+        if _bool_arg(attrs.get("tl.hexagon_prof", False)):
+            return func
+        return func.with_attr("tl.hexagon_prof", True)
+
+    return prim_func_pass(pass_fn, opt_level=0, name="tl.hexagon.ProfileConfig")
+
+
 class _Verifier:
     def __init__(self) -> None:
         self.in_vector = 0
+        self.in_pool = 0
         self.has_gdn_leaf = False
         self.buffers: dict[str, Buffer] = {}
+        self.annotated_layouts: dict[str, Any] = {}
 
     def verify(self, func: PrimFunc) -> None:
         for _, buf in func.buffer_map.items():
             self.buffers[_buffer_name(buf)] = buf
+
+        # Layout annotations created by ``alloc_shared(layout=...)`` are
+        # attached to the SBlock that is current at the call site.  In nested
+        # T.serial/T.parallel structures that can be an inner SBlock, while the
+        # corresponding allocation still appears in an outer block's
+        # ``alloc_buffers``.  Gather all alloc buffers and all layout maps before
+        # checking allocations so suffix-vs-annotation validation is not
+        # sensitive to SBlock nesting order.
+        for buf in _collect_alloc_buffers(func):
+            self.buffers[_buffer_name(buf)] = buf
+
+        def collect_layouts(node: Any) -> None:
+            if isinstance(node, SBlock):
+                self._collect_layout_annotations(node)
+
+        post_order_visit(func.body, collect_layouts)
+
         def scan(node: Any) -> None:
             if isinstance(node, Call) and _is_extern(node):
                 callee = _extern_callee(node)
@@ -494,6 +543,7 @@ class _Verifier:
             self._visit_stmt(op.block)
             return
         if isinstance(op, SBlock):
+            self._collect_layout_annotations(op)
             for buf in op.alloc_buffers:
                 self.buffers[_buffer_name(buf)] = buf
                 self._check_alloc(buf)
@@ -515,8 +565,11 @@ class _Verifier:
                     raise HexagonEmitError(f"R10: threadIdx.x extent 必须是静态整数{_loc(op)}")
                 if extent > 6:
                     raise HexagonEmitError(f"R10: Hexagon worker 数必须 ≤6, 实际 {extent}{_loc(op)}")
+            is_pool = ("blockIdx.x" in ttag or var == "bx") and self._contains_gdn_leaf(op.body)
             self.in_vector += 1 if is_vec else 0
+            self.in_pool += 1 if is_pool else 0
             self._visit_stmt(op.body)
+            self.in_pool -= 1 if is_pool else 0
             self.in_vector -= 1 if is_vec else 0
             return
         if isinstance(op, AttrStmt):
@@ -530,7 +583,12 @@ class _Verifier:
                         raise HexagonEmitError("R10: threadIdx.x extent 必须是静态整数")
                     if extent > 6:
                         raise HexagonEmitError(f"R10: Hexagon worker 数必须 ≤6, 实际 {extent}")
+                is_pool = ("blockIdx.x" in name or vname == "bx") and self._contains_gdn_leaf(op.body)
+            else:
+                is_pool = False
+            self.in_pool += 1 if is_pool else 0
             self._visit_stmt(op.body)
+            self.in_pool -= 1 if is_pool else 0
             return
         if isinstance(op, IfThenElse):
             self._check_expr(op.condition)
@@ -549,11 +607,42 @@ class _Verifier:
             self._check_expr(op.value)
 
     def _check_alloc(self, buf: Buffer) -> None:
+        suffix = _scope_layout_suffix(_buffer_scope(buf))
+        if suffix is not None:
+            layout = self.annotated_layouts.get(_var_name(getattr(buf, "data", "")))
+            if layout is None:
+                layout = self.annotated_layouts.get(_buffer_name(buf))
+            if layout is not None:
+                try:
+                    annotated = detect_layout_mode(layout, buf)
+                except Exception as e:
+                    raise HexagonEmitError(f"layout: 无法识别 buffer {_buffer_name(buf)} 的 annotation layout") from e
+                # Strictly reject only explicit AH/WH-vs-suffix conflicts.
+                # Missing annotations are allowed because the scope suffix is the
+                # transition-period fallback channel.  Identity annotations
+                # (``rm`` from fill_default_layout, historical ``none``, or any
+                # other non-AH/WH identity/custom mode) are advisory and do not
+                # contradict a .ah/.wh storage suffix; they can be introduced by
+                # generic LayoutInference/default-fill around nested SBlocks.
+                if annotated in ("ah", "wh") and annotated != suffix:
+                    raise HexagonEmitError(
+                        f"layout: buffer {_buffer_name(buf)} scope 后缀 .{suffix} 与 annotation {annotated} 不一致"
+                    )
         if _is_acc(_buffer_scope(buf)):
             for dim in buf.shape:
                 iv = _i64(dim)
                 if iv is not None and iv % 32:
                     raise HexagonEmitError(f"R5: hmx.acc buffer {_buffer_name(buf)} 维度 {iv} 不是 32 的倍数")
+
+    def _collect_layout_annotations(self, op: SBlock) -> None:
+        layout_map = op.annotations.get("layout_map") if hasattr(op, "annotations") else None
+        if not layout_map:
+            return
+        for var, layout in layout_map.items():
+            self.annotated_layouts[_var_name(var)] = layout
+            buf = getattr(var, "buffer", None) or self._buffer_from_data_arg(var)
+            if buf is not None:
+                self.annotated_layouts[_buffer_name(buf)] = layout
 
     def _check_expr(self, e: Any) -> None:
         if isinstance(e, BufferLoad):
@@ -576,9 +665,10 @@ class _Verifier:
                         dbuf = getattr(dst, "buffer", None)
                         if _is_vtcm(_buffer_scope(dbuf)):
                             raise HexagonEmitError(f"R2: 归约结果禁止标量写 VTCM buffer {_buffer_name(dbuf)}{_loc(e)}")
-                if callee in ("hexagon.copy_rm_ah", "hexagon.copy_ah_rm", "hexagon.copy_acc_rm", "hexagon.copy_ddr"):
+                if callee in ("hexagon.copy_rm_ah", "hexagon.copy_f32_ah", "hexagon.copy_ah_rm", "hexagon.copy_acc_rm", "hexagon.copy_ddr"):
                     self._check_copy_intrin(e, off)
                 if callee == "hexagon.gemm_hmx":
+                    self._check_r4(e)
                     self._check_gemm_intrin(e, off)
                 return
             else:
@@ -587,6 +677,7 @@ class _Verifier:
                     self._check_copy(e)
                     return
                 elif opname == "tl.tileop.gemm":
+                    self._check_r4(e)
                     self._check_gemm(e)
                     return
             for a in e.args:
@@ -597,6 +688,29 @@ class _Verifier:
             self._check_expr(e.a); self._check_expr(e.b)
         elif cls in ("Cast", "Not", "Neg"):
             self._check_expr(e.value)
+
+    def _check_r4(self, op: Any) -> None:
+        if self.in_pool:
+            raise HexagonEmitError(f"R4: HMX/T.gemm(hexagon.gemm_hmx) 不得出现在 pool worker 段内{_loc(op)}")
+
+    def _contains_gdn_leaf(self, op: Any) -> bool:
+        found = False
+
+        def scan(node: Any) -> None:
+            nonlocal found
+            if found:
+                return
+            if isinstance(node, Call) and _is_extern(node):
+                callee = _extern_callee(node)
+                if callee and callee.startswith("hexagon.") and callee.split(".", 1)[1] in {
+                    "load_state128", "store_state128", "load_h2f_rows128", "scan_exp32", "dot128x2_store",
+                    "state_x2_matvec128", "affine_rows128", "forward_solve32", "output_rows128",
+                    "state_decay_rows128", "state_update32",
+                }:
+                    found = True
+
+        post_order_visit(op, scan)
+        return found
 
     def _check_copy(self, call: Call) -> None:
         if len(call.args) < 2:
@@ -637,10 +751,26 @@ class _Verifier:
         dst_nd = _i64(call.args[dst_meta]) if len(call.args) > dst_meta else 0
         dst_nd = int(dst_nd or 0)
         bytes_hint = 2
-        for i in range(dst_nd):
-            idx = dst_meta + 2 + 2 * i
+        nd_for_bytes = dst_nd
+        ext_base = dst_meta + 2
+        # BufferLoad point-view copies into AH can arrive with an empty dst
+        # region after LowerTileOp canonicalization.  For the same intrinsic the
+        # source range still carries the logical full tile, so use it as the R1
+        # byte-size proof instead of treating the copy as a scalar 1-element VTCM
+        # access.  The emitter still validates the static trailing 2-D shape.
+        if nd_for_bytes == 0:
+            nd_for_bytes = src_nd
+            ext_base = off + 4
+        for i in range(nd_for_bytes):
+            idx = ext_base + 2 * i
             if idx < len(call.args):
                 v = _i64(call.args[idx])
+                if v:
+                    bytes_hint *= v
+        if bytes_hint == 2 and dst is not None and _is_vtcm(_buffer_scope(dst)) and len(dst.shape) >= 2:
+            bytes_hint = 2
+            for dim in dst.shape[-2:]:
+                v = _i64(dim)
                 if v:
                     bytes_hint *= v
         if bytes_hint % 128:
@@ -657,6 +787,14 @@ class _Verifier:
             raise HexagonEmitError(f"R5: hexagon.gemm_hmx tile 维度必须 32 整除, 实际 M={m},N={n},K={k}")
 
     def _buffer_from_data_arg(self, arg: Any) -> Buffer | None:
+        if isinstance(arg, BufferLoad):
+            return arg.buffer
+        if isinstance(arg, Call) and _call_op_name(arg) == "tl.region":
+            load = arg.args[0] if arg.args else None
+            return getattr(load, "buffer", None)
+        buf = getattr(arg, "buffer", None)
+        if buf is not None:
+            return buf
         name = _var_name(arg)
         for buf in self.buffers.values():
             if _var_name(getattr(buf, "data", "")) == name or _buffer_name(buf) == name:

@@ -86,6 +86,11 @@ static constexpr const char *kEnableReducerPlanVerbose =
 // coalescing of every fragment<->global copy, weighted by bytes moved —
 // with register count as the tiebreak.
 static constexpr const char *kLayoutCostModel = "tl.layout_cost_model";
+static constexpr const char *kLayoutInferenceAnnotateParallelLoops =
+    "tl.layout_inference.annotate_parallel_loops";
+static constexpr const char *kLayoutInferenceFillDefaultLayout =
+    "tl.layout_inference.fill_default_layout";
+static constexpr const char *kHexagonProf = "tl.hexagon_prof";
 static constexpr const char *kEnableVectorizePlannerVerbose =
     "tl.enable_vectorize_planner_verbose";
 static constexpr const char *kDisableLoopUnswitching =

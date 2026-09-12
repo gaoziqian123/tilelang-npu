@@ -66,9 +66,28 @@ def _gemm_impl(
     B_region = to_buffer_region(B)
     C_region = to_buffer_region(C)
 
-    A_shape = retrieve_shape(A_region)
-    B_shape = retrieve_shape(B_region)
-    C_shape = retrieve_shape(C_region)
+    def _logical_gemm_shape(arg, region):
+        shape = retrieve_shape(region)
+        # A scalar BufferLoad such as buf[row0, col0] is used by Hexagon as a
+        # "buffer + base offset" view.  The point indices provide the base
+        # address only; the matrix extent is the declared trailing 2-D shape of
+        # the backing buffer.  Keep explicit BufferRegion/tl.region extents
+        # unchanged so normal sliced GEMM validation still works.
+        if isinstance(arg, tirx.BufferLoad) and len(arg.buffer.shape) >= 2:
+            one = tirx.IntImm("int32", 1)
+            if all(prim_expr_equal(x, one) for x in shape[-2:]):
+                prefix = [one for _ in shape[:-2]]
+                return prefix + list(arg.buffer.shape[-2:])
+        return shape
+
+    A_shape = _logical_gemm_shape(A, A_region)
+    B_shape = _logical_gemm_shape(B, B_region)
+    C_shape = _logical_gemm_shape(C, C_region)
+    if isinstance(A, tirx.BufferLoad) and len(A.buffer.shape) >= 2 and len(C_shape) >= 2:
+        one = tirx.IntImm("int32", 1)
+        prefix = [one for _ in A_shape[:-2]]
+        a_k = A.buffer.shape[-2] if transpose_A else A.buffer.shape[-1]
+        A_shape = prefix + ([a_k, C_shape[-2]] if transpose_A else [C_shape[-2], a_k])
 
     assert len(C_shape) >= 2, "current only support C as a 2D or higher-order tensor"
     assert len(A_shape) >= 2, "current only support A as a 2D or higher-order tensor"
@@ -82,6 +101,10 @@ def _gemm_impl(
     M, N = C_shape[-2], C_shape[-1]
     M_A = A_shape[-1] if transpose_A else A_shape[-2]
     K = A_shape[-2] if transpose_A else A_shape[-1]
+    if isinstance(B, tirx.BufferLoad) and len(B.buffer.shape) >= 2:
+        one = tirx.IntImm("int32", 1)
+        prefix = [one for _ in B_shape[:-2]]
+        B_shape = prefix + ([C_shape[-1], K] if transpose_B else [K, C_shape[-1]])
     N_B = B_shape[-2] if transpose_B else B_shape[-1]
     K_B = B_shape[-1] if transpose_B else B_shape[-2]
     assert prim_expr_equal(M_A, M), f"T.gemm M shape check failed: M_A = {M_A}, M_C = {M}"
@@ -118,9 +141,14 @@ def _gemm_impl(
         mbar = to_buffer_region(mbar, access_type="rw")
     C_coords = [r.min for r in C_region.region[-2:]]
     # Convert BufferRegion to tl.region calls for arguments
-    A_arg = buffer_region_to_tile_region(A_region, "r", [r for r in A_shape])
-    B_arg = buffer_region_to_tile_region(B_region, "r", [r for r in B_shape])
-    C_arg = buffer_region_to_tile_region(C_region, "rw", [r for r in C_shape])
+    def _tile_region_arg(arg, region, access_type, shape):
+        if isinstance(arg, tirx.BufferLoad):
+            return T.call_intrin("handle", tirx.op.Op.get("tl.region"), arg, {"r": 1, "w": 2, "rw": 3}[access_type], *shape)
+        return buffer_region_to_tile_region(region, access_type, [r for r in shape])
+
+    A_arg = _tile_region_arg(A, A_region, "r", A_shape)
+    B_arg = _tile_region_arg(B, B_region, "r", B_shape)
+    C_arg = _tile_region_arg(C, C_region, "rw", C_shape)
     # When mbar is None, pass a placeholder constant (0).
     # The C++ side checks if arg 16 is a BufferLoadNode before using it,
     # so a non-BufferLoad value will be correctly ignored.

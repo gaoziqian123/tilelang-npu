@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import re
 import struct
 from pathlib import Path
 from typing import Any
@@ -79,6 +80,16 @@ class _Ctx:
     vec_var: str | None = None
     vec_extent: int | None = None
     worker_var: str | None = None
+    outer_vars: tuple[str, ...] = ()
+
+
+@dataclass
+class _PoolWorker:
+    name: str
+    ctx_type: str
+    extent: int
+    outer_vars: tuple[str, ...]
+    body: list[str]
 
 
 def _i64(x: Any) -> int | None:
@@ -236,12 +247,22 @@ class HexagonEmitter(PyStmtExprVisitor):
         self._vtcm_offsets: dict[str, int] = {}
         self._wscratch_slots: dict[str, str] = {}
         self._gemm_b_buffers: set[str] = set()
+        self._pre_has_gemm = False
+        self._pre_has_gemm_view = False
+        self._pre_has_vector = False
+        self._pool_workers: list[_PoolWorker] = []
+        self._shape_params: list[str] = []
+        self.hexagon_prof = False
+        self._prof_next_slot = 5
 
     def emit(self, output_path: str | os.PathLike[str] | None = None) -> str:
         funcs = [self.mod] if isinstance(self.mod, PrimFunc) else [f for _, f in self.mod.functions.items()]
         for func in funcs:
             if isinstance(func, PrimFunc):
                 self._record_params(func)
+                self._pre_has_gemm = self._stmt_contains_gemm_intrin(func.body)
+                self._pre_has_vector = self._contains_vector_for(func.body)
+                self._shape_params = self._derive_shape_params(func)
                 self.body_lines = self._lower_stmt(func.body, _Ctx(), indent=1)
         self._finalize_allocs()
         source = self._render_c()
@@ -392,11 +413,25 @@ class HexagonEmitter(PyStmtExprVisitor):
         if is_parallel:
             if extent is None:
                 raise HexagonEmitError(f"白名单: T.Parallel extent 必须是静态整数: {var}{_loc(op)}")
+            if self._pre_has_gemm:
+                wid = len(self._pool_workers)
+                wname = f"{self.func_name or 'tl'}_pool{wid}_worker"
+                ctx_type = f"{self.func_name or 'tl'}_pool{wid}_ctx_t"
+                worker_ctx = _Ctx(block_var=ctx.block_var, row_var=ctx.row_var, worker_var="job", outer_vars=ctx.outer_vars)
+                body = [self._ind(1, f"const int {var} = job;")]
+                body += self._lower_stmt(op.body, worker_ctx, 1)
+                self._pool_workers.append(_PoolWorker(wname, ctx_type, extent, ctx.outer_vars, body))
+                init_vals = ", ".join([arg.cname for arg in self.global_args] + self._shape_params + list(ctx.outer_vars) + ["abl", "prof"])
+                return [
+                    self._ind(indent, f"// T.Parallel({extent}) -> Hexagon worker-pool phase (sync join)"),
+                    self._ind(indent, f"{ctx_type} ctx{wid} = {{ {init_vals} }};"),
+                    *self._emit_profiled_pool_call(indent, f"attnops_pool_run_ctx({wname}, &ctx{wid}, {extent});"),
+                ]
             # Hexagon elementwise kernels lower T.Parallel as an outer strip-mined
             # loop around inner T.vectorized stores.  The HVX work is still the
             # 128B vector body; T.Kernel(threads<=6) supplies the worker-pool
             # contract at the entry level.
-            body = self._lower_stmt(op.body, _Ctx(block_var=ctx.block_var, row_var=ctx.row_var, worker_var=ctx.worker_var), indent + 1)
+            body = self._lower_stmt(op.body, _Ctx(block_var=ctx.block_var, row_var=ctx.row_var, worker_var=ctx.worker_var, outer_vars=ctx.outer_vars), indent + 1)
             return [self._ind(indent, f"// T.Parallel({extent}) strip over 128B HVX vectors"),
                     self._ind(indent, f"for (int {var} = 0; {var} < {extent}; {var}++) {{")] + body + [self._ind(indent, "}")]
         if "blockIdx.x" in tname or var == "bx":
@@ -404,7 +439,7 @@ class HexagonEmitter(PyStmtExprVisitor):
                 raise HexagonEmitError(f"白名单: blockIdx.x extent 必须静态{_loc(op)}")
             self.seen_block_launch = True
             is_vector_block = self._contains_vector_for(op.body)
-            if is_vector_block and not self._contains_gdn_leaf(op.body) and not self.has_gemm:
+            if is_vector_block and not self._contains_gdn_leaf(op.body) and not self._pre_has_gemm:
                 self.has_vector_kernel = True
                 self.vector_uses_pool = True
                 wv = ctx.worker_var or "job"
@@ -419,7 +454,9 @@ class HexagonEmitter(PyStmtExprVisitor):
                         self._ind(indent, f"const int {var} = {wv};")] + body
             if self.gdn_mode == "escape":
                 bound = "1"
-            elif self.has_vector_kernel or not self.has_gemm:
+            elif self._generic_gemm_recipe_mode():
+                bound = str(extent)
+            elif (self.has_vector_kernel and not self._pre_has_gemm) or not self._pre_has_gemm:
                 bound = "(total + PANEL - 1) / PANEL"
             elif self._legacy_gemm_mode():
                 bound = "N / NP"
@@ -442,15 +479,16 @@ class HexagonEmitter(PyStmtExprVisitor):
             body = self._lower_stmt(op.body, ctx, indent)
             return [self._ind(indent, f"// TIR {tname} extent={extent} is lowered into hrt_* worker-pool recipes")] + body
             
-        if extent is None:
-            if self.gdn_mode == "leaf" and var in ("j",):
-                bound = self._expr_c(op.extent)
-                body = self._lower_stmt(op.body, _Ctx(block_var=ctx.block_var, row_var=ctx.row_var, worker_var=ctx.worker_var), indent + 1)
-                return [self._ind(indent, f"for (int {var} = 0; {var} < {bound}; {var}++) {{")] + body + [self._ind(indent, "}")]
-            raise HexagonEmitError(f"白名单: For extent 必须是静态整数: {var}{_loc(op)}")
         minv = _i64(op.min)
         if minv not in (0, None):
             raise HexagonEmitError(f"白名单: 暂只支持 min=0 的 For, {var} min={minv}{_loc(op)}")
+        if extent is None:
+            # Serial loops may have scalar-expression bounds, e.g. triangular
+            # GDN loops `for j in T.serial(i + 1)`.  Vectorized/parallel/thread
+            # loops were handled above and still require static extents.
+            bound = self._expr_scalar(op.extent)
+            body = self._lower_stmt(op.body, _Ctx(block_var=ctx.block_var, row_var=ctx.row_var, worker_var=ctx.worker_var, outer_vars=ctx.outer_vars), indent + 1)
+            return [self._ind(indent, f"for (int {var} = 0; {var} < {bound}; {var}++) {{")] + body + [self._ind(indent, "}")]
         # For the GEMM row-block loop, keep runtime M/block_M rather than the
         # anchor shape's static trip count so one generated skel covers §5 shapes.
         is_row_loop = self._looks_like_row_loop(op)
@@ -459,7 +497,8 @@ class HexagonEmitter(PyStmtExprVisitor):
         else:
             bound = "M / 32" if is_row_loop else str(extent)
         row = var if is_row_loop else ctx.row_var
-        body = self._lower_stmt(op.body, _Ctx(block_var=ctx.block_var, row_var=row, worker_var=ctx.worker_var), indent + 1)
+        outer = ctx.outer_vars + ((var,) if not is_row_loop else ())
+        body = self._lower_stmt(op.body, _Ctx(block_var=ctx.block_var, row_var=row, worker_var=ctx.worker_var, outer_vars=outer), indent + 1)
         if is_row_loop and not self._legacy_gemm_mode():
             body = [
                 self._ind(indent + 1, f"int m_rem_{var} = M - {var} * GM_BLOCK_M;"),
@@ -494,7 +533,7 @@ class HexagonEmitter(PyStmtExprVisitor):
                 is_gdn_block = self._contains_gdn_leaf(op.body)
                 if is_gdn_block:
                     self.gdn_mode = "leaf"
-                if is_vector_block and not is_gdn_block and not self.has_gemm:
+                if is_vector_block and not is_gdn_block and not self._pre_has_gemm:
                     self.has_vector_kernel = True
                     self.vector_uses_pool = True
                     wv = ctx.worker_var or "job"
@@ -507,7 +546,14 @@ class HexagonEmitter(PyStmtExprVisitor):
                     wv = ctx.worker_var or "job"
                     return [self._ind(indent, f"// TIR launch_thread(blockIdx.x, extent={extent}) -> worker-pooled heads"),
                             self._ind(indent, f"const int {vname} = {wv};")] + body
-                bound = ("1" if self.gdn_mode == "escape" else ("(total + PANEL - 1) / PANEL" if (self.has_vector_kernel or not self.has_gemm) else "N / NP"))
+                if self.gdn_mode == "escape":
+                    bound = "1"
+                elif self._generic_gemm_recipe_mode():
+                    bound = str(extent)
+                elif (self.has_vector_kernel and not self._pre_has_gemm) or not self._pre_has_gemm:
+                    bound = "(total + PANEL - 1) / PANEL"
+                else:
+                    bound = "N / NP"
                 return [self._ind(indent, f"// TIR launch_thread(blockIdx.x, extent={extent})"),
                         self._ind(indent, f"for (int {vname} = 0; {vname} < {bound}; {vname}++) {{")] + body + [self._ind(indent, "}")]
             if "threadIdx.x" in name or vname == "tx":
@@ -518,7 +564,12 @@ class HexagonEmitter(PyStmtExprVisitor):
                 self.nworkers = extent
             if "threadIdx" in name or vname in ("tx", "ty", "tz"):
                 body = self._lower_stmt(op.body, ctx, indent)
-                return [self._ind(indent, f"// TIR {name} extent={extent} is lowered into hrt_* worker-pool recipes")] + body
+                prefix = [self._ind(indent, f"// TIR {name} extent={extent} is lowered into hrt_* worker-pool recipes")]
+                if any(re.search(r"\b%s\b" % re.escape(vname), line) for line in body):
+                    prefix.append(self._ind(indent, f"const int {vname} = 0;"))
+                return prefix + body
+            return self._lower_stmt(op.body, ctx, indent)
+        if key == "tl.assume":
             return self._lower_stmt(op.body, ctx, indent)
         raise HexagonEmitError(f"白名单: 不支持 AttrStmt attr_key={key}{_loc(op)}")
 
@@ -547,7 +598,7 @@ class HexagonEmitter(PyStmtExprVisitor):
                 return self._emit_reduce_prod2_128(call, ctx, indent)
             if callee == "hexagon.gemm_hmx":
                 raise HexagonEmitError(f"白名单: hexagon.gemm_hmx 必须后接 hexagon.copy_acc_rm 以执行延迟 acc_read{_loc(op)}")
-            if callee in ("hexagon.copy_rm_ah", "hexagon.copy_ah_rm", "hexagon.copy_acc_rm", "hexagon.copy_ddr"):
+            if callee in ("hexagon.copy_rm_ah", "hexagon.copy_f32_ah", "hexagon.copy_f32_wh", "hexagon.copy_ah_rm", "hexagon.copy_acc_rm", "hexagon.copy_ddr"):
                 return self._emit_copy_intrin(call, ctx, indent)
             if callee and callee.startswith("hexagon.") and callee.split(".", 1)[1] in self._gdn_leaf_names():
                 return self._emit_gdn_leaf(callee.split(".", 1)[1], call, ctx, indent)
@@ -561,6 +612,38 @@ class HexagonEmitter(PyStmtExprVisitor):
         callee = _ann_str(call.args[0]) if call.args else None
         if callee == "hexagon.copy_rm_ah":
             dst = self._buffer_from_data_arg(call.args[2]) if len(call.args) > 2 else None
+            if self._generic_gemm_recipe_mode():
+                self.has_copy = True
+                src = self._buffer_from_data_arg(call.args[1]) if len(call.args) > 1 else None
+                dst = self._buffer_from_data_arg(call.args[2]) if len(call.args) > 2 else None
+                if src is None or dst is None:
+                    raise HexagonEmitError(f"copy_rm_ah: 找不到源/目标 buffer{_loc(call)}")
+                src_ptr = self._buffer_ptr_c(src)
+                dst_off = self._vtcm_offset_c(dst)
+                snd = int(_i64(call.args[3]) or 0) if len(call.args) > 3 else 0
+                src_base = self._copy_region_linear_base(call, 4, snd, src)
+                dst_meta = 4 + 2 * snd
+                dnd = int(_i64(call.args[dst_meta]) or 0) if len(call.args) > dst_meta else 0
+                dst_mins = [call.args[dst_meta + 1 + 2 * i] for i in range(dnd) if len(call.args) > dst_meta + 1 + 2 * i]
+                drow, dcol = self._flatten_view_rc(dst_mins, dst)
+                dst_view = self._hmx_tile_base_offset_from_min_c(drow, dcol, dst)
+                if dst_view != "0":
+                    dst_off = f"{dst_off} + {dst_view}"
+                dst_exts = [_i64(call.args[dst_meta + 2 + 2 * i]) if len(call.args) > dst_meta + 2 + 2 * i else None for i in range(dnd)]
+                if len(dst_exts) < 2 or dst_exts[-2] is None or dst_exts[-1] is None:
+                    raise HexagonEmitError(f"copy_rm_ah: 目标 AH/WH region 必须是静态二维尾维{_loc(call)}")
+                rows, cols = int(dst_exts[-2]), int(dst_exts[-1])
+                if rows % 32 or cols % 32:
+                    raise HexagonEmitError(f"R5: copy_rm_ah 目标 tile 维度必须 32 整除, 实际 rows={rows},cols={cols}")
+                kt = cols // 32
+                mt = rows // 32
+                body = [self._ind(indent, "if (!(abl & 2)) {"),
+                        self._ind(indent + 1, "hrt_mask_init();"),
+                        self._ind(indent + 1, f"for (int tl_gm_r = 0; tl_gm_r < {mt}; tl_gm_r++)"),
+                        self._ind(indent + 2, f"hrt_stage_act_hvx_direct((const uint8_t *)({src_ptr} + (size_t)({src_base}) + (size_t)tl_gm_r * 32 * {cols}),"),
+                        self._ind(indent + 3, f"V + {dst_off} + (size_t)tl_gm_r * {kt} * HRT_TILE_BYTES, {cols}, {kt}, HRT_TILE_BYTES, 32);"),
+                        self._ind(indent, "}")]
+                return body if ctx.worker_var is not None else self._prof_wrap(indent, 1, body)
             if self._is_gemm_b_operand(dst):
                 self.has_copy = True
                 w_base = "(size_t)bx * nct * kt" if self._legacy_gemm_mode() else "(size_t)bx * (NP / 32) * kt"
@@ -570,7 +653,7 @@ class HexagonEmitter(PyStmtExprVisitor):
                         self._ind(indent + 2, "(size_t)nct * kt * HRT_TILE_BYTES);"),
                         self._ind(indent, "prof[0] += (int32_t)(HAP_perf_get_qtimer_count() - t0);")]
             self.has_copy = True
-            rv = ctx.row_var or "m"
+            rv = ctx.row_var or "0"
             src = self._buffer_from_data_arg(call.args[1]) if len(call.args) > 1 else None
             src_ptr = self._buffer_ptr_c(src)
             if self._legacy_gemm_mode():
@@ -585,15 +668,74 @@ class HexagonEmitter(PyStmtExprVisitor):
             if bm == 32:
                 stage = [self._ind(indent + 1, f"hrt_stage_act_hvx_direct((const uint8_t *)({src_ptr} + (size_t){rv} * GM_BLOCK_M * K), V + GM_ACT, K, kt, HRT_TILE_BYTES, 32);")]
             else:
-                stage = [self._ind(indent + 1, "for (int rb = 0; rb < mbt; rb++)"),
+                mbt_expr = "mbt" if ctx.row_var is not None else str(bm // 32)
+                stage = [self._ind(indent + 1, f"for (int rb = 0; rb < {mbt_expr}; rb++)"),
                          self._ind(indent + 2, f"hrt_stage_act_hvx_direct((const uint8_t *)({src_ptr} + ((size_t){rv} * GM_BLOCK_M + rb * 32) * K),"),
                          self._ind(indent + 3, "V + GM_ACT + (size_t)rb * kt * HRT_TILE_BYTES, K, kt, HRT_TILE_BYTES, 32);")]
-            return [self._ind(indent, "t0 = HAP_perf_get_qtimer_count();"),
-                    self._ind(indent, "if (!(abl & 2)) {"),
+            body = [self._ind(indent, "if (!(abl & 2)) {"),
                     self._ind(indent + 1, "hrt_mask_init();"),
                     *stage,
-                    self._ind(indent, "}"),
+                    self._ind(indent, "}")]
+            return (body if ctx.worker_var is not None else self._prof_wrap(indent, 1, body)) if self._generic_gemm_recipe_mode() else [
+                    self._ind(indent, "t0 = HAP_perf_get_qtimer_count();"),
+                    *body,
                     self._ind(indent, "prof[1] += (int32_t)(HAP_perf_get_qtimer_count() - t0);")]
+        if callee in ("hexagon.copy_f32_ah", "hexagon.copy_f32_wh"):
+            self.has_copy = True
+            self.has_scalar_kernel = True
+            src = self._buffer_from_data_arg(call.args[1]) if len(call.args) > 1 else None
+            dst = self._buffer_from_data_arg(call.args[2]) if len(call.args) > 2 else None
+            if dst is None:
+                raise HexagonEmitError(f"copy_f32_ah: 找不到目标 VTCM buffer{_loc(call)}")
+            src_ptr = self._buffer_ptr_c(src)
+            snd = int(_i64(call.args[3]) or 0) if len(call.args) > 3 else 0
+            src_mins = [self._expr_c(call.args[4 + 2 * i]) for i in range(snd) if len(call.args) > 4 + 2 * i]
+            src_exts = [_i64(call.args[5 + 2 * i]) if len(call.args) > 5 + 2 * i else None for i in range(snd)]
+            dst_meta = 4 + 2 * snd
+            dnd = int(_i64(call.args[dst_meta]) or 0) if len(call.args) > dst_meta else 0
+            dst_exts = [_i64(call.args[dst_meta + 2 + 2 * i]) if len(call.args) > dst_meta + 2 + 2 * i else None for i in range(dnd)]
+            if len(dst_exts) < 2 or dst_exts[-2] is None or dst_exts[-1] is None:
+                raise HexagonEmitError(f"copy_f32_ah: 目标 AH region 必须是静态二维尾维{_loc(call)}")
+            rows, cols = int(dst_exts[-2]), int(dst_exts[-1])
+            if len(src_exts) < 2 or src_exts[-1] is None:
+                raise HexagonEmitError(f"copy_f32_ah: 源 fp32 region 必须是静态二维尾维{_loc(call)}")
+            # 点视图的 region extent 可能被对侧广播成逻辑 tile 形状(如
+            # w^T staging 的 (128,32)),而行距永远是背板 buffer 的行长。
+            src_ld_i = _i64(src.shape[-1]) if src is not None and len(src.shape) >= 1 else None
+            ld = int(src_ld_i) if src_ld_i is not None else int(src_exts[-1])
+            trans_arg_idx = dst_meta + 1 + 2 * dnd
+            if len(call.args) > trans_arg_idx:
+                trans = self._expr_c(call.args[trans_arg_idx])
+            else:
+                trans_i = 1 if rows != cols and src_exts[-2] == cols and src_exts[-1] == rows else 0
+                trans = str(trans_i)
+            src_base = self._copy_region_linear_base(call, 4, snd, src)
+            bname = _buffer_name(dst)
+            alloc = next((a for a in self.allocs if a.name == bname), None)
+            if alloc is None or alloc.offset is None:
+                raise HexagonEmitError(f"R3: 找不到 VTCM buffer {bname} 的静态偏移")
+            dst_mins = [call.args[dst_meta + 1 + 2 * i] for i in range(dnd) if len(call.args) > dst_meta + 1 + 2 * i]
+            dst_view = self._hmx_tile_base_offset_from_region_c(dst_mins, dst, rows, cols)
+            dst_c = f"V + {alloc.offset}" if dst_view == "0" else f"V + {alloc.offset} + {dst_view}"
+            if callee == "hexagon.copy_f32_wh":
+                # WH: dst 逻辑形状 [N, K](gemm B 操作数约定);trans=1 表示
+                # 源按 [N,K] rm 读、产出 W=src^T 的 WH tiles(默认 trans=0:
+                # 源按 [K,N] rm 读)。不做方形自动推断,需要转置必须显式标注。
+                if len(call.args) > trans_arg_idx:
+                    pass
+                else:
+                    trans = "0"
+                helper = "hrt_tlgdn_stage_f32_to_wh"
+                dim_args = f"{cols}, {rows}"
+            else:
+                helper = "hrt_tlgdn_stage_f32_to_ah"
+                dim_args = f"{rows}, {cols}"
+            body = [
+                self._ind(indent, "if (!(abl & 2)) {"),
+                self._ind(indent + 1, f"{helper}(({src_ptr} + {src_base}), {dst_c}, {dim_args}, {ld}, {trans});"),
+                self._ind(indent, "}"),
+            ]
+            return body if ctx.worker_var is not None else self._prof_wrap(indent, 1, body)
         if callee == "hexagon.copy_ddr":
             self.has_copy = True
             src = self._buffer_from_data_arg(call.args[1]) if len(call.args) > 1 else None
@@ -683,6 +825,27 @@ class HexagonEmitter(PyStmtExprVisitor):
         dtype = str(getattr(buf, "dtype", "float16"))
         return "f32" if dtype == "float32" else "f16"
 
+    def _vtcm_offset_c(self, buf: Buffer | None) -> str:
+        bname = _buffer_name(buf)
+        alloc = next((a for a in self.allocs if a.name == bname), None)
+        if alloc is None or alloc.offset is None:
+            raise HexagonEmitError(f"R3: 找不到 VTCM buffer {bname} 的静态偏移")
+        return str(alloc.offset)
+
+    def _copy_region_linear_base(self, call: Call, start: int, ndim: int, buf: Buffer | None) -> str:
+        if ndim <= 0:
+            return "0"
+        terms: list[str] = []
+        for i in range(ndim):
+            mi = start + 2 * i
+            if len(call.args) <= mi:
+                break
+            min_c = self._expr_c(call.args[mi])
+            suffix = buf.shape[i + 1:] if buf is not None and len(buf.shape) > i + 1 else ()
+            stride = self._shape_numel_c(suffix) if suffix else "1"
+            terms.append(f"(size_t)({min_c})" if stride == "1" else f"(size_t)({min_c}) * ({stride})")
+        return " + ".join(terms) if terms else "0"
+
     def _gdn_arg(self, call: Call, idx: int) -> str:
         off = 1 if len(call.args) and (_ann_str(call.args[0]) or "").startswith("hexagon.") else 0
         if len(call.args) <= idx + off:
@@ -761,20 +924,24 @@ class HexagonEmitter(PyStmtExprVisitor):
                 self._ind(indent, f"Q6_dcfetch_A((void *)({p} + {idx_name} + {self.dcfetch_elems}));")
             )
         if scope == "global":
+            limit = self._shape_numel_c(buf.shape) if buf is not None and len(buf.shape) > 1 else "total"
+            guard = "total" if limit == "total" else f"(size_t)({limit})"
+            store_lanes = 64
+            if str(buf.dtype) == "float32" and not (len(val.names) == 2 and val.names[0] != val.names[1]):
+                store_lanes = 32
             lines += [
-                self._ind(indent, f"if ({idx_name} + 64 <= total) {{"),
+                self._ind(indent, f"if ({idx_name} + {store_lanes} <= {guard}) {{"),
                 *expr_lines,
                 self._ind(indent + 1, f"*(HVX_Vector *)({ptr} + {idx_name}) = {store_name};"),
             self._ind(indent, "}"),
             ]
         else:
             lines += [*expr_lines, self._ind(indent, f"*(HVX_Vector *)({ptr} + {idx_name}) = {store_name};")]
-        if str(buf.dtype) == "float32" and val.dtype == "float32" and len(val.names) == 2:
-            # One HVX register carries 32 fp32 lanes.  TileLang vectorized(64)
-            # elementwise expressions are represented as a lo/hi pair after
-            # fp16->fp32 promotion, so store both halves for a full 128B+128B
-            # fp32 vector body.  This keeps fp32 scratch rows valid for later
-            # vector->scalar reductions.
+        if str(buf.dtype) == "float32" and val.dtype == "float32" and len(val.names) == 2 and val.names[0] != val.names[1]:
+            # One HVX register carries 32 fp32 lanes.  64-lane fp32 elementwise
+            # expressions are a lo/hi register pair; store both halves.  A
+            # 32-lane context reuses a single register ([name, name]) and must
+            # NOT emit the +32 store, which would clobber the next row.
             if scope == "global":
                 lines.insert(-1, self._ind(indent + 1, f"*(HVX_Vector *)({ptr} + {idx_name} + 32) = {val.names[1]};"))
             else:
@@ -863,18 +1030,26 @@ class HexagonEmitter(PyStmtExprVisitor):
         # vector induction variable (which would repeat the same vector).
         if ctx.vec_var is None or ctx.vec_var not in base:
             raise HexagonEmitError(f"R1: HVX 向量 load/store 地址必须包含 T.vectorized 变量并按 128B 对齐: {base}{_loc(op)}")
-        if "+ 1" in base or "+1" in base or "%" in base:
+        if "+ 1" in base or "+1" in base:
             raise HexagonEmitError(f"R1: HVX 向量 load/store 地址不可证 128B 对齐: {base}{_loc(op)}")
 
     def _vector_index_c(self, indices: Any, ctx: _Ctx, buf: Buffer | None = None) -> str:
         if len(indices) == 1:
             return self._expr_c(indices[0])
-        if len(indices) == 2:
-            row = self._expr_c(indices[0])
-            col = self._expr_c(indices[1])
-            stride = _i64(buf.shape[1]) if buf is not None and len(buf.shape) >= 2 else None
-            return f"({row}) * {stride if stride is not None else 'FF'} + ({col})"
-        raise HexagonEmitError("白名单: 向量 load/store 当前只支持 1D/2D buffer")
+        terms: list[str] = []
+        for i, idx in enumerate(indices):
+            idx_c = self._expr_c(idx)
+            suffix_shape = buf.shape[i + 1:] if buf is not None and len(buf.shape) > i + 1 else ()
+            stride = self._shape_numel_c(suffix_shape) if suffix_shape else "1"
+            terms.append(f"({idx_c})" if stride == "1" else f"({idx_c}) * {stride}")
+        return " + ".join(terms) if terms else "0"
+
+    def _shape_numel_c(self, shape: Any) -> str:
+        terms: list[str] = []
+        for dim in shape:
+            iv = _i64(dim)
+            terms.append(str(iv) if iv is not None else f"({self._expr_c(dim)})")
+        return " * ".join(terms) if terms else "1"
 
     def _region_base_c(self, expr: Any, ctx: _Ctx) -> str:
         load = _region_load(expr)
@@ -954,7 +1129,11 @@ class HexagonEmitter(PyStmtExprVisitor):
             raise HexagonEmitError(f"R2: 禁止对 VTCM buffer {_buffer_name(op.buffer)} 做标量 load/store{_loc(op)}")
         if _buffer_scope(op.buffer) == "local.var":
             val = self._expr_scalar(op.value, str(op.buffer.dtype))
-            return [self._ind(indent, f"{_buffer_name(op.buffer)} = {val};")]
+            name = _buffer_name(op.buffer)
+            if name not in self.scalar_vars:
+                self.scalar_vars[name] = str(op.buffer.dtype)
+                return [self._ind(indent, f"{self._scalar_ctype(str(op.buffer.dtype))} {name} = {val};")]
+            return [self._ind(indent, f"{name} = {val};")]
         ptr = self._buffer_ptr_c(op.buffer)
         idx = self._vector_index_c(op.indices, ctx, op.buffer)
         val = self._expr_scalar(op.value, str(op.buffer.dtype))
@@ -1071,11 +1250,135 @@ class HexagonEmitter(PyStmtExprVisitor):
         return [self._ind(indent, f"hrt_reduce_sum_f32_128_prod2({x0}, {y0}, {x1}, {y1}, {d0}, {d1});")]
 
     def _buffer_from_data_arg(self, arg: Any) -> Buffer | None:
+        if isinstance(arg, BufferLoad):
+            return arg.buffer
+        if isinstance(arg, Call) and _call_op_name(arg) == "tl.region":
+            load = arg.args[0] if arg.args else None
+            return getattr(load, "buffer", None)
+        buf = getattr(arg, "buffer", None)
+        if buf is not None:
+            return buf
         name = _var_name(arg)
         for buf in self.buffers.values():
             if _var_name(getattr(buf, "data", "")) == name or _buffer_name(buf) == name:
                 return buf
         return None
+
+    def _region_min_indices(self, arg: Any, buf: Buffer | None) -> list[Any]:
+        if isinstance(arg, Call) and _call_op_name(arg) == "tl.region" and arg.args:
+            load = arg.args[0]
+            if isinstance(load, BufferLoad):
+                return list(load.indices)
+        if isinstance(arg, BufferLoad):
+            return list(arg.indices)
+        region = getattr(arg, "region", None)
+        if region is not None:
+            return [r.min for r in region]
+        if buf is not None:
+            return [IntImm("int32", 0) for _ in buf.shape]
+        return []
+
+    def _flatten_view_rc(self, mins: list[Any], buf: Buffer | None) -> tuple[Any, Any]:
+        """Fold leading-dim view mins into the row index of the trailing 2-D plane.
+
+        Point views such as state_ah[hv, 0, 0] denote the trailing 2-D tile
+        rooted there; the AH/WH byte offset must see hv * shape[-2] rows.
+        """
+
+        zero = IntImm("int32", 0)
+        if len(mins) < 2:
+            return zero, zero
+        row, col = mins[-2], mins[-1]
+        if buf is not None and len(mins) > 2 and len(buf.shape) >= len(mins):
+            lead = None
+            for i in range(len(mins) - 2):
+                rows_per: Any = 1
+                for d in buf.shape[i + 1:-1]:
+                    rows_per = rows_per * d
+                term = mins[i] * rows_per
+                lead = term if lead is None else lead + term
+            if lead is not None:
+                row = row + lead
+        return row, col
+
+    def _hmx_tile_base_offset_c(self, arg: Any, buf: Buffer) -> str:
+        """Byte offset of a BufferLoad/tl.region base in AH/WH tile storage."""
+
+        mins = self._region_min_indices(arg, buf)
+        if len(mins) < 2 or len(buf.shape) < 2:
+            return "0"
+        row, col = self._flatten_view_rc(mins, buf)
+        row_c, col_c = self._expr_c(row), self._expr_c(col)
+        tile_cols = _i64(buf.shape[-1])
+        tile_cols_c = str(tile_cols // 32) if tile_cols is not None else f"(({self._expr_c(buf.shape[-1])}) / 32)"
+        if _i64(row) == 0 and _i64(col) == 0:
+            return "0"
+        return f"(((size_t)({row_c}) / 32) * {tile_cols_c} + ((size_t)({col_c}) / 32)) * HRT_TILE_BYTES"
+
+    def _hmx_tile_base_offset_from_min_c(self, row: Any, col: Any, buf: Buffer, tile_cols_override: int | None = None) -> str:
+        tile_cols = _i64(buf.shape[-1]) if len(buf.shape) >= 2 else None
+        tile_cols_c = str(tile_cols_override) if tile_cols_override is not None else (str(tile_cols // 32) if tile_cols is not None else f"(({self._expr_c(buf.shape[-1])}) / 32)")
+        if _i64(row) == 0 and _i64(col) == 0:
+            return "0"
+        row_c = row if isinstance(row, str) else self._expr_c(row)
+        col_c = col if isinstance(col, str) else self._expr_c(col)
+        return f"(((size_t)({row_c}) / 32) * {tile_cols_c} + ((size_t)({col_c}) / 32)) * HRT_TILE_BYTES"
+
+    def _hmx_tile_base_offset_from_region_c(self, mins: list[Any], buf: Buffer | None, rows: int, cols: int) -> str:
+        """Byte offset for AH/WH staging regions using logical 32x32 tiles.
+
+        At this point AH/WH buffer shapes may already be layout-expanded, but
+        the copy region extents remain the logical trailing matrix shape.  Use
+        those logical extents for leading-dimension stride so ``buf[h, 0, 0]``
+        advances by one full logical matrix plane, matching the HMX operand
+        base emitted by ``gemm_hmx._flatten_view_base``.
+        """
+
+        if len(mins) < 2:
+            return "0"
+        if all(_i64(m) == 0 for m in mins):
+            return "0"
+        row_min, col_min = mins[-2], mins[-1]
+        row_terms: list[str] = [self._expr_c(row_min)] if _i64(row_min) != 0 else []
+        if buf is not None and len(mins) > 2 and len(buf.shape) >= len(mins):
+            lead_extents = list(buf.shape[:len(mins) - 2])
+            for i in range(len(mins) - 2):
+                stride: Any = rows
+                for d in lead_extents[i + 1:]:
+                    iv = _i64(d)
+                    if iv is not None and isinstance(stride, int):
+                        stride *= int(iv)
+                    else:
+                        stride_s = str(stride) if isinstance(stride, int) else stride
+                        stride = f"({stride_s}) * ({self._expr_c(d)})"
+                stride_s = str(stride) if isinstance(stride, int) else stride
+                row_terms.append(f"({self._expr_c(mins[i])} * {stride_s})")
+        row_expr = " + ".join(row_terms) if row_terms else "0"
+        assert buf is not None
+        return self._hmx_tile_base_offset_from_min_c(row_expr, col_min, buf, cols // 32)
+
+    def _emit_profiled_pool_call(self, indent: int, call_line: str) -> list[str]:
+        if not self.hexagon_prof:
+            return [self._ind(indent, call_line)]
+        slot = self._prof_next_slot
+        self._prof_next_slot += 1
+        return [
+            self._ind(indent, "tl_prof_phase_t0 = HAP_perf_get_qtimer_count();"),
+            self._ind(indent, call_line),
+            self._ind(indent, f"prof[{slot}] += (int32_t)(HAP_perf_get_qtimer_count() - tl_prof_phase_t0);"),
+        ]
+
+    def _prof_wrap(self, indent: int, slot: int, lines: list[str]) -> list[str]:
+        """Wrap an emitted main-thread region in an opt-in qtimer accumulator."""
+
+        if not self.hexagon_prof:
+            return lines
+        return [self._ind(indent, "t0 = HAP_perf_get_qtimer_count();")] + lines + [
+            self._ind(indent, f"prof[{slot}] += (int32_t)(HAP_perf_get_qtimer_count() - t0);")
+        ]
+
+    def _prof_reset(self, indent: int) -> list[str]:
+        return [self._ind(indent, "t0 = HAP_perf_get_qtimer_count();")] if self.hexagon_prof else []
 
     def _new_hvx_tmp(self, prefix: str = "hv") -> str:
         n = getattr(self, "_hvx_tmp", 0)
@@ -1145,6 +1448,81 @@ class HexagonEmitter(PyStmtExprVisitor):
             return _HVXVal([name], "float16")
         raise HexagonEmitError(f"R7: 不支持向量 cast {v.dtype}->{dtype}")
 
+    def _lower_hvx_int_expr(self, e: Any, ctx: _Ctx, lines: list[str], indent: int, lane_off: int = 0) -> str:
+        iv = _i64(e)
+        if iv is not None:
+            name = self._new_hvx_tmp("iv")
+            lines.append(self._ind(indent, f"HVX_Vector {name} = Q6_V_vsplat_R({iv});"))
+            return name
+        if hasattr(e, "name") or hasattr(e, "name_hint"):
+            vname = _var_name(e)
+            name = self._new_hvx_tmp("iv")
+            if ctx.vec_var is not None and vname == ctx.vec_var:
+                arr = self._new_scalar_tmp("iota_w")
+                vals = ", ".join(str(i) for i in range(32))
+                lines.append(self._ind(indent, f"static const int32_t {arr}[32] __attribute__((aligned(128))) = {{{vals}}};"))
+                base = f"({vname} + {lane_off})" if lane_off else vname
+                lines.append(self._ind(indent, f"HVX_Vector {name} = Q6_Vw_vadd_VwVw(*(const HVX_Vector *){arr}, Q6_V_vsplat_R({base}));"))
+            else:
+                lines.append(self._ind(indent, f"HVX_Vector {name} = Q6_V_vsplat_R({vname});"))
+            return name
+        cls = type(e).__name__
+        if cls in ("Add", "Sub"):
+            a = self._lower_hvx_int_expr(e.a, ctx, lines, indent, lane_off)
+            b = self._lower_hvx_int_expr(e.b, ctx, lines, indent, lane_off)
+            name = self._new_hvx_tmp("iv")
+            fn = "Q6_Vw_vadd_VwVw" if cls == "Add" else "Q6_Vw_vsub_VwVw"
+            lines.append(self._ind(indent, f"HVX_Vector {name} = {fn}({a}, {b});"))
+            return name
+        if cls in ("FloorDiv", "FloorMod"):
+            # 仅支持 2 的幂常数:div → 算术右移, mod → 按位与 (lane 值非负)。
+            k = _i64(e.b)
+            if k is None or k <= 0 or (k & (k - 1)) != 0:
+                raise HexagonEmitError(f"白名单: 向量整数 {cls} 只支持 2 的幂常数, 实际 {e.b}{_loc(e)}")
+            a = self._lower_hvx_int_expr(e.a, ctx, lines, indent, lane_off)
+            name = self._new_hvx_tmp("iv")
+            if cls == "FloorDiv":
+                lines.append(self._ind(indent, f"HVX_Vector {name} = Q6_Vw_vasr_VwR({a}, {k.bit_length() - 1});"))
+            else:
+                m = self._new_hvx_tmp("iv")
+                lines.append(self._ind(indent, f"HVX_Vector {m} = Q6_V_vsplat_R({k - 1});"))
+                lines.append(self._ind(indent, f"HVX_Vector {name} = Q6_V_vand_VV({a}, {m});"))
+            return name
+        if cls == "Cast":
+            return self._lower_hvx_int_expr(e.value, ctx, lines, indent, lane_off)
+        raise HexagonEmitError(f"白名单: 向量谓词暂不支持整数表达式 {cls}{_loc(e)}")
+
+    def _lower_hvx_pred(self, e: Any, ctx: _Ctx, lines: list[str], indent: int, lane_off: int = 0) -> str:
+        cls = type(e).__name__
+        if cls in ("LT", "LE", "GT", "GE", "EQ", "NE"):
+            a = self._lower_hvx_int_expr(e.a, ctx, lines, indent, lane_off)
+            b = self._lower_hvx_int_expr(e.b, ctx, lines, indent, lane_off)
+            q = self._new_hvx_tmp("q")
+            if cls == "LT":
+                lines.append(self._ind(indent, f"HVX_VectorPred {q} = Q6_Q_vcmp_gt_VwVw({b}, {a});"))
+            elif cls == "GT":
+                lines.append(self._ind(indent, f"HVX_VectorPred {q} = Q6_Q_vcmp_gt_VwVw({a}, {b});"))
+            elif cls == "LE":
+                one = self._new_hvx_tmp("iv")
+                bp1 = self._new_hvx_tmp("iv")
+                lines.append(self._ind(indent, f"HVX_Vector {one} = Q6_V_vsplat_R(1);"))
+                lines.append(self._ind(indent, f"HVX_Vector {bp1} = Q6_Vw_vadd_VwVw({b}, {one});"))
+                lines.append(self._ind(indent, f"HVX_VectorPred {q} = Q6_Q_vcmp_gt_VwVw({bp1}, {a});"))
+            elif cls == "GE":
+                one = self._new_hvx_tmp("iv")
+                ap1 = self._new_hvx_tmp("iv")
+                lines.append(self._ind(indent, f"HVX_Vector {one} = Q6_V_vsplat_R(1);"))
+                lines.append(self._ind(indent, f"HVX_Vector {ap1} = Q6_Vw_vadd_VwVw({a}, {one});"))
+                lines.append(self._ind(indent, f"HVX_VectorPred {q} = Q6_Q_vcmp_gt_VwVw({ap1}, {b});"))
+            elif cls == "EQ":
+                lines.append(self._ind(indent, f"HVX_VectorPred {q} = Q6_Q_vcmp_eq_VwVw({a}, {b});"))
+            else:
+                eq = self._new_hvx_tmp("q")
+                lines.append(self._ind(indent, f"HVX_VectorPred {eq} = Q6_Q_vcmp_eq_VwVw({a}, {b});"))
+                lines.append(self._ind(indent, f"HVX_VectorPred {q} = Q6_Q_not_Q({eq});"))
+            return q
+        raise HexagonEmitError(f"白名单: 向量谓词暂不支持 {cls}{_loc(e)}")
+
     def _lower_hvx_expr(self, e: Any, ctx: _Ctx, lines: list[str], want: str | None, indent: int) -> _HVXVal:
         imm = self._imm_value(e)
         if imm is not None:
@@ -1195,6 +1573,32 @@ class HexagonEmitter(PyStmtExprVisitor):
             arg0 = 0
             if opname in ("tir.call_pure_extern", "tirx.call_pure_extern") and len(e.args) >= 1:
                 callee = _ann_str(e.args[0]); arg0 = 1
+            if opname in ("tir.if_then_else", "tirx.if_then_else") or str(opname).endswith("if_then_else"):
+                if len(e.args) < 3:
+                    raise HexagonEmitError(f"白名单: if_then_else 参数数量不足{_loc(e)}")
+                dtype = want or self._expr_dtype_hint(e.args[1]) or self._expr_dtype_hint(e.args[2]) or "float16"
+                tv = self._lower_hvx_expr(e.args[1], ctx, lines, dtype, indent)
+                fv = self._lower_hvx_expr(e.args[2], ctx, lines, dtype, indent)
+                if dtype == "float16":
+                    pred = self._lower_hvx_pred(e.args[0], ctx, lines, indent)
+                    name = self._new_hvx_tmp()
+                    lines.append(self._ind(indent, f"HVX_Vector {name} = Q6_V_vmux_QVV({pred}, {tv.names[0]}, {fv.names[0]});"))
+                    return _HVXVal([name], "float16")
+                if dtype == "float32":
+                    # fp32 每 32 lane 一个寄存器;64-lane pair 的上半必须用
+                    # 自己的谓词(lane 下标 +32)。[name, name] 伪 pair 只算一次。
+                    tn = tv.names if not (len(tv.names) == 2 and tv.names[0] == tv.names[1]) else tv.names[:1]
+                    fn = fv.names if not (len(fv.names) == 2 and fv.names[0] == fv.names[1]) else fv.names[:1]
+                    n = max(len(tn), len(fn))
+                    out: list[str] = []
+                    for i in range(n):
+                        pred_i = self._lower_hvx_pred(e.args[0], ctx, lines, indent, lane_off=32 * i)
+                        ti = tn[i] if i < len(tn) else tn[-1]
+                        fi = fn[i] if i < len(fn) else fn[-1]
+                        name = self._new_hvx_tmp()
+                        lines.append(self._ind(indent, f"HVX_Vector {name} = Q6_V_vmux_QVV({pred_i}, {ti}, {fi});"))
+                        out.append(name)
+                    return _HVXVal(out, "float32")
             if callee == "hexagon.silu_fp16":
                 x = self._lower_hvx_expr(e.args[arg0], ctx, lines, "float16", indent)
                 one = self._const_hvx(1.0, "float16", lines, indent)
@@ -1267,14 +1671,97 @@ class HexagonEmitter(PyStmtExprVisitor):
     def _emit_gemm_intrin_with_copy(self, gemm: Call, copy: Call, ctx: _Ctx, indent: int) -> list[str]:
         self._visit_gemm_intrin(gemm)
         self._visit_copy_intrin(copy)
+        if self._generic_gemm_recipe_mode():
+            return self._emit_gemm_recipe_generic(gemm, copy, ctx, indent)
         return self._emit_gemm_recipe(ctx, indent)
 
+    def _emit_gemm_recipe_generic(self, gemm: Call, copy: Call, ctx: _Ctx, indent: int) -> list[str]:
+        if len(gemm.args) < 7:
+            raise HexagonEmitError("R5: hexagon.gemm_hmx 参数数量不足")
+        m, n, k = (_i64(gemm.args[-3]), _i64(gemm.args[-2]), _i64(gemm.args[-1]))
+        if None in (m, n, k):
+            raise HexagonEmitError("R5: 通用 hexagon.gemm_hmx 的 M/N/K 必须是静态整数")
+        assert m is not None and n is not None and k is not None
+        if m % 32 or n % 32 or k % 32:
+            raise HexagonEmitError(f"R5: hexagon.gemm_hmx tile 维度必须 32 整除, 实际 M={m},N={n},K={k}")
+        a_buf = self._buffer_from_data_arg(gemm.args[1])
+        b_buf = self._buffer_from_data_arg(gemm.args[2])
+        if a_buf is None or b_buf is None:
+            raise HexagonEmitError(f"R5: 通用 gemm 找不到 A/B VTCM buffer{_loc(gemm)}")
+        if not _is_vtcm(_buffer_scope(a_buf)) or not _is_vtcm(_buffer_scope(b_buf)):
+            raise HexagonEmitError(f"R5: 通用 gemm 要求 A/B 已 stage 到 VTCM AH/WH buffer{_loc(gemm)}")
+        mt, nt, kt = m // 32, n // 32, k // 32
+        a_base = self._vtcm_offset_c(a_buf)
+        b_base = self._vtcm_offset_c(b_buf)
+        if len(gemm.args) >= 11:
+            a_view = self._hmx_tile_base_offset_from_min_c(gemm.args[4], gemm.args[5], a_buf, kt)
+            b_view = self._hmx_tile_base_offset_from_min_c(gemm.args[6], gemm.args[7], b_buf, kt)
+        else:
+            a_view = self._hmx_tile_base_offset_c(gemm.args[1], a_buf)
+            b_view = self._hmx_tile_base_offset_c(gemm.args[2], b_buf)
+        a_off = a_base if a_view == "0" else f"{a_base} + {a_view}"
+        b_off = b_base if b_view == "0" else f"{b_base} + {b_view}"
+        if len(copy.args) < 4:
+            raise HexagonEmitError("copy_acc_rm 参数数量不足")
+        dst = self._buffer_from_data_arg(copy.args[2])
+        if dst is None:
+            raise HexagonEmitError(f"copy_acc_rm: 找不到目标 buffer{_loc(copy)}")
+        dnd_start = 4 + 2 * int(_i64(copy.args[3]) or 0)
+        dnd = int(_i64(copy.args[dnd_start]) or 0) if len(copy.args) > dnd_start else 0
+        dst_base = self._copy_region_linear_base(copy, dnd_start + 1, dnd, dst)
+        dst_scope = _buffer_scope(dst)
+        dst_is_vtcm = _is_vtcm(dst_scope)
+        if str(dst.dtype) != "float16":
+            raise HexagonEmitError(f"copy_acc_rm: 通用 gemm 写回只支持 fp16, 实际 {dst.dtype}")
+        acc0 = "TL_ACC"
+        prefix = self._new_scalar_tmp("gm")
+        lines: list[str] = [
+            *self._prof_reset(indent),
+            self._ind(indent, f"for (int {prefix}_r = 0; {prefix}_r < {mt}; {prefix}_r++) {{"),
+            self._ind(indent + 1, f"for (int {prefix}_c = 0; {prefix}_c < {nt}; {prefix}_c++) {{"),
+            self._ind(indent + 2, "if (!(abl & 4)) {"),
+            self._ind(indent + 3, "int e = hrt_acc_clear_f16();"),
+            self._ind(indent + 3, "if (e) return e;"),
+            self._ind(indent + 3, f"for (int {prefix}_kb = 0; {prefix}_kb < {kt}; {prefix}_kb++) {{"),
+            self._ind(indent + 4, f"e = hrt_hmx_mm_f16(V, {a_off} + ((size_t){prefix}_r * {kt} + {prefix}_kb) * HRT_TILE_BYTES,"),
+            self._ind(indent + 5, f"{b_off} + ((size_t){prefix}_c * {kt} + {prefix}_kb) * HRT_TILE_BYTES);"),
+            self._ind(indent + 4, "if (e) return e;"),
+            self._ind(indent + 3, "}"),
+            self._ind(indent + 3, f"if (!(abl & 16)) {{ e = hrt_acc_read_f16(V, g_v.CFG, {acc0}); if (e) return e; }}"),
+            self._ind(indent + 2, "}"),
+            *( [self._ind(indent + 2, "prof[2] += (int32_t)(HAP_perf_get_qtimer_count() - t0);"),
+                self._ind(indent + 2, "t0 = HAP_perf_get_qtimer_count();")] if self.hexagon_prof else [] ),
+            self._ind(indent + 2, "if (!(abl & 8)) {"),
+        ]
+        if dst_is_vtcm:
+            dst_off = self._vtcm_offset_c(dst)
+            lines += [
+                self._ind(indent + 3, f"hrt_tlgdn_acc_tile_to_vtcm_rm(V, {acc0}, (f16 *)(V + {dst_off}), {n}, {prefix}_r * 32, {prefix}_c * 32);"),
+            ]
+        elif dst_scope == "global":
+            dst_ptr = self._buffer_ptr_c(dst)
+            lines += [
+                self._ind(indent + 3, "hrt_mask_init();"),
+                self._ind(indent + 3, f"hrt_unperm_single_hvx(V + {acc0}, {dst_ptr} + (size_t)({dst_base}) + (size_t){prefix}_r * 32 * {n} + {prefix}_c * 32, {n});"),
+            ]
+        else:
+            raise HexagonEmitError(f"copy_acc_rm: 目标必须是 global 或 VTCM RM, 实际 scope={dst_scope}")
+        lines += [
+            self._ind(indent + 2, "}"),
+            *( [self._ind(indent + 2, "prof[3] += (int32_t)(HAP_perf_get_qtimer_count() - t0);"),
+                self._ind(indent + 2, "t0 = HAP_perf_get_qtimer_count();")] if self.hexagon_prof else [] ),
+            self._ind(indent + 1, "}"),
+            self._ind(indent, "}"),
+        ]
+        return lines
+
     def _emit_gemm_recipe(self, ctx: _Ctx, indent: int) -> list[str]:
-        rv = ctx.row_var or "m"
+        rv = ctx.row_var or "0"
         bv = ctx.block_var or "bx"
         if not self._legacy_gemm_mode():
             bm = self.block_M_hint or 32
-            rr_open = [] if bm == 32 else [self._ind(indent, "for (int rb = 0; rb < mbt; rb++) {")]
+            mbt_expr = "mbt" if ctx.row_var is not None else str(bm // 32)
+            rr_open = [] if bm == 32 else [self._ind(indent, f"for (int rb = 0; rb < {mbt_expr}; rb++) {{")]
             rr_close = [] if bm == 32 else [self._ind(indent, "}")]
             rr = "0" if bm == 32 else "rb"
             ii = indent if bm == 32 else indent + 1
@@ -1350,6 +1837,8 @@ class HexagonEmitter(PyStmtExprVisitor):
             self.buffers[_buffer_name(buf)] = buf
         self._record_stmt_buffers(func.body)
         attrs = func.attrs or {}
+        self.hexagon_prof = _bool_arg(attrs.get("tl.hexagon_prof", False))
+        self._prof_next_slot = 5
         self._written_globals = {str(x) for x in (attrs.get("hexagon.write_set") or [])}
         raw_offsets = attrs.get("hexagon.vtcm_offsets") or {}
         self._vtcm_offsets = {str(k): int(v.value if hasattr(v, "value") else v) for k, v in raw_offsets.items()}
@@ -1401,6 +1890,19 @@ class HexagonEmitter(PyStmtExprVisitor):
             args.append(_GlobalArg(buf=buf, cname=cname))
             self.global_ptrs[bname] = cname
         self.global_args = args
+
+    def _derive_shape_params(self, func: PrimFunc) -> list[str]:
+        params: list[str] = []
+        seen: set[str] = set()
+        for _, buf in func.buffer_map.items():
+            for dim in buf.shape:
+                if _i64(dim) is not None:
+                    continue
+                name = self._expr_c(dim)
+                if name not in seen:
+                    seen.add(name)
+                    params.append(name)
+        return params
 
     @staticmethod
     def _c_var_name(name: str, used: set[str]) -> str:
@@ -1469,9 +1971,9 @@ class HexagonEmitter(PyStmtExprVisitor):
                 self.block_M_hint = int(shape[0])
                 self.block_N_hint = int(shape[1])
             numel = _shape_numel(buf.shape)
-            nbytes = _align((numel or 0) * 2)
+            nbytes = _align(2 * GM_TILE if self._generic_gemm_recipe_mode() else (numel or 0) * 2)
             name = _buffer_name(buf)
-            self.allocs.append(_Alloc(name, scope, nbytes if not self._legacy_gemm_mode() else 0, self._vtcm_offsets.get(name)))
+            self.allocs.append(_Alloc(name, scope, nbytes if (self._generic_gemm_recipe_mode() or not self._legacy_gemm_mode()) else 0, self._vtcm_offsets.get(name)))
             return
         if _is_vtcm(scope):
             numel = _shape_numel(buf.shape)
@@ -1555,9 +2057,48 @@ class HexagonEmitter(PyStmtExprVisitor):
         bn = self.block_N_hint or 1024
         return bm == 32 and bn == 1024
 
+    def _generic_gemm_recipe_mode(self) -> bool:
+        """Use per-call GEMM lowering when HMX appears inside a non-GEMM shell.
+
+        The legacy GEMM_NT anchor (block_M=32, block_N=1024, no view operands)
+        always keeps the legacy path so its emitted ABI stays byte-identical.
+        """
+
+        if not self._pre_has_gemm:
+            return False
+        if self._legacy_gemm_mode() and not self._pre_has_gemm_view:
+            return False
+        return bool(self._pre_has_gemm_view or self._pre_has_vector or self.has_scalar_kernel or self._uses_gdn_shell())
+
+    def _stmt_contains_gemm_intrin(self, op: Any) -> bool:
+        if isinstance(op, Evaluate) and isinstance(op.value, Call):
+            return self._extern_callee_name(op.value) == "hexagon.gemm_hmx"
+        if isinstance(op, For):
+            return self._stmt_contains_gemm_intrin(op.body)
+        if isinstance(op, AttrStmt):
+            return self._stmt_contains_gemm_intrin(op.body)
+        if isinstance(op, (SBlockRealize, SBlock)):
+            return self._stmt_contains_gemm_intrin(op.block if isinstance(op, SBlockRealize) else op.body)
+        if isinstance(op, SeqStmt):
+            return any(self._stmt_contains_gemm_intrin(x) for x in op.seq)
+        if isinstance(op, IfThenElse):
+            return self._stmt_contains_gemm_intrin(op.then_case) or (op.else_case is not None and self._stmt_contains_gemm_intrin(op.else_case))
+        return False
+
     def _record_gemm_operands(self, op: Any) -> None:
         def visit(node: Any) -> None:
             if isinstance(node, Call) and self._extern_callee_name(node) == "hexagon.gemm_hmx":
+                # 11-arg form carries (A_base0, A_base1, B_base0, B_base1).
+                # Only a genuinely non-zero/non-constant base means a view
+                # operand; the plain 7-arg-equivalent form (all bases zero)
+                # must NOT flip legacy GEMM kernels into the generic path.
+                if len(node.args) >= 11:
+                    bases = node.args[4:8]
+                    def _is_zero(x: Any) -> bool:
+                        v = _i64(x)
+                        return v == 0
+                    if not all(_is_zero(b) for b in bases):
+                        self._pre_has_gemm_view = True
                 self._record_gemm_b_arg(node)
 
         try:
@@ -1621,6 +2162,8 @@ class HexagonEmitter(PyStmtExprVisitor):
     def _looks_like_row_loop(self, op: For) -> bool:
         var = _var_name(op.loop_var)
         extent = _i64(op.extent)
+        if self._generic_gemm_recipe_mode():
+            return var in ("m", "rb")
         return var in ("m", "rb") or (extent is not None and self.block_M_hint == 32 and extent >= 1)
 
     def _expr_c(self, e: Any) -> str:
@@ -1631,10 +2174,10 @@ class HexagonEmitter(PyStmtExprVisitor):
             return _var_name(e)
         cls = type(e).__name__
         cls_key = cls.lower()
-        if cls_key in ("add", "sub", "mul", "div", "floordiv", "floormod", "mod", "lt", "le", "gt", "ge", "eq", "ne"):
+        if cls_key in ("add", "sub", "mul", "div", "floordiv", "floormod", "mod", "lt", "le", "gt", "ge", "eq", "ne", "and", "or"):
             a, b = e.a, e.b
             op = {"add": "+", "sub": "-", "mul": "*", "div": "/", "floordiv": "/", "floormod": "%", "mod": "%",
-                  "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "eq": "==", "ne": "!="}[cls_key]
+                  "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "eq": "==", "ne": "!=", "and": "&&", "or": "||"}[cls_key]
             return f"({self._expr_c(a)} {op} {self._expr_c(b)})"
         if cls == "Cast":
             return self._expr_c(e.value)
@@ -1663,11 +2206,13 @@ class HexagonEmitter(PyStmtExprVisitor):
     def _render_c(self) -> str:
         if self._uses_gdn_shell():
             return self._render_gdn_c()
-        if self.has_vector_kernel or self.has_scalar_kernel:
+        if (self.has_vector_kernel or self.has_scalar_kernel) and not self.has_gemm:
             return self._render_vector_c()
         if not self.has_gemm:
             raise HexagonEmitError("R5: v2 emitter 目前只支持包含 T.gemm 的 GEMM_NT kernel")
         m, n, k = self._infer_problem_shape()
+        if self._generic_gemm_recipe_mode() or self.has_vector_kernel or self.has_scalar_kernel or self._pool_workers:
+            return self._render_generic_c(m, n, k)
         if not self._legacy_gemm_mode():
             return self._render_gemm_c_generic(m, n, k)
         if m % 32 or n % 256 or k % 64:
@@ -1805,6 +2350,122 @@ int {self.func_name}(remote_handle64 h, unsigned char *slab, int slabLen,
     int kt = K / 32, nct = NP / 32;
     (void)nct;  // user-tiled 路径内层循环重声明,入口副本可能不引用
     uint64_t t0, tt = HAP_perf_get_qtimer_count();
+{body}
+    prof[4] = (int32_t)(HAP_perf_get_qtimer_count() - tt);
+    return 0;
+}}
+'''
+
+    def _render_pool_worker_defs(self) -> str:
+        if not self._pool_workers:
+            return ""
+        chunks: list[str] = []
+        for worker in self._pool_workers:
+            fields: list[str] = []
+            locals_: list[str] = []
+            for arg in self.global_args:
+                ct = self._buffer_elem_ctype(arg.buf)
+                qual = "const " if self._is_readonly_global(arg.buf) else ""
+                fields.append(f"    {qual}{ct} *{arg.cname};")
+                locals_.append(f"    {qual}{ct} *{arg.cname} = ctx->{arg.cname};")
+            for name in self._shape_params:
+                fields.append(f"    int {name};")
+                locals_.append(f"    const int {name} = ctx->{name};")
+            for name in worker.outer_vars:
+                fields.append(f"    int {name};")
+                locals_.append(f"    const int {name} = ctx->{name};")
+            fields.append("    int abl;")
+            fields.append("    int32_t *prof;")
+            locals_.append("    const int abl = ctx->abl;")
+            locals_.append("    int32_t *prof = ctx->prof;")
+            body = "\n".join(worker.body)
+            # Only unpack ctx fields the worker body actually references;
+            # unpacking everything would trip -Wunused-variable (-Werror in
+            # the skel build) for pool phases that touch a subset of args.
+            locals_ = [
+                line for line in locals_
+                if re.search(r"\b%s\b" % re.escape(line.split("=", 1)[0].strip().split()[-1].lstrip("*")), body)
+            ]
+            fields_s = "\n".join(fields)
+            locals_s = "\n".join(locals_)
+            # (void)-cast every unpacked local that survives (plus V/t0) so an
+            # unused-but-referenced-elsewhere decl can never warn; keep the
+            # cast list in sync with the filtered locals.
+            local_names = [
+                line.split("=", 1)[0].strip().split()[-1].lstrip("*")
+                for line in locals_
+            ]
+            voids = "".join(f" (void){n};" for n in ["V", "t0", *local_names])
+            chunks.append(f'''
+typedef struct {{
+{fields_s}
+}} {worker.ctx_type};
+
+static void {worker.name}(int job, void *opaque) {{
+    const {worker.ctx_type} *ctx = (const {worker.ctx_type} *)opaque;
+{locals_s}
+    uint8_t *V = HRT_VTCM_BASE();
+    uint64_t t0;{voids}
+{body}
+}}
+''')
+        return "\n".join(chunks)
+
+    def _render_generic_c(self, m: int, n: int, k: int) -> str:
+        del m, n, k  # Generic shell uses per-call static recipe sizes and ABI scalars.
+        body = "\n".join(self.body_lines)
+        func_name = self.func_name
+        vtcm_bytes = self._assign_vtcm_offsets()
+        shape_params = {name: name for name in self._shape_params}
+        prof_slots = max(5, self._prof_next_slot) if self.hexagon_prof else 5
+        slab_lines, prof_off = self._emit_slab_layout(1, shape_params, prof_bytes=prof_slots * 4)
+        slab = "\n".join(slab_lines)
+        worker_defs = self._render_pool_worker_defs()
+        gm_out_define = ""
+        accs = [a for a in self.allocs if _is_acc(a.scope) and a.offset is not None]
+        if accs:
+            gm_out_define = f"\n#define TL_ACC ((size_t){accs[0].offset})"
+        scalar_sig = "".join(f", int {p}" for p in self._shape_params)
+        time_decl = "uint64_t t0, tl_prof_phase_t0, tt = HAP_perf_get_qtimer_count();" if self.hexagon_prof else ("uint64_t t0, tt = HAP_perf_get_qtimer_count();" if "t0 =" in body else "uint64_t tt = HAP_perf_get_qtimer_count();")
+        prof_comment = ""
+        if self.hexagon_prof:
+            prof_comment = "\n".join([
+                "",
+                "// tl.hexagon_prof profile slots (int32 qtimer ticks, accumulated like gsp_prof):",
+                "//   prof[0]: pre-loop/weight-staging aggregate when emitted (legacy generic slot)",
+                "//   prof[1]: main-thread staging copies (rm/f32 -> AH/WH) aggregate",
+                "//   prof[2]: main-thread HMX matmul + accumulator read aggregate",
+                "//   prof[3]: main-thread accumulator readback/unpermute/writeback aggregate",
+                "//   prof[4]: whole entry wall time",
+                f"//   prof[5..{prof_slots - 1}]: worker-pool calls in source order (one slot per synchronous T.parallel phase)",
+            ])
+        return f'''// Generated by tilelang.hexagon.emitter: generic mixed pool/HMX shell v1.
+// T.parallel phases are synchronous worker-pool jobs; serial/T.gemm phases run on the caller thread.
+{prof_comment}
+#include <stdint.h>
+#include <stddef.h>
+#include <string.h>
+#include "attnops.h"
+#include "HAP_perf.h"
+#include "hexagon_rt.h"
+
+typedef hrt_f16 f16;
+typedef hrt_f32 f32;
+
+#define TL_GENERIC_VTCM_BYTES ((size_t){vtcm_bytes}){gm_out_define}
+{worker_defs}
+
+int {func_name}(remote_handle64 h, unsigned char *slab, int slabLen{scalar_sig}, int abl) {{
+    (void)h;
+    if (!HRT_VTCM_READY()) return -3;
+    if (TL_GENERIC_VTCM_BYTES > HRT_VTCM_SIZE()) return -4;
+{slab}
+    HRT_PROF_DECL(prof, slab, {prof_off});
+    HRT_PROF_CLEAR(prof, {prof_slots * 4});
+    uint8_t *V = HRT_VTCM_BASE();
+    const size_t total = (size_t)-1;
+    (void)V; (void)total;
+    {time_decl}
 {body}
     prof[4] = (int32_t)(HAP_perf_get_qtimer_count() - tt);
     return 0;
@@ -1956,6 +2617,8 @@ int {func_name}(remote_handle64 h, unsigned char *slab, int slabLen, int T, int 
         locals_s = "\n".join(locals_)
         assigns_s = "\n".join(assigns)
         decls_s = "\n".join(decls)
+        accs = [a for a in self.allocs if _is_acc(a.scope) and a.offset is not None]
+        gm_out_define = f"\n#define TL_ACC ((size_t){accs[0].offset})" if accs else ""
         if self.vector_uses_pool:
             worker = f'''
 {statics_s}
@@ -1984,6 +2647,7 @@ static void {func_name}_worker(int job) {{
         else:
             worker = ""
             launch = body
+        time_decl = "uint64_t t0, tt = HAP_perf_get_qtimer_count();" if "t0 =" in launch else "uint64_t tt = HAP_perf_get_qtimer_count();"
         return f'''// Generated by tilelang.hexagon.emitter: elementwise HVX vector v1.
 // T.Kernel threads<=6 is lowered to attnops_pool_run over blockIdx.x panels;
 // the caller thread handles the post-join partial tail panel, if any.
@@ -1999,7 +2663,7 @@ typedef hrt_f32 f32;
 
 #define PANEL 1024
 #define VELEM_VTCM_BYTES ((size_t){vtcm_bytes})
-#define NWORKERS {nworkers}
+#define NWORKERS {nworkers}{gm_out_define}
 {worker}
 
 int {func_name}(remote_handle64 h, unsigned char *slab, int slabLen,
@@ -2016,7 +2680,7 @@ int {func_name}(remote_handle64 h, unsigned char *slab, int slabLen,
     HRT_PROF_DECL(prof, slab, prof_off);
     HRT_PROF_CLEAR(prof, 4);
     const size_t total = elems;
-    uint64_t tt = HAP_perf_get_qtimer_count();
+    {time_decl}
 {launch}
     prof[0] = (int32_t)(HAP_perf_get_qtimer_count() - tt);
     return 0;

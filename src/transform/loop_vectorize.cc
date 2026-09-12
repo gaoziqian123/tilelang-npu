@@ -32,6 +32,7 @@
 #include "backend/common/target_utils.h"
 #include "common/int64_promoter.h"
 #include "common/loop_vectorization_utils.h"
+#include "hexagon/target_utils.h"
 #include "support/check.h"
 #include <iostream>
 #include <optional>
@@ -1201,6 +1202,9 @@ bool IsExprInvariantInVectorBoundary(const PrimExpr &expr, Var var,
 }
 
 int MaxVectorLoadBits(const Target &target, bool global_only_access) {
+  if (TargetIsHexagon(target)) {
+    return 1024;
+  }
   if (TargetSupportVectorize256(target) && !tl_config::Vectorize256Disabled() &&
       global_only_access) {
     return 256;

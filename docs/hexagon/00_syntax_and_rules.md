@@ -39,7 +39,7 @@ fp16 矩阵单元(hexkl micro 接口)。
 scope 名保持 TileLang 习惯:用户仍写 `T.alloc_shared(...)` / `T.alloc_fragment(...)`,
 backend 根据 target 把它们落到 VTCM / HMX acc。需要显式布局时用 TileLang 已有的
 layout 机制(`T.alloc_shared(shape, dtype, layout=...)` 或 annotate),新增两个
-layout 常量:`"rm"`(row-major,默认)、`"ah"`(HMX 激活/权重 tile 布局)。
+layout 常量:`"rm"`(row-major,默认)、`"ah"`(HMX 激活 tile 布局)、`"wh"`(HMX 权重 tile 布局)。
 
 ## 2. 语法表:原语对照
 
@@ -55,9 +55,9 @@ layout 常量:`"rm"`(row-major,默认)、`"ah"`(HMX 激活/权重 tile 布局)�
 | `T.copy(src, dst)` | 见 §3 lowering 表;所有 copy 生成 HVX 向量化代码或 pooled copy |
 | `T.gemm(A, B, C)` | HMX 链:`acc_clear → K/32 × hexkl_micro_hmx_mm_f16 → (延迟 acc_read)`;A/B 必须是 `ah` layout 的 VTCM tile,C 是 `hmx.acc` |
 | `T.Pipelined(n, num_stages=k)` | 双缓冲/多缓冲:编译器把循环体内的 global→vtcm copy 拆成 worker pool 异步预取(`pool_start`/`pool_join` 模式,参照 attnops_ffn.c),计算链不停 |
-| `T.Parallel` / `T.serial` / `T.unroll` / `T.vectorized` | 常规循环构造;`T.vectorized` 强制 128B 向量化(失败=编译错,见 R2) |
+| `T.Parallel` / `T.serial` / `T.unroll` / `T.vectorized` | 常规循环构造;`T.serial` 允许动态标量表达式 extent(如三角循环 `T.serial(i + 1)`),由 emitter 用标量表达式打印 bound;`T.vectorized` 仍强制静态 128B 向量化(失败=编译错,见 R2) |
 | `T.clear` / `T.fill` | fragment → `acc_clear`;vtcm → HVX 向量填充 |
-| `T.reduce_sum(src128, dst_scalar)` | **已支持** 128 维 fp16/fp32 向量→fp32 标量;fp16 先升 fp32,再走双链交错 + `Q6_V_vror_VR` rotate-fold(VLIW in-order 配方)。`dst_scalar` 可是 global/DDR scratch,禁止写 VTCM 标量(R2) |
+| `T.reduce_sum(src128, dst_scalar)` | **已支持** 128 维 fp16/fp32 向量→fp32 标量;fp16 先升 fp32,再走双链交错 + `Q6_V_vror_VR` rotate-fold(VLIW in-order 配方)。`dst_scalar` 可是 global/DDR scratch,禁止写 VTCM 标量(R2);src/dst buffer 下标按任意 rank row-major 线性化,不再限 1D/2D |
 | dtype: `float16` / `float32` | fp16 存储 + fp32(或 HMX 37-bit)累加是默认;转换由编译器插桩(§4 R7) |
 
 ### 2.2 Hexagon 扩展原语(对照 CUDA 路径暴露 ldg/sts/wgmma 的方式,
@@ -91,14 +91,160 @@ layout 常量:`"rm"`(row-major,默认)、`"ah"`(HMX 激活/权重 tile 布局)�
 | global → vtcm(小张量/控制块) | 单线程 128B HVX 直拷 `hvx_memcpy` | ~8GB/s,编译器按尺寸阈值选 |
 | vtcm → vtcm(纯搬移) | 128B HVX 拷贝循环;不展开不 dcfetch(dense GEMM 消融:两者都是负优化) | 编译器调度最好 |
 | vtcm(rm) → vtcm(ah) | zip16(§2.2),tile 对处理 | 手写版 392ms 标量 → 3ms HVX |
+| global/slab fp32(rm) → vtcm fp16(AH) | `hexagon.copy_f32_ah`: fp32→fp16 staging + AH zip16,经 `hexagon_rt.h::hrt_tlgdn_stage_f32_to_ah`;`hexagon.copy.trans=1` 表示源按 `[K,M]` row-major 读、逻辑输出为 `[M,K]` | GDN split 中间 fp32 矩阵进 HMX 前 staging |
 | vtcm(ah) → vtcm/global(rm) | unperm + `vdeal`,相邻 tile 对拼 128B 整行直写 | 手写版 78ms → ~1ms |
 | vtcm → vreg | 128B 对齐 load;**非对齐地址编译错**(硬件静默向下对齐,必须挡住,§4 R1) | — |
-| fragment(hmx.acc) → vtcm | `hexkl_micro_hmx_acc_read_f16`,输出 AH tile | — |
+| fragment(hmx.acc) → global/vtcm(rm) | `hexagon.gemm_hmx` 必须紧跟 `hexagon.copy_acc_rm`;emitter 延迟 acc_read 后直接 unperm 写回。global 目标走 `hrt_unperm_*_hvx`;VTCM RM fp16 目标走 `hrt_tlgdn_acc_tile_to_vtcm_rm`，供后续 HVX/vectorized 代码继续读取 | 标准 GDN kernel 的 HMX 中间 tile 写回路径 |
 | vtcm → global | 128B HVX store;fp32→fp16 转换在此插桩 | — |
+
+未命中特殊 `hexagon.copy_*` recipe 的 `T.copy` 组合会回退到设备无关的
+`LowerNormalCopy`，生成普通 loop + `T.vectorized` 的 HVX 向量 load/store；
+仍受 R1/R2/R10 等 Hexagon verifier 规则约束，不会放行 VTCM 标量访问。
 
 `T.Pipelined(num_stages≥2)` 时,global→vtcm copy 由 pool worker 异步执行
 (`pool_start` 投递下一次迭代的 copy,`pool_join` 在进入迭代体前等齐),
 RPC/主线程上的 HMX mm 链不中断——手写版 FFN 的 ACT/GBUF 双缓冲即此模式。
+
+### 3.0.1 HMX GEMM 发射:legacy GEMM 壳 vs 通用 recipe
+
+Hexagon emitter 目前保留两条 GEMM lowering 路径：
+
+- **legacy GEMM 壳路径**：入口 ABI 为 `slab,w,M,N,K,abl` 的 GEMM_NT kernel 继续使用
+  原有 `GM_ACT/GM_WA/GM_OUT/NP/nct/kt` 宏和运行时 panel 选择逻辑。该路径用于
+  `examples/hexagon/gemm_nt.py` / `gemm_small.py`，要求逐字节回归稳定。
+- **通用 recipe**：当 `hexagon.gemm_hmx + hexagon.copy_acc_rm` 出现在非 legacy GEMM
+  壳的 kernel 内(例如 GDN/elementwise 壳内有多个异形 `T.gemm`)时，emitter 不再读取
+  `GM_*` 运行时量，而是从当前 gemm extern 的静态 `(A_data,B_data,C_data,M,N,K)`
+  取每 call 的 M/N/K，并从 `HexagonStoragePlan` 写入的 `hexagon.vtcm_offsets` 查
+  A/B/acc/dst 的 VTCM 基址。每个 gemm 对独立生成局部 `mt/nt/kt` 循环：
+  `acc_clear → kt × hrt_hmx_mm_f16 → hrt_acc_read_f16 → copy_acc_rm 写回`。
+
+通用 recipe 允许同一 kernel 内顺序出现多个不同形状的 GEMM；所有 tile 数、VTCM
+offset、写回目标都绑定在当前 gemm/copy 对上，不使用 emitter 全局单值状态。
+HMX 物理 acc 仍是单份资源，顺序段之间通过每段自带的 clear/read 隔离，acc read
+scratch 只需一对 32×32 fp16 tile，可在各段复用。
+
+通用 recipe 另有默认关闭的 profiling 模式：设置 pass config
+`tl.hexagon_prof=True`（或同名 kernel attr）后，generic mixed pool/HMX shell
+会把每个同步 `T.parallel` worker-pool call 包在 `HAP_perf_get_qtimer_count()`
+前后，并继续累加主线程 staging / HMX matmul / accumulator readback 聚合槽。
+生成文件头会确定性写出 `prof[]` slot 布局；默认关闭时不改变生成文本。
+
+### 3.0.2 通用 mixed pool/HMX 渲染路径
+
+渲染器选择保持向后兼容优先级：先按既有结构事实选择 GDN shell、纯
+elementwise/SILU vector shell、legacy/user-tiled GEMM shell；只有这些固定壳都不匹配，
+且 kernel 中存在需要交替执行的 `T.parallel`/串行段/`T.gemm` 组合时，才进入通用
+`generic mixed pool/HMX shell`。因此 `gemm_nt` / `gemm_small` / `gdn_prefill` /
+`silu_mul` 等既有固定例子的生成物必须逐字节不变。
+
+通用路径的 IR 映射约定：
+
+- body 内的 `for x in T.parallel(N)` 被提升为文件级 `static void worker(int job,
+  void *opaque)`；`x` 在 worker 开头绑定为 `const int x = job`。入口处用
+  `attnops_pool_run_ctx(worker, &ctx, N)` 同步执行并 join；每个 pool 调用就是段间
+  barrier，后续串行/HMX 段能看到并行段对 VTCM/global 的写入。
+- 普通 `T.serial` 循环、`T.copy` staging、`hexagon.gemm_hmx + hexagon.copy_acc_rm`
+  链保持在 FastRPC caller 主线程内联执行。R4 仍禁止 worker 内出现 HMX；通用路径只把
+  显式 `T.parallel` 的 body 提升，`T.gemm` 所在串行段不会被提升。
+- 若 `T.parallel` 位于外层 `T.serial` 循环内，提升函数的 ctx 结构体会捕获所有 global
+  slab 指针、按首次出现顺序推导的 shape 标量、外层循环变量、`abl` 与 `prof` 指针。
+  VTCM 指针不放入 ctx，而是在 worker 内重新取 `HRT_VTCM_BASE()`；各 VTCM buffer 地址
+  来自 `HexagonStoragePlan` 写入的静态 128B 对齐 offset。
+- 通用入口 ABI 为
+  `int name(remote_handle64 h, unsigned char *slab, int slabLen, <shape scalars...>, int abl)`。
+  `<shape scalars...>` 只来自 global buffer shape 中的符号维度，按 `func.buffer_map`
+  中首次出现顺序去重；所有 global tensor 均由 `_emit_slab_layout` 在单个 slab 中按
+  128B 对齐顺序切片，尾部预留 int32 profiling 区(`prof`)。
+
+这一路径适合“并行 HVX 段 → 主线程 HMX GEMM 段 → 并行 HVX 段”这类混合 kernel；
+如果 kernel 能被上面的固定 renderer 完整识别，应继续走固定 renderer 以保持 ABI 和
+生成文本稳定。
+
+### 3.0.3 `tl.hexagon_prof` 可选分阶段计时
+
+通用 mixed pool/HMX shell 支持 PrimFunc attr / pass 配置风格开关
+`tl.hexagon_prof`，默认 `False`。关闭时不改变默认生成文本；开启时 emitter 在
+generated C 文件头写入 `prof[]` slot 注释，并把 HAP qtimer tick 累加到 slab 尾部
+的 int32 `prof[]` 区。slot 0..4 保留既有聚合计数，后续 slot 按源码顺序记录
+worker-pool phase；staging、HMX mm、unperm 等主线程子阶段继续使用原有聚合 slot。
+该开关只在通用 shell 路径生效，不触碰 legacy leaf renderer。
+
+### 3.1 Hexagon layout 注册框架
+
+Hexagon 专用 layout 不再由 Python 或 lowering 代码散落地判断字符串，而是在
+`src/hexagon/layouts.{h,cc}` 中走统一注册表：
+
+- `HexagonLayoutMode`：`NONE/AH/WH/RM/...` 的 C++ mode 枚举，`NONE` 只表示未命中
+  注册 layout；普通 row-major/默认路径正式命中 `RM`。
+- `HexagonLayoutSpec`：一行注册表项，包含 mode、名字、构造器
+  `Layout (*)(Buffer)` 和检测器 `bool (*)(Layout, Buffer)`。
+- `MakeHexagonLayout(mode, buffer)`：按 mode 查注册表并调用构造器。
+- `DetectHexagonLayoutMode(layout, buffer)`：遍历注册表，用
+  `StructuralEqual(layout, MakeXLayout(buffer))` 风格的检测器返回首个命中 mode。
+
+内置 layout 按注册顺序为 AH/WH/RM：
+
+- `AH` / `WH`：二者在 32×32 fp16 HMX tile 上都是同一个 zip16 row-pair
+布局：输入行对 `(2*rp, 2*rp+1)` 中第 `col` 列被映射到
+`lane = (col % 2) * 32 + (row % 2) + 2 * floor((col % 32) / 2)`，外层输出维是
+`row_tile, col_tile, row_pair, lane`。这与 `hexagon_rt.h::hrt_stage_act_hvx` 中
+两行拼接后执行 `Q6_Vh_vshuff_Vh` 的 AH 语义一致；WH 当前遵循硬件事实
+“32×32 tile 上 WH == AH == vshuff(row-major)”。layout 只描述纯下标置换，
+因此只实现 `Forward` 表达式，不实现反向 rewrite 特化。
+- `RM`：逐维恒等 layout，`InputShape == OutputShape == buffer.shape`，forward 为
+  `InputPlaceholder(0..rank-1)` 原样返回。该模式无 dtype/shape 约束，代表普通
+  row-major buffer；`DetectHexagonLayoutMode` 对这类 layout 返回 `"rm"`，而不是
+  旧行为的 `"none"`。
+
+### 3.2 Hexagon pipeline 中的 LayoutInference 不变量
+
+Hexagon pipeline 中 **LayoutInference 常驻**：无论 kernel 是否包含 `T.gemm`，都会在
+`LowerTileOp` 之前运行。Hexagon 以 pass config
+`tl.layout_inference.fill_default_layout=True` 要求 `LowerTileOp` 入口处每个 SBlock 的
+`layout_map` 覆盖 block 内所有已知 buffer；没有 AH/WH/用户 strict 标注等特殊布局的
+buffer 会补一个逐维恒等 `RM` layout。
+
+同时 Hexagon 设置 `tl.layout_inference.annotate_parallel_loops=False`：`T.Kernel`/
+`T.parallel` 在 Hexagon 上是运行时 worker-pool 语义，不是 CUDA 风格 SIMT lane 切分；
+因此不把 `parallel_loop_layout` / padding guard 等编译期 SIMT annotations 写到 For 上，
+避免触发后续 padding-guard 切分和向量化 planner 降级。
+
+以后添加新 layout 的固定三步：
+
+1. 在 `HexagonLayoutMode` 增加枚举值和字符串转换分支；
+2. 编写 `MakeHexagonXLayout(buffer)` 与 `DetectHexagonXLayout(layout, buffer)`；
+3. 在 `RegisterBuiltinHexagonLayouts()` 的表中追加一行
+   `{HexagonLayoutMode::kX, "x", MakeHexagonXLayout, DetectHexagonXLayout}`。
+
+框架 API、Python `tilelang.hexagon.language.layout.make_layout()` /
+`detect_layout_mode()` 和调用方无需再改。
+
+### 3.3 `alloc_shared(layout=...)` 双轨过渡
+
+过渡期 `T.alloc_shared(shape, dtype, layout="ah"/"wh")` 同时走两条通道：
+
+- **fallback 通道**：保留物理 scope 后缀编码，实际分配仍带 `vtcm.ah` / `vtcm.wh`，
+  兼容尚未消费 layout annotation 的 Hexagon lowering/工具。
+- **正式通道**：分配完成后立即在当前 kernel SBlock 上发
+  `T.annotate_layout({buf: T.make_layout(layout, buf)})`，让 AH/WH 进入
+  LayoutInference 的 strict annotation 种子；`layout="rm"` 或缺省时不发 annotation，
+  由 `fill_default_layout=True` 补 row-major `RM`。
+
+双轨期 verifier 只做轻量一致性检查：若同一 buffer 同时有 `.ah`/`.wh` scope 后缀
+和 AH/WH `layout_map` annotation，两者必须同名（`.ah` 对 AH、`.wh` 对 WH）；
+缺 annotation、缺后缀，或通用 shell 补上的 `rm`/`none` 恒等 annotation 均合法。B 步
+完成后 scope 后缀 fallback 将退役，layout annotation 成为唯一语义通道。
+一致性检查会先跨整棵 TIR 收集所有嵌套 SBlock 的 `layout_map`，只在 annotation 明确
+识别为 AH/WH 且与 `.ah`/`.wh` 后缀不同名时视为冲突；缺 annotation、`rm`/`none`、以及
+其它恒等/未命中自定义 layout 都按 advisory 处理，不覆盖 scope 后缀语义。
+
+`T.gemm` 的 A/B/C 操作数可写成 `buf[row0, col0]` 形式表示“声明 buffer + 动态
+基址视图”：矩阵逻辑形状取 backing buffer/输出 tile 的尾部二维，`row0/col0` 只参与
+AH/WH tile 基址偏移计算，不把 GEMM 形状收缩成 `1x1`。
+
+向量三角/边界掩码请在 `T.vectorized` 循环中写 `T.if_then_else(j <= i, x, 0)`；
+Hexagon emitter 会下降为 HVX word-lane compare + `Q6_V_vmux_QVV` select。
 
 ## 4. 规则表(编译期强制;每条都来自真机踩坑)
 
@@ -107,7 +253,7 @@ RPC/主线程上的 HMX mm 链不中断——手写版 FFN 的 ACT/GBUF 双缓�
 | R1 | 一切 VTCM buffer 128B 对齐;HVX load 地址必须 128B 对齐 | 硬件静默向下对齐,读错数据不报错 | 分配器自动对齐;load 地址不可证对齐时报错 |
 | R2 | 禁止对 VTCM 的标量 load/store | ~46ns/次,慢 100 倍级 | `T.vectorized` 失败即编译错;所有 vtcm 访问 lowering 必须整 128B |
 | R3 | VTCM 静态预算 ≤ 8MB(含 HMX CFG 区) | 运行时越界踩 CFG,杀 DSP PD | 编译期求和断言,报错给出每个 buffer 的占用 |
-| R4 | HMX 序列只能出现在 kernel 主线程(RPC/executor 线程);pool worker 不得调 HMX | 跨线程 invoke 杀 PD(`AEE_EBADSTATE`) | 结构强制:`T.gemm` 只允许出现在 `T.Kernel` 主线程控制流,worker 分支里出现即编译错 |
+| R4 | HMX 序列只能出现在 kernel 主线程(RPC/executor 线程);pool worker 不得调 HMX | 跨线程 invoke 杀 PD(`AEE_EBADSTATE`) | 编译期强制:`HexagonVerify`(`tilelang/hexagon/passes.py`) 跟踪 worker-pool/threadIdx/GDN leaf pool 上下文,worker 分支里出现 `T.gemm` 或 `hexagon.gemm_hmx` 即报 R4 |
 | R5 | `T.gemm` 的 A/B/C tile 维必须 32 的倍数;K 链长 = K/32 次 mm | HMX 指令粒度即 32×32×32 | 编译期整除检查;tailing 由 padding 或拆分处理 |
 | R6 | 已废弃为性能建议:旧手写 GEMM 的 panel 宽 ∈ {1024,512,256};TileLang HMX GEMM 现在接受用户代码里 `T.alloc_shared/T.alloc_fragment` 选出的任意 32 倍数 `block_N` | 小 `block_N` 会增加 panel 数、权重 staging/写回相对开销,性能显著变慢但语义合法 | 编译器不再做 R6 硬校验;只保留 R5(32 整除)和 R3(VTCM 预算),VTCM 偏移来自 `HexagonStoragePlan` |
 | R7 | GEMM 类累加:fp16 输入、HMX 37-bit acc(≈fp32);HVX 路径累加一律 fp32 内链 | fp16 内链在 K≥2560 必炸(max_rel 0.15 级) | `T.gemm` 默认 fp32-grade acc;HVX 归约自动 fp32 链 |
@@ -131,7 +277,8 @@ TileOp 实现:`src/hexagon/op/copy.cc` 把 `T.copy` 改写成显式
 1. **LowerTileOp**(TileOp→Hexagon intrinsic):`T.copy` →
    `hexagon.copy_rm_ah` / `hexagon.copy_ah_rm` / `hexagon.copy_acc_rm` /
    `hexagon.copy_ddr`;`T.gemm` → `hexagon.gemm_hmx`。这是 target-specific
-   注册表选择,不是 emitter 里的 recipe 推断。
+   注册表选择,不是 emitter 里的 recipe 推断；copy recipe 优先读取
+   LayoutInference 的 `layout_map`，未命中时才回退到显式 annotation / scope 后缀。
 2. **HexagonProductReduceFusion**(TIR→TIR):识别“`T.vectorized` 循环把
    `Mul(x,y)` 写入 128-lane scratch,紧跟 `hexagon.reduce_sum128`”的结构,
    改写为 `hexagon.reduce_prod128`;两个连续同形态 reduce 改写为
@@ -147,8 +294,8 @@ TileOp 实现:`src/hexagon/op/copy.cc` 把 `T.copy` 改写成显式
    映射结果挂 `hexagon.wscratch_slots`,emitter 只查该 attr,不再看用户 buffer 名。
 6. **HexagonVerify**(验证):在 emitter 前集中检查 TIR 层可见规则,当前覆盖 R1
      (VTCM copy 128B 可向量化,含 `hexagon.copy_*`)、R2(VTCM 标量 load/store,
-     含 reduce 结果)、R5(`hexagon.gemm_hmx` 静态 MNK/32 整除)、
-     R10(worker≤6),失败错误带规则号。
+     含 reduce 结果)、R4(pool worker 内禁止 `T.gemm`/`hexagon.gemm_hmx`)、
+     R5(`hexagon.gemm_hmx` 静态 MNK/32 整除)、R10(worker≤6),失败错误带规则号。
 
 emitter 只做机械 lowering:看到 `hexagon.copy_*` / `hexagon.gemm_hmx` 就打印
 既有 `hrt_copy_*`、HMX acc_clear/mm/acc_read/unperm recipe;不再承担 copy/gemm
@@ -203,6 +350,7 @@ fp64 对拍 max_rel < 0.1(R12 判据),性能对照手写版 1.6–3.2 TFLOPS,
 | GEMM_NT | M=960/1024,N∈{2560,4096,6144,8192,12288},K∈{2560,4096} | N panel | panel→rowblock(32)→K 链 | R5,R6,R7 |
 | FFN(SwiGLU) | M=960,FF=9216,K=2560 | FF panel(Wg+Wu 共 stage) | 两 phase gemm + silu 原地 | R5–R8,pipeline |
 | GDN prefill | T=1024,Hk=16,Hv=32,D=128,chunk=32 | v-head × chunk | 纯 HVX fp32,无 HMX | R2,R8,R10 |
+| GDN split prefill | T=1024,Hk=16,Hv=32,D=128,chunk=32 | FLA stage × chunk | cumsum/kkt/solve 为 HVX/标量；fwdo/fwdh 矩阵阶段走主线程 HMX `T.gemm` | R2,R4,R5,R8,R10 |
 | FA D=256 | GQA 16q/4kv,S≤1024 | KV-head group→q-head→Q tile | HMX(S=K^TQ、PV)+ HVX online softmax | R5,R8,R9 |
 | GLA decode | T=1,D=128 | head over pool | state 64KB/head 驻 VTCM | R3,R10 |
 
@@ -212,6 +360,19 @@ GDN 显式 scratch 必须使用 `T.alloc_wscratch`，但变量名不参与 ABI �
 `examples/hexagon/gdn_prefill_renamed.py` 用任意 scratch 名覆盖此规则。
 
 v0.1 只承诺 GEMM 端到端;GDN/FA/FFN 是语法表必须能表达、但尚未验证的后续目标。
+
+### 6.1 GDN split prefill slab 约定
+
+`examples/hexagon/gdn_split.py` 是 GDN 的 FLA 阶段拆分版：五个追加入口
+`tl_gdn_cumsum/kkt/solve/fwdo/fwdh` 按 chunk 串行调用。基础输入输出仍是
+`Q|K|V|G|B|S0|O|S1`；其后追加显式中间张量（全部 128B 对齐）：`state
+[Hv,128,128] fp32`、`qf/kf/vf/w/u [Hv,T/32,32,128] fp32`、`A/P
+[Hv,T/32,32,32] fp32`、`eG/eGinv/beta [Hv,T/32,32] fp32`、`eGC [Hv,T/32]
+fp32`、`prof[5] int32`。数学以 `attnops_gdn.c` 为准，decay 只在 v 侧、输出侧
+和 chunk 末 state update 三处出现，`A`/UT 不含 decay。
+
+`fwdo` 和 `fwdh` 是矩阵阶段验证点：HMX 链保留在 FastRPC 主线程，copy/stage 可用
+pool，严禁把 `T.gemm`/`hrt_hmx_mm_f16` 放进 pool worker（R4）。
 
 ## 7. 实现落点(mirror `tilelang/cuda/` + `src/cuda/`)
 

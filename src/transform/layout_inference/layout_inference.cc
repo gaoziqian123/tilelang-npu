@@ -124,6 +124,50 @@ bool IsOpenFragmentLayout(const Buffer &buffer, const Layout &layout) {
   return fragment && FragmentReferencesForeignVars(fragment.value());
 }
 
+Layout MakeIdentityLayout(const Buffer &buffer) {
+  ICHECK(buffer.defined()) << "Default layout expects a defined buffer";
+  Array<PrimExpr> fwds;
+  fwds.reserve(buffer->shape.size());
+  for (size_t i = 0; i < buffer->shape.size(); ++i) {
+    fwds.push_back(InputPlaceholder(static_cast<int>(i)));
+  }
+  return Layout(buffer->shape, fwds);
+}
+
+std::vector<Buffer> CollectKnownBlockBuffers(const SBlock &block) {
+  std::vector<Buffer> buffers;
+  auto add = [&](const Buffer &buffer) {
+    if (!buffer.defined()) {
+      return;
+    }
+    if (std::none_of(buffers.begin(), buffers.end(),
+                     [&](const Buffer &other) { return other.same_as(buffer); })) {
+      buffers.push_back(buffer);
+    }
+  };
+  for (const Buffer &buffer : block->alloc_buffers) {
+    add(buffer);
+  }
+  for (const MatchBufferRegion &match : block->match_buffers) {
+    add(match->buffer);
+    add(match->source->buffer);
+  }
+  for (const BufferRegion &region : block->reads) {
+    add(region->buffer);
+  }
+  for (const BufferRegion &region : block->writes) {
+    add(region->buffer);
+  }
+  PostOrderVisit(block->body, [&](const ObjectRef &obj) {
+    if (const auto *load = obj.as<BufferLoadNode>()) {
+      add(load->buffer);
+    } else if (const auto *store = obj.as<BufferStoreNode>()) {
+      add(store->buffer);
+    }
+  });
+  return buffers;
+}
+
 // ---------------------------------------------------------------------------
 // Free-mode attempt scoring (layout RFC, design B)
 // ---------------------------------------------------------------------------
@@ -1550,22 +1594,27 @@ private:
 
 class LayoutInferencer : public IRMutatorWithAnalyzer {
 public:
-  static PrimFunc Substitute(PrimFunc f) {
+  static PrimFunc Substitute(PrimFunc f, bool annotate_parallel_loops,
+                             bool fill_default_layout) {
     arith::Analyzer analyzer;
     PrimFuncNode *fptr = f.CopyOnWrite();
     fptr->body = ParallelLoopFuser::Fuse(f->body);
     BufferUseDefCollector collector;
     collector.Collect(f);
     auto result = collector.Run();
-    LayoutInferencer substituter(result, &analyzer);
+    LayoutInferencer substituter(result, &analyzer, fill_default_layout,
+                                 annotate_parallel_loops);
     fptr->body = substituter.VisitStmt(f->body);
     return f;
   }
 
 private:
   LayoutInferencer(const LayoutInferenceResult &result,
-                   arith::Analyzer *analyzer)
-      : arith::IRMutatorWithAnalyzer(analyzer), result_(result) {};
+                   arith::Analyzer *analyzer, bool fill_default_layout,
+                   bool annotate_parallel_loops)
+      : arith::IRMutatorWithAnalyzer(analyzer), result_(result),
+        fill_default_layout_(fill_default_layout),
+        annotate_parallel_loops_(annotate_parallel_loops) {};
 
   using arith::IRMutatorWithAnalyzer::IRMutatorWithAnalyzer;
 
@@ -1582,7 +1631,15 @@ private:
     SBlock block = Downcast<SBlock>(IRMutatorWithAnalyzer::VisitStmt_(op));
 
     auto block_ptr = block.CopyOnWrite();
-    block_ptr->annotations.Set(attr::kLayoutMap, result_.layout_map);
+    LayoutMap layout_map = result_.layout_map;
+    if (fill_default_layout_) {
+      for (const Buffer &buffer : CollectKnownBlockBuffers(block)) {
+        if (!layout_map.count(buffer)) {
+          layout_map.Set(buffer, MakeIdentityLayout(buffer));
+        }
+      }
+    }
+    block_ptr->annotations.Set(attr::kLayoutMap, layout_map);
     return block;
   }
 
@@ -1603,7 +1660,7 @@ private:
    * @return The For statement with layout annotations attached
    */
   Stmt VisitStmt_(const ForNode *op) final {
-    if (!result_.for_map.count(GetRef<For>(op))) {
+    if (!annotate_parallel_loops_ || !result_.for_map.count(GetRef<For>(op))) {
       return IRMutatorWithAnalyzer::VisitStmt_(op);
     }
 
@@ -1642,14 +1699,23 @@ private:
 
 private:
   const LayoutInferenceResult result_;
+  bool fill_default_layout_;
+  bool annotate_parallel_loops_;
 };
 
 tvm::transform::Pass LayoutInference() {
   using namespace tirx::transform;
   auto pass_func = [=](PrimFunc f, const IRModule &m, const PassContext &ctx) {
-    f = LayoutInferencer::Substitute(std::move(f));
-    // Validate parallel loop layout annotations
-    ParallelLoopLayoutValidator::Validate(f->body);
+    bool annotate_parallel_loops = tl_config::LayoutInferenceAnnotateParallelLoops();
+    bool fill_default_layout = tl_config::LayoutInferenceFillDefaultLayout();
+    f = LayoutInferencer::Substitute(std::move(f), annotate_parallel_loops,
+                                     fill_default_layout);
+    // Validate parallel loop layout annotations only when LayoutInference is
+    // configured to publish them. Hexagon deliberately keeps T.parallel as a
+    // runtime worker-pool loop without SIMT layout annotations.
+    if (annotate_parallel_loops) {
+      ParallelLoopLayoutValidator::Validate(f->body);
+    }
     return f;
   };
   return CreatePrimFuncPass(pass_func, 0, "tl.LayoutInference", {});

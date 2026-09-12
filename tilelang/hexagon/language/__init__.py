@@ -21,6 +21,7 @@ from .intrinsics import *  # noqa: F401,F403
 from .intrinsics import __all__ as _INTRINSICS_ALL
 from .layout import *  # noqa: F401,F403
 from .layout import __all__ as _LAYOUT_ALL
+from .layout import make_layout
 from .scopes import *  # noqa: F401,F403
 from .scopes import __all__ as _SCOPES_ALL
 
@@ -28,8 +29,8 @@ from .scopes import __all__ as _SCOPES_ALL
 def _validate_layout(layout: str | None) -> str:
     if layout is None:
         return "rm"
-    if layout not in ("rm", "ah"):
-        raise ValueError(f"Hexagon layout must be 'rm' or 'ah', got {layout!r}")
+    if layout not in ("rm", "ah", "wh"):
+        raise ValueError(f"Hexagon layout must be 'rm', 'ah' or 'wh', got {layout!r}")
     return layout
 
 
@@ -44,7 +45,10 @@ def alloc_shared(shape, dtype, scope: str = "vtcm", *, layout: str | None = None
 
     layout = _validate_layout(layout)
     physical_scope = scope if layout == "rm" else f"{scope}.{layout}"
-    return _alloc_shared(shape, dtype, scope=physical_scope)
+    buffer = _alloc_shared(shape, dtype, scope=physical_scope)
+    if layout in ("ah", "wh"):
+        annotate_layout({buffer: make_layout(layout, buffer)})
+    return buffer
 
 
 def alloc_wscratch(shape, dtype):
@@ -79,8 +83,8 @@ def copy(src, dst, *, layout: tuple[str, str] | None = None, annotations: dict |
 
     ann = _normalize_annotations(annotations)
     if layout is not None:
-        if tuple(layout) not in (("rm", "ah"), ("ah", "rm")):
-            raise ValueError(f"Hexagon copy layout must be ('rm','ah') or ('ah','rm'), got {layout!r}")
+        if tuple(layout) not in (("rm", "ah"), ("ah", "rm"), ("rm", "wh")):
+            raise ValueError(f"Hexagon copy layout must be ('rm','ah'), ('ah','rm') or ('rm','wh'), got {layout!r}")
         ann["hexagon.copy.src_layout"] = tirx.StringImm(layout[0])
         ann["hexagon.copy.dst_layout"] = tirx.StringImm(layout[1])
     return _copy(src, dst, annotations=ann, **kwargs)
