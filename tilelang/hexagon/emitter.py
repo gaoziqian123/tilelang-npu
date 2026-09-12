@@ -16,7 +16,7 @@ import struct
 from pathlib import Path
 from typing import Any
 
-from tvm import IRModule, ir, tirx
+from tvm import IRModule, arith, ir, tirx
 from tvm.target import Target
 from tvm.tirx import (
     AttrStmt,
@@ -899,7 +899,7 @@ class HexagonEmitter(PyStmtExprVisitor):
         base = self._vector_index_c(op.indices, ctx, buf)
         expr_lines, val = self._expr_hvx(op.value, ctx, indent + 1)
         store_name = val.names[0]
-        self._check_vector_alignment(base, ctx, op)
+        self._check_vector_alignment(op.indices, ctx, op, buf, base)
         ptr = self._buffer_ptr_c(buf)
         # 设计文档 §3:DDR 直读必须带 dcfetch(单线程无预取只有 7-14GB/s)。
         # 对表达式里出现的每个 global 读 buffer,在当前向量索引前方
@@ -1021,17 +1021,133 @@ class HexagonEmitter(PyStmtExprVisitor):
             off += alloc.bytes
         return off
 
-    def _check_vector_alignment(self, base: str, ctx: _Ctx, op: Any) -> None:
-        # R1: the HVX pointer must denote a 128B boundary, i.e. a multiple of 64
-        # fp16 elements.  The vector induction variable itself advances by 64;
-        # all generated vector kernels use FF/PANEL multiples of 64, so common
-        # affine forms row*FF + bx*PANEL + v are accepted here.  Reject constants
-        # or offsets that are provably not aligned, and reject forms missing the
-        # vector induction variable (which would repeat the same vector).
-        if ctx.vec_var is None or ctx.vec_var not in base:
-            raise HexagonEmitError(f"R1: HVX 向量 load/store 地址必须包含 T.vectorized 变量并按 128B 对齐: {base}{_loc(op)}")
-        if "+ 1" in base or "+1" in base:
-            raise HexagonEmitError(f"R1: HVX 向量 load/store 地址不可证 128B 对齐: {base}{_loc(op)}")
+    def _linear_index_expr(self, indices: Any, buf: Buffer | None = None) -> Any:
+        """Return the flattened element index as a TIR PrimExpr, before C rendering."""
+
+        if len(indices) == 1:
+            return indices[0]
+        terms: list[Any] = []
+        for i, idx in enumerate(indices):
+            suffix_shape = buf.shape[i + 1:] if buf is not None and len(buf.shape) > i + 1 else ()
+            stride: Any = 1
+            for dim in suffix_shape:
+                iv = _i64(dim)
+                stride = stride * iv if iv is not None and isinstance(stride, int) else stride * dim
+            terms.append(idx if stride == 1 else idx * stride)
+        if not terms:
+            return IntImm("int32", 0)
+        expr = terms[0]
+        for term in terms[1:]:
+            expr = expr + term
+        return expr
+
+    def _expr_contains_var(self, expr: Any, name: str | None) -> bool:
+        if not name:
+            return False
+        found = False
+
+        def visit(node: Any) -> None:
+            nonlocal found
+            if found:
+                return
+            if (hasattr(node, "name") or hasattr(node, "name_hint")) and _var_name(node) == name:
+                found = True
+
+        try:
+            tirx.stmt_functor.post_order_visit(expr, visit)
+        except Exception:
+            if (hasattr(expr, "name") or hasattr(expr, "name_hint")) and _var_name(expr) == name:
+                found = True
+        return found
+
+    def _find_var_by_name(self, expr: Any, name: str | None) -> Any | None:
+        if not name:
+            return None
+        found = None
+
+        def visit(node: Any) -> None:
+            nonlocal found
+            if found is None and (hasattr(node, "name") or hasattr(node, "name_hint")) and _var_name(node) == name:
+                found = node
+
+        try:
+            tirx.stmt_functor.post_order_visit(expr, visit)
+        except Exception:
+            if (hasattr(expr, "name") or hasattr(expr, "name_hint")) and _var_name(expr) == name:
+                found = expr
+        return found
+
+    def _buffer_base_byte_offset(self, buf: Buffer | None) -> int:
+        """Known static byte offset of a buffer base; unknown/aligned bases use 0.
+
+        Global/rpcmem pointers and wscratch slots follow the existing ABI
+        assumption that their base pointers are HVX-aligned.  VTCM buffers have
+        explicit static placement, so include their byte offset in the proof.
+        """
+
+        if buf is None or not _is_vtcm(_buffer_scope(buf)):
+            return 0
+        bname = _buffer_name(buf)
+        alloc = next((a for a in self.allocs if a.name == bname), None)
+        if alloc is None:
+            return 0
+        if alloc.offset is None:
+            self._assign_vtcm_offsets()
+        return int(alloc.offset or 0)
+
+    def _is_aligned_byte_expr(self, byte_expr: Any, alignment: int, ctx: _Ctx | None = None) -> bool:
+        # T.vectorized loops advance the induction variable by one full HVX
+        # vector at C level (32 fp32 lanes or 64 fp16 lanes).  Encode that loop
+        # fact in the expression given to the analyzer by substituting
+        # vec_var := vec_step * fresh_symbol; otherwise modular_set only sees an
+        # unconstrained scalar loop variable and cannot prove row*stride+vec.
+        if ctx is not None and ctx.vec_var is not None and ctx.vec_extent is not None:
+            v = self._find_var_by_name(byte_expr, ctx.vec_var)
+            if v is not None:
+                step = 32 if ctx.vec_extent == 32 else 64
+                fresh = tirx.Var(f"{ctx.vec_var}_hvx_step", str(getattr(v, "dtype", "int32") or "int32"))
+                try:
+                    byte_expr = tirx.stmt_functor.substitute(byte_expr, {v: fresh * step})
+                except Exception:
+                    pass
+        analyzer = arith.Analyzer()
+        try:
+            rem = analyzer.rewrite_simplify(byte_expr % alignment)
+        except AttributeError:
+            rem = analyzer.simplify(byte_expr % alignment)
+        except Exception:
+            rem = None
+        if _i64(rem) == 0:
+            return True
+        try:
+            if analyzer.can_prove((byte_expr % alignment) == 0):
+                return True
+        except Exception:
+            pass
+        try:
+            mod = analyzer.modular_set(byte_expr)
+            coeff = int(getattr(mod, "coeff"))
+            base = int(getattr(mod, "base"))
+            return coeff % alignment == 0 and base % alignment == 0
+        except Exception:
+            return False
+
+    def _check_vector_alignment(self, indices: Any, ctx: _Ctx, op: Any, buf: Buffer | None = None, base: str | None = None) -> None:
+        # R1: the HVX pointer must denote a 128B boundary.  Prove that property
+        # on the TIR element-index expression before rendering C: byte_offset =
+        # flattened_index * sizeof(dtype) + known_static_buffer_base.  If TVM's
+        # arithmetic analyzer cannot prove divisibility by 128, keep the old
+        # conservative behavior (reject this vector load/store).
+        index_expr = self._linear_index_expr(indices, buf)
+        rendered = base if base is not None else self._expr_c(index_expr)
+        if not self._expr_contains_var(index_expr, ctx.vec_var):
+            raise HexagonEmitError(f"R1: HVX 向量 load/store 地址必须包含 T.vectorized 变量并按 128B 对齐: {rendered}{_loc(op)}")
+        elem_bytes = _dtype_bytes(str(buf.dtype)) if buf is not None else 1
+        vec_step = 32 if ctx.vec_extent == 32 else 64
+        required_alignment = min(128, elem_bytes * vec_step)
+        byte_expr = index_expr * elem_bytes + self._buffer_base_byte_offset(buf)
+        if not self._is_aligned_byte_expr(byte_expr, required_alignment, ctx):
+            raise HexagonEmitError(f"R1: HVX 向量 load/store 地址不可证 {required_alignment}B 对齐: {rendered}{_loc(op)}")
 
     def _vector_index_c(self, indices: Any, ctx: _Ctx, buf: Buffer | None = None) -> str:
         if len(indices) == 1:
@@ -1400,6 +1516,22 @@ class HexagonEmitter(PyStmtExprVisitor):
             return str(getattr(e, "dtype", "")) or None
         return None
 
+    def _lower_hvx_exp(self, arg: Any, dtype: str, ctx: _Ctx, lines: list[str], indent: int) -> _HVXVal:
+        if dtype == "float32":
+            x = self._lower_hvx_expr(arg, ctx, lines, "float32", indent)
+            # fp32 vectors use the Hexagon pair convention: a 64-lane
+            # T.vectorized expression is carried by two 32-lane HVX vectors.
+            a, b = self._new_hvx_tmp(), self._new_hvx_tmp()
+            lines.append(self._ind(indent, f"HVX_Vector {a} = hrt_exp_fp32_vec({x.names[0]});"))
+            lines.append(self._ind(indent, f"HVX_Vector {b} = hrt_exp_fp32_vec({x.names[1]});"))
+            return _HVXVal([a, b], "float32")
+        if dtype == "float16":
+            x = self._lower_hvx_expr(arg, ctx, lines, "float16", indent)
+            name = self._new_hvx_tmp()
+            lines.append(self._ind(indent, f"HVX_Vector {name} = hrt_exp_fp16({x.names[0]});"))
+            return _HVXVal([name], "float16")
+        raise HexagonEmitError(f"R7: T.exp on Hexagon only supports fp32/fp16, got {dtype}")
+
     def _imm_value(self, e: Any) -> float | int | None:
         iv = _i64(e)
         if iv is not None:
@@ -1546,7 +1678,7 @@ class HexagonEmitter(PyStmtExprVisitor):
                     lines.append(self._ind(indent, f"HVX_Vector {name} = hrt_splat_h((int){ptr}[(size_t)({base})]);"))
                     v = _HVXVal([name], "float16")
                 return self._promote_hvx(v, want, lines, indent) if want else v
-            self._check_vector_alignment(base, ctx, e)
+            self._check_vector_alignment(e.indices, ctx, e, e.buffer, base)
             name = self._new_hvx_tmp()
             cty = "const HVX_Vector *"
             if dtype == "float32" and ctx.vec_extent is not None and ctx.vec_extent != 32:
@@ -1611,23 +1743,10 @@ class HexagonEmitter(PyStmtExprVisitor):
                 lines.append(self._ind(indent, f"HVX_Vector {name} = hrt_exp_fp16({x.names[0]});"))
                 return _HVXVal([name], "float16")
             if callee == "hexagon.exp_fp32":
-                x = self._lower_hvx_expr(e.args[arg0], ctx, lines, "float32", indent)
-                a, b = self._new_hvx_tmp(), self._new_hvx_tmp()
-                lines.append(self._ind(indent, f"HVX_Vector {a} = hrt_exp_fp32_vec({x.names[0]});"))
-                lines.append(self._ind(indent, f"HVX_Vector {b} = hrt_exp_fp32_vec({x.names[1]});"))
-                return _HVXVal([a, b], "float32")
+                return self._lower_hvx_exp(e.args[arg0], "float32", ctx, lines, indent)
             if opname in ("tir.exp", "tirx.exp", "exp") or str(opname).endswith(".exp"):
                 dtype = want or self._expr_dtype_hint(e.args[0]) or "float16"
-                x = self._lower_hvx_expr(e.args[0], ctx, lines, dtype, indent)
-                if dtype == "float16":
-                    name = self._new_hvx_tmp()
-                    lines.append(self._ind(indent, f"HVX_Vector {name} = hrt_exp_fp16({x.names[0]});"))
-                    return _HVXVal([name], "float16")
-                if dtype == "float32":
-                    a, b = self._new_hvx_tmp(), self._new_hvx_tmp()
-                    lines.append(self._ind(indent, f"HVX_Vector {a} = hrt_exp_fp32_vec({x.names[0]});"))
-                    lines.append(self._ind(indent, f"HVX_Vector {b} = hrt_exp_fp32_vec({x.names[1]});"))
-                    return _HVXVal([a, b], "float32")
+                return self._lower_hvx_exp(e.args[0], dtype, ctx, lines, indent)
             raise HexagonEmitError(f"白名单: 向量表达式暂不支持 Call {_call_op_name(e)}{_loc(e)}")
         cls = type(e).__name__
         if cls == "Cast":

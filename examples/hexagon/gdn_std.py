@@ -3,7 +3,7 @@
 
 This example is intentionally written only with TileLang language constructs
 (T.copy/T.gemm/T.parallel/T.serial/T.vectorized/T.alloc_shared/
-T.alloc_fragment/T.hexagon.exp_fp32 plus scalar arithmetic).  Unlike
+T.alloc_fragment/T.exp plus scalar arithmetic).  Unlike
 ``gdn_prefill.py``, it does not call any user-visible hand-written GDN C
 leaf such as ``hrt_tlgdn_*``.
 
@@ -112,10 +112,10 @@ def gdn_std(TOK: int = 1024, Hk: int = 16, Hv: int = 32, D: int = 128, chunk: in
                     eGCg[hvp, c] = 0.0
                     for i in T.serial(chunk):
                         eGCg[hvp, c] = eGCg[hvp, c] + G[hvp, t0 + i]
-                        eGg[hvp, c, i] = T.hexagon.exp_fp32(T.max(eGCg[hvp, c], -60.0))
-                        eGivg[hvp, c, i] = T.hexagon.exp_fp32(-T.max(eGCg[hvp, c], -60.0))
+                        eGg[hvp, c, i] = T.exp(T.max(eGCg[hvp, c], -60.0))
+                        eGivg[hvp, c, i] = T.exp(-T.max(eGCg[hvp, c], -60.0))
                         betag[hvp, c, i] = B[hvp, t0 + i]
-                    eGCg[hvp, c] = T.hexagon.exp_fp32(T.max(eGCg[hvp, c], -60.0))
+                    eGCg[hvp, c] = T.exp(T.max(eGCg[hvp, c], -60.0))
                     for i in T.serial(chunk):
                         for d in T.vectorized(D):
                             KH[hvp, i, d] = betag[hvp, c, i] * eGg[hvp, c, i] * T.Cast("float32", K[hk_p, t0 + i, d])
@@ -153,19 +153,18 @@ def gdn_std(TOK: int = 1024, Hk: int = 16, Hv: int = 32, D: int = 128, chunk: in
                     T.copy(WU_acc, WUg[hv_wu, c, chunk, 0], layout=("ah", "rm"))
 
                 # Phase 3: triangular masks, affine RHS, and serial forward solve.
-                # Masks run as a flat 1024-lane vector pass over the (32,32)
-                # plane so every f16 load / f32 store is a full 128B vector
-                # (32-lane f16 rows would be 64B-misaligned; lane index l maps
-                # to row l//32 / col l%32 via power-of-two div/mod).
+                # Masks run as a 1024-lane vector pass over the (32,32) plane
+                # while indexing the logical matrix dimensions directly; lane
+                # index l maps to row l//32 / col l%32.
                 for hvp3 in T.parallel(Hv):
                     for l in T.vectorized(chunk * chunk):
-                        Pg[hvp3, c, 0, l] = T.if_then_else(
+                        Pg[hvp3, c, l // chunk, l % chunk] = T.if_then_else(
                             l % chunk <= l // chunk,
-                            T.Cast("float32", APg[hvp3, c, chunk, l]),
+                            T.Cast("float32", APg[hvp3, c, chunk + l // chunk, l % chunk]),
                             T.Cast("float32", 0.0))
-                        Ag[hvp3, c, 0, l] = T.if_then_else(
+                        Ag[hvp3, c, l // chunk, l % chunk] = T.if_then_else(
                             l % chunk < l // chunk,
-                            T.Cast("float32", APg[hvp3, c, 0, l]),
+                            T.Cast("float32", APg[hvp3, c, l // chunk, l % chunk]),
                             T.Cast("float32", 0.0))
                     for i in T.serial(chunk):
                         for d in T.vectorized(D):

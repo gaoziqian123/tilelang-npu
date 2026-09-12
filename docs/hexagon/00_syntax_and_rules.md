@@ -59,6 +59,7 @@ layout 常量:`"rm"`(row-major,默认)、`"ah"`(HMX 激活 tile 布局)、`"wh"`
 | `T.clear` / `T.fill` | fragment → `acc_clear`;vtcm → HVX 向量填充 |
 | `T.reduce_sum(src128, dst_scalar)` | **已支持** 128 维 fp16/fp32 向量→fp32 标量;fp16 先升 fp32,再走双链交错 + `Q6_V_vror_VR` rotate-fold(VLIW in-order 配方)。`dst_scalar` 可是 global/DDR scratch,禁止写 VTCM 标量(R2);src/dst buffer 下标按任意 rank row-major 线性化,不再限 1D/2D |
 | dtype: `float16` / `float32` | fp16 存储 + fp32(或 HMX 37-bit)累加是默认;转换由编译器插桩(§4 R7) |
+| `T.exp(x)` | 标准写法:fp32 标量走 `expf`,fp32 HVX 向量走 `hrt_exp_fp32_vec` 的 32-lane pair；fp16 HVX 走 `hrt_exp_fp16`。递推链仍应显式保持 fp32 输入类型。 |
 
 ### 2.2 Hexagon 扩展原语(对照 CUDA 路径暴露 ldg/sts/wgmma 的方式,
 ###     以 `tilelang.hexagon.language` 子包提供,不影响通用写法)
