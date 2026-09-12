@@ -91,7 +91,7 @@ layout 常量:`"rm"`(row-major,默认)、`"ah"`(HMX 激活 tile 布局)、`"wh"`
 | global → vtcm(小张量/控制块) | 单线程 128B HVX 直拷 `hvx_memcpy` | ~8GB/s,编译器按尺寸阈值选 |
 | vtcm → vtcm(纯搬移) | 128B HVX 拷贝循环;不展开不 dcfetch(dense GEMM 消融:两者都是负优化) | 编译器调度最好 |
 | vtcm(rm) → vtcm(ah) | zip16(§2.2),tile 对处理 | 手写版 392ms 标量 → 3ms HVX |
-| global/slab fp32(rm) → vtcm fp16(AH) | `hexagon.copy_f32_ah`: fp32→fp16 staging + AH zip16,经 `hexagon_rt.h::hrt_tlgdn_stage_f32_to_ah`;`hexagon.copy.trans=1` 表示源按 `[K,M]` row-major 读、逻辑输出为 `[M,K]` | GDN split 中间 fp32 矩阵进 HMX 前 staging |
+| global/slab fp32(rm) → vtcm fp16(AH) | `hexagon.copy_f32_ah`: fp32→fp16 staging + AH zip16,经 `hexagon_rt.h::hrt_tlgdn_stage_f32_to_ah`;`hexagon.copy.trans=1` 表示源按 `[K,M]` row-major 读、逻辑输出为 `[M,K]` | GDN 标准构造中的 fp32 矩阵进 HMX 前 staging |
 | vtcm(ah) → vtcm/global(rm) | unperm + `vdeal`,相邻 tile 对拼 128B 整行直写 | 手写版 78ms → ~1ms |
 | vtcm → vreg | 128B 对齐 load;**非对齐地址编译错**(硬件静默向下对齐,必须挡住,§4 R1) | — |
 | fragment(hmx.acc) → global/vtcm(rm) | `hexagon.gemm_hmx` 必须紧跟 `hexagon.copy_acc_rm`;emitter 延迟 acc_read 后直接 unperm 写回。global 目标走 `hrt_unperm_*_hvx`;VTCM RM fp16 目标走 `hrt_tlgdn_acc_tile_to_vtcm_rm`，供后续 HVX/vectorized 代码继续读取 | 标准 GDN kernel 的 HMX 中间 tile 写回路径 |
@@ -350,7 +350,7 @@ fp64 对拍 max_rel < 0.1(R12 判据),性能对照手写版 1.6–3.2 TFLOPS,
 | GEMM_NT | M=960/1024,N∈{2560,4096,6144,8192,12288},K∈{2560,4096} | N panel | panel→rowblock(32)→K 链 | R5,R6,R7 |
 | FFN(SwiGLU) | M=960,FF=9216,K=2560 | FF panel(Wg+Wu 共 stage) | 两 phase gemm + silu 原地 | R5–R8,pipeline |
 | GDN prefill | T=1024,Hk=16,Hv=32,D=128,chunk=32 | v-head × chunk | 纯 HVX fp32,无 HMX | R2,R8,R10 |
-| GDN split prefill | T=1024,Hk=16,Hv=32,D=128,chunk=32 | FLA stage × chunk | cumsum/kkt/solve 为 HVX/标量；fwdo/fwdh 矩阵阶段走主线程 HMX `T.gemm` | R2,R4,R5,R8,R10 |
+| GDN std prefill | T=1024,Hk=16,Hv=32,D=128,chunk=32 | v-head × chunk | 标准 TileLang 构造生成，HVX/标量段与主线程 HMX `T.gemm` 混合 | R2,R4,R5,R8,R10 |
 | FA D=256 | GQA 16q/4kv,S≤1024 | KV-head group→q-head→Q tile | HMX(S=K^TQ、PV)+ HVX online softmax | R5,R8,R9 |
 | GLA decode | T=1,D=128 | head over pool | state 64KB/head 驻 VTCM | R3,R10 |
 
@@ -360,19 +360,6 @@ GDN 显式 scratch 必须使用 `T.alloc_wscratch`，但变量名不参与 ABI �
 `examples/hexagon/gdn_prefill_renamed.py` 用任意 scratch 名覆盖此规则。
 
 v0.1 只承诺 GEMM 端到端;GDN/FA/FFN 是语法表必须能表达、但尚未验证的后续目标。
-
-### 6.1 GDN split prefill slab 约定
-
-`examples/hexagon/gdn_split.py` 是 GDN 的 FLA 阶段拆分版：五个追加入口
-`tl_gdn_cumsum/kkt/solve/fwdo/fwdh` 按 chunk 串行调用。基础输入输出仍是
-`Q|K|V|G|B|S0|O|S1`；其后追加显式中间张量（全部 128B 对齐）：`state
-[Hv,128,128] fp32`、`qf/kf/vf/w/u [Hv,T/32,32,128] fp32`、`A/P
-[Hv,T/32,32,32] fp32`、`eG/eGinv/beta [Hv,T/32,32] fp32`、`eGC [Hv,T/32]
-fp32`、`prof[5] int32`。数学以 `attnops_gdn.c` 为准，decay 只在 v 侧、输出侧
-和 chunk 末 state update 三处出现，`A`/UT 不含 decay。
-
-`fwdo` 和 `fwdh` 是矩阵阶段验证点：HMX 链保留在 FastRPC 主线程，copy/stage 可用
-pool，严禁把 `T.gemm`/`hrt_hmx_mm_f16` 放进 pool worker（R4）。
 
 ## 7. 实现落点(mirror `tilelang/cuda/` + `src/cuda/`)
 

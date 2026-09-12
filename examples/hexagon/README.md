@@ -10,7 +10,6 @@
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gemm_nt.py
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gdn_prefill.py
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gdn_prefill_renamed.py
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gdn_split.py
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/silu_mul.py --impl direct
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/silu_mul.py --impl vtcm
 ```
@@ -124,51 +123,6 @@ def gdn_prefill(TOK: int = 1024, Hk: int = 16, Hv: int = 32, D: int = 128, chunk
 生成 C 的结构：按 value head 启动 worker，32-token chunk 内依次完成 Q/K/V fp16→fp32、gate scan、三角 dot、state matvec、forward solve、输出、state decay/update；decay 只出现在 v 侧 `e^{-gamma}`、输出侧 `e^{gamma}` 和 chunk 末 state decay，UT 矩阵不含 decay。
 
 真机验证：`max_rel=0.0059`，与手写实现逐位一致；TileLang 生成版 `44.99 ms`，手写版 `45.35 ms`。
-
-## GDN prefill split (`gdn_split.py`)
-
-`gdn_split.py` 把同一 GDN chunk 数学按 FLA/flash-linear-attention 的阶段拆成
-五个独立 FastRPC/TileLang 入口。调用方按 chunk 串行执行：
-
-```text
-for c in 0..T/32-1:
-  tl_gdn_cumsum(c) -> tl_gdn_kkt(c) -> tl_gdn_solve(c)
-  -> tl_gdn_fwdo(c) -> tl_gdn_fwdh(c)
-```
-
-拆分后的显式 slab 布局（所有 offset 128B 对齐，固定锚点
-`T=1024,Hk=16,Hv=32,D=128,C=32`）：
-
-| 名称 | 形状 | dtype | 说明 |
-|---|---:|---|---|
-| `Q,K` | `[Hk,T,128]` | fp16 | 输入 q/k，k-head = `hv % Hk` |
-| `V,O` | `[Hv,T,128]` | fp16 | 输入 v / 输出 o |
-| `G,B` | `[Hv,T]` | fp32 | log-decay / beta |
-| `S0,S1` | `[Hv,128,128]` | fp32 | 初始/最终 state `[dk,dv]` |
-| `state` | `[Hv,128,128]` | fp32 | chunk 间显式 state，`cumsum(c=0)` 从 S0 初始化，`fwdh(last)` 写 S1 |
-| `qf,kf,vf` | `[Hv,T/32,32,128]` | fp32 | `tl_gdn_cumsum` 的 fp16→fp32 行缓存 |
-| `w,u` | `[Hv,T/32,32,128]` | fp32 | `w` 是 RHS/solve 后结果；`u` 保存 `S^T q` 输出侧 affine 项 |
-| `A,P` | `[Hv,T/32,32,32]` | fp32 | FLA 三角矩阵；`A` 严格下三角，`P` 含对角且上三角清零 |
-| `eG,eGinv,beta` | `[Hv,T/32,32]` | fp32 | chunk 内前缀 exp 因子和 beta |
-| `eGC` | `[Hv,T/32]` | fp32 | chunk-final decay |
-| `prof` | `5*int32` | i32 | 五阶段 qtimer tick 累加 |
-
-五个阶段职责：
-
-- `tl_gdn_cumsum`：照单 kernel 用户层 b 段做 inclusive cumsum、clamp(-60)、fp32
-  exp，拷贝 beta；同时用 HVX helper 转换 Q/K/V 到 fp32 中间张量。
-- `tl_gdn_kkt`：照用户层 c 段用 128-wide fp32 dot 构建 `A/P`；同时计算
-  `S^T k`/`S^T q` 两个 state matvec，并做 `beta*v - beta*eG*S^T k` affine。
-- `tl_gdn_solve`：逐行串行 forward substitution：`w_i -= A[i,j] w_j`。
-- `tl_gdn_fwdo`：矩阵阶段显式走 HMX：stage `P(32x32)` 和 `w^T(128x32)` 到
-  AH/VTCM，主线程执行 `T.gemm` 等价链得到 `tril(P)@w`，再加 `eG*(S^Tq)` 并
-  fp32→fp16 写 O。HMX 不进入 pool worker。
-- `tl_gdn_fwdh`：先把 `eGC*eGinv` fold 到 `kf`，再用 HMX 计算
-  `k_hat^T(128x32) @ w(32x128)`，最后 HVX 加到 `eGC*state`；last chunk 写 S1。
-
-这个拆法的目的不是取代已验证单 kernel，而是暴露 FLA 阶段边界，便于以后把
-矩阵阶段调度/替换成更标准的 TileLang `T.gemm` lowering。当前 ABI 只追加方法，
-不修改 `tl_gdn_prefill`。
 
 ## SwiGLU 激活 (`silu_mul.py`)
 

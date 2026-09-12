@@ -4,8 +4,8 @@
 This example is intentionally written only with TileLang language constructs
 (T.copy/T.gemm/T.parallel/T.serial/T.vectorized/T.alloc_shared/
 T.alloc_fragment/T.hexagon.exp_fp32 plus scalar arithmetic).  Unlike
-``gdn_prefill.py`` and the templated split example, it does not call any
-user-visible hand-written GDN C leaf such as ``hrt_tlgdn_*``.
+``gdn_prefill.py``, it does not call any user-visible hand-written GDN C
+leaf such as ``hrt_tlgdn_*``.
 
 Shape is fixed to the Qwen GDN prefill anchor: T=1024, Hk=16, Hv=32,
 D=128, chunk=32.  The generated kernel is a code-generation/structure

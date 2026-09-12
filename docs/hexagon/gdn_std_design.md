@@ -70,20 +70,19 @@ VTCM 预算(R3):state 2MB + 影子 1MB + 中间张量,总量 <6MB;装不下就�
 
 ## 流程
 
-1. 写 examples/hexagon/gdn_std.py(骨架参照 gdn_prefill.py / gdn_split.py)。
+1. 写 examples/hexagon/gdn_std.py(骨架参照 gdn_prefill.py)。
    生成 → 审查 C 结构 → hexagon-clang 语法过。
 2. skel 集成走 /root/project/backend/npu/attn/collect_tilelang.sh 通道(只追加;
    attnops.idl 加 tl_gdn_std 入口,重建 stub/skel)。注意:build.sh 的 host 阶段在服务器缺
-   NDK clang,skel 在服务器编,host 测试二进制按前例在手机 Termux clang 下编
-   (参照 gdn_split_test 的构建方式)。
-3. 写 gdn_std_test.c(参照 gdn_split_test.c 的 rpcmem/slab/fp64 参考模式;
+   NDK clang,skel 在服务器编,host 测试二进制按前例在手机 Termux clang 下编。
+3. 写 gdn_std_test.c(rpcmem/slab/fp64 参考模式;
    fp64 参考照 attnops_gdn.c 数学在 host 侧跑)。判据 max_rel<0.1(rms 缩放)。
 4. 手机 detach 运行(nohup + .done 轮询,日志拉回):先 1 iter 对拍,再多 iter 计时,
    prof 尾区分相位计时。
 5. 性能迭代到 <45.35ms。杠杆(按预期收益):staging 挪 pool 相位与 HMX 重叠
    (pool_start/pool_join 在 hexagon_rt.h;编译器侧若缺表达就记录缺口);合并 pool 段减少
    相位切换;w 的 AH staging 在 fwdo/fwdh 间复用;kkt 与 WU 的 A 操作数合并 stage。
-6. 对照基线:手写 TL_GDN(tl_gdn_test)46.6ms;gdn_split 45.7ms。
+6. 对照基线:手写 TL_GDN(tl_gdn_test)46.6ms。gdn_split 曾是阶段拆分的过渡实验，已由纯编译器生成的 gdn_std 取代。
 
 ## 汇报要求
 
