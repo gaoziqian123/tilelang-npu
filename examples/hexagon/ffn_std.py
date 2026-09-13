@@ -81,7 +81,7 @@ def ffn_std(M: int = 1024, K: int = 2560, FF: int = 9216, ff_panel: int = 256, k
                     T.copy(Wg[p * ff_panel + wg_job * 32 : p * ff_panel + (wg_job + 1) * 32, 0:K], Wg_b[wg_job * 32 : (wg_job + 1) * 32, 0:K], layout=("rm", "wh"))
                 for wu_job in T.parallel(ff_panel // 32):
                     T.copy(Wu[p * ff_panel + wu_job * 32 : p * ff_panel + (wu_job + 1) * 32, 0:K], Wu_b[wu_job * 32 : (wu_job + 1) * 32, 0:K], layout=("rm", "wh"))
-                for mb in T.serial(M // 32):
+                for mb in T.Pipelined(M // 32, num_stages=2, order=[0, 1, 2, 3, 4, 5], stage=[0, 1, 1, 1, 1, 1]):
                     # Activation staging is per row block.  Keep it in a pool
                     # phase so the caller thread only runs HMX chains.
                     for xjob in T.parallel(8):
@@ -106,7 +106,7 @@ def ffn_std(M: int = 1024, K: int = 2560, FF: int = 9216, ff_panel: int = 256, k
                 # all M/32 row blocks for this output-channel panel.
                 for wd_job in T.parallel(k_panel // 32):
                     T.copy(Wd[kp * k_panel + wd_job * 32 : kp * k_panel + (wd_job + 1) * 32, 0:FF], Wd_b[wd_job * 32 : (wd_job + 1) * 32, 0:FF], layout=("rm", "wh"))
-                for rb2 in T.serial(M // 32):
+                for rb2 in T.Pipelined(M // 32, num_stages=2, order=[0, 1, 2, 3], stage=[0, 1, 1, 1]):
                     for hjob in T.parallel(36):
                         T.copy(Slab[rb2 * 32 : (rb2 + 1) * 32, hjob * (FF // 36) : (hjob + 1) * (FF // 36)], H_a[0:32, hjob * (FF // 36) : (hjob + 1) * (FF // 36)], layout=("rm", "ah"))
                     T.gemm(H_a, Wd_b, Y_acc, transpose_B=True, clear_accum=True)
@@ -167,6 +167,9 @@ def run_syntax_check(out: Path, skip: bool) -> int:
 def structural_check(src: str) -> int:
     checks: list[tuple[str, bool]] = []
     checks.append(("pool workers emitted", "attnops_pool_run_ctx(" in src and "_pool" in src))
+    checks.append(("async pool starts emitted", src.count("attnops_pool_start_ctx(") >= 2))
+    checks.append(("async pool joins emitted", src.count("attnops_pool_join();") >= 2))
+    checks.append(("sync prologue/epilogue pools emitted", "attnops_pool_run_ctx(" in src))
     checks.append(("hmx present", "hrt_hmx_mm_f16" in src and "hrt_acc_read_f16" in src))
     worker_blob = src.split("int attnops_tl_ffn_std", 1)[0]
     checks.append(("hmx outside worker functions", "hrt_hmx_mm_f16" not in worker_blob))
@@ -174,6 +177,11 @@ def structural_check(src: str) -> int:
     checks.append(("copy recipe staging", "hrt_tl" in src and ("copy" in src or "stage" in src)))
     checks.append(("prof counters", "tl.hexagon_prof profile slots" in src and "tl_prof_phase_t0" in src and "prof[5.." in src))
     checks.append(("no handwritten ffn leaf", "attnops_ffn(" not in src and "fn_silu_ah_worker" not in src))
+    checks.append(("rotated pipeline buffers", "floormod" in src or "% 2" in src))
+    async_start_pos = src.find("attnops_pool_start_ctx(")
+    async_join_pos = src.find("attnops_pool_join();", async_start_pos)
+    sync_after_join_pos = src.find("attnops_pool_run_ctx(", async_join_pos)
+    checks.append(("join before following sync pool", async_start_pos >= 0 and async_join_pos > async_start_pos and sync_after_join_pos > async_join_pos))
     m = re.search(r"#define TL_GENERIC_VTCM_BYTES \(\(size_t\)(\d+)\)", src)
     vtcm = int(m.group(1)) if m else -1
     checks.append((f"vtcm budget {vtcm} < 8MB", 0 <= vtcm < 8 * 1024 * 1024))

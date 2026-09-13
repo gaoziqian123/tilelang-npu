@@ -33,9 +33,13 @@ copy its handwritten worker code or leaf intrinsics.
 
 ## Kernel phases
 
-The v1 schedule is deliberately synchronous: worker-pool `T.parallel` phases
-are barriers, and all `T.gemm` HMX chains run on the caller thread.  There is no
-async overlap.
+The row-block sweeps use `T.Pipelined(..., num_stages=2)` to overlap activation
+staging with caller-thread HMX work.  In the steady-state loop the first
+worker-pool `T.parallel` phase is emitted as `attnops_pool_start_ctx`, while the
+caller thread continues into the HMX GEMM / readout chain.  The outstanding pool
+is joined before the next worker-pool phase (the SwiGLU/store or final store),
+and prologue/epilogue phases stay synchronous.  The weight-panel loops remain
+ordinary `T.serial` loops so Wg/Wu/Wd are not double-buffered in VTCM.
 
 ### Phase 1: gate/up panels and SwiGLU scratch
 
@@ -43,11 +47,13 @@ The FF axis is split into static `FF_PANEL = 256` panels.  For each panel:
 
 1. Stage `Wg[p:p+FF_PANEL, :]` and `Wu[p:p+FF_PANEL, :]` to VTCM WH layout with
    `T.copy`.
-2. For each 32-row block of `x`, stage the activation block to VTCM AH once and
-   run two `T.gemm` calls sharing it: gate and up.
-3. Copy accumulator tiles to VTCM fp16 temporaries, then a `T.parallel` phase
-   computes `silu(gate) * up` elementwise using standard math (`T.exp`) and
-   writes the result to global `h` scratch.
+2. For each 32-row block of `x`, the pipelined stage-0 `T.parallel` phase stages
+   the activation block to VTCM AH once; in steady state this staging for block
+   `mb+1` overlaps the stage-1 gate/up `T.gemm` calls for block `mb`.
+3. Copy accumulator tiles to VTCM fp16 temporaries, join the outstanding staging
+   pool, then a synchronous `T.parallel` phase computes `silu(gate) * up`
+   elementwise using standard math (`T.exp`) and writes the result to global `h`
+   scratch.
 
 `h` is global scratch in row-major `[M, FF]`.  A fully raw HMX-AH global scratch
 with no accumulator unpermute would require a standard TileLang global-layout
@@ -57,14 +63,15 @@ expressiveness gap rather than adding handwritten C.
 
 ### Phase 2: down projection
 
-For each 32-row block:
+For each output-channel panel:
 
-1. `T.copy(..., layout=("rm", "ah"))` stages a row-major 32-row block of `h` as
-   the HMX A operand.
-2. The output K axis is split into `K_PANEL = 128` panels.  For each panel,
-   stage `Wd[k:k+K_PANEL, :]` to WH and run `T.gemm(h, Wd_panel^T)`.
-3. Copy the accumulator to a VTCM fp16 tile and a worker-pool phase writes it to
-   the row-major `y` region of the slab.
+1. Stage `Wd[k:k+K_PANEL, :]` to WH once and keep it resident.
+2. The pipelined row-block loop stages a row-major 32-row block of `h` as the HMX
+   A operand.  In steady state, H staging for `rb2+1` overlaps the down-projection
+   `T.gemm(h, Wd_panel^T)` for `rb2`.
+3. Copy the accumulator to a VTCM fp16 tile, join the outstanding staging pool,
+   and a synchronous worker-pool phase writes it to the row-major `y` region of
+   the slab.
 
 ## VTCM budget
 
@@ -73,14 +80,14 @@ The panels are chosen by a simple under-8MB budget check, matching the spirit of
 
 | Buffer | Shape/layout | Bytes |
 |---|---:|---:|
-| `X_a` | `[32, 2560]` fp16 AH | 163,840 |
+| `X_a` | 2 × `[32, 2560]` fp16 AH (pipeline versions) | 327,680 |
 | `Wg_b` | `[256, 2560]` fp16 WH | 1,310,720 |
 | `Wu_b` | `[256, 2560]` fp16 WH | 1,310,720 |
 | gate/up/h panel tmp | 3 × `[32,256]` fp16 RM | 49,152 |
-| `H_a` | `[32, 9216]` fp16 AH | 589,824 |
+| `H_a` | 2 × `[32, 9216]` fp16 AH (pipeline versions) | 1,179,648 |
 | `Wd_b` | `[128, 9216]` fp16 WH | 2,359,296 |
 | HMX accumulator/readout area | emitter-managed | ~64 KiB |
-| **Total static VTCM request** | | **< 6.5 MiB generated** |
+| **Total static VTCM request** | | **< 7.2 MiB generated** |
 
 `FF_PANEL = 512` would require two resident phase-1 weight panels of about
 5.0 MiB before the down-projection panel and full-row `h` staging buffers are
@@ -129,7 +136,8 @@ source order.
 
 ## v1 exclusions
 
-- No async pool/HMX overlap; every `T.parallel` phase is synchronous.
+- No weight-panel pipelining; double-buffering the large Wg/Wu/Wd panels would
+  exceed the 8 MiB VTCM cap.
 - No host-side WH preconversion ABI; weights are staged from row-major tensors by
   standard `T.copy`.
 - No handwritten raw-AH global writeback for `h`.  The standard route stores
