@@ -600,7 +600,14 @@ class HexagonEmitter(PyStmtExprVisitor):
         old_async = self._pipeline_async_first_available
         self._pending_async_pool_slot = None
         self._pipeline_async_first_available = True
-        body = self._lower_pipeline_body(op.body, loop_ctx, indent + 1)
+        num_stages = _i64(op.annotations.get("tl_pipelined_num_stages")) if op.annotations else None
+        # Pool-phase fusion (stage-0 producer + trailing late-stage consumer
+        # merged into one async job array) is only sound when the trailing
+        # pool phase reads a *previous* iteration's buffers, which requires
+        # num_stages >= 3.  With num_stages == 2 the trailing phase consumes
+        # the current iteration's gemm outputs and must stay synchronous.
+        allow_fuse = num_stages is not None and num_stages >= 3
+        body = self._lower_pipeline_body(op.body, loop_ctx, indent + 1, allow_fuse=allow_fuse)
         if self._pending_async_pool_slot is not None:
             body += self._emit_profiled_pool_join(indent + 1, self._pending_async_pool_slot)
             self._pending_async_pool_slot = None
@@ -611,12 +618,56 @@ class HexagonEmitter(PyStmtExprVisitor):
             self._ind(indent, f"for (int {var} = 0; {var} < {bound}; {var}++) {{"),
         ] + body + [self._ind(indent, "}")]
 
-    def _lower_pipeline_body(self, op: Any, ctx: _Ctx, indent: int) -> list[str]:
+    def _as_pool_parallel_for(self, stmt: Any) -> Any:
+        """Return the inner For if stmt is a (possibly block-wrapped) T.parallel
+        For that lowers to a pool phase."""
+        while True:
+            if isinstance(stmt, SBlockRealize):
+                stmt = stmt.block
+            elif isinstance(stmt, SBlock):
+                stmt = stmt.body
+            else:
+                break
+        if not isinstance(stmt, For):
+            return None
+        kind = str(getattr(stmt, "kind", ""))
+        if not ("parallel" in kind.lower() or kind == "1"):
+            return None
+        if not self._pre_has_gemm:
+            return None
+        return stmt
+
+    def _lower_pipeline_body(self, op: Any, ctx: _Ctx, indent: int, allow_fuse: bool = False) -> list[str]:
         seq = list(op.seq) if isinstance(op, SeqStmt) else [op]
+        # Pool-phase fusion: [T.parallel producer, gemm chain..., T.parallel
+        # writeback] with num_stages >= 3 -> emit ONE async pool start whose
+        # job array is [producer jobs | writeback jobs]; both are joined once
+        # at the loop back-edge.  This mirrors the handwritten kernels, whose
+        # async job arrays combine next-block staging with previous-block
+        # writeback.
+        fuse_skip: set[int] = set()
+        fused_start: dict[int, tuple[Any, Any]] = {}
+        if allow_fuse:
+            pool_idx = [j for j, s in enumerate(seq) if self._as_pool_parallel_for(s) is not None]
+            if os.environ.get("TL_FUSE_DEBUG"):
+                print(f"FUSEDBG nstmt={len(seq)} pool_idx={pool_idx} kinds={[type(s).__name__ for s in seq]}")
+            if len(pool_idx) == 2:
+                i0, i1 = pool_idx
+                between = seq[i0 + 1:i1]
+                if any(self._is_gemm_intrin_eval(s) for s in between):
+                    fused_start[i0] = (self._as_pool_parallel_for(seq[i0]), self._as_pool_parallel_for(seq[i1]))
+                    fuse_skip.add(i1)
         out: list[str] = []
         i = 0
         while i < len(seq):
             stmt = seq[i]
+            if i in fuse_skip:
+                i += 1
+                continue
+            if i in fused_start:
+                out += self._emit_fused_pool_phases(*fused_start[i], ctx, indent)
+                i += 1
+                continue
             if self._pending_async_pool_slot is not None and self._contains_pool_phase(stmt):
                 out += self._emit_profiled_pool_join(indent, self._pending_async_pool_slot)
                 self._pending_async_pool_slot = None
@@ -630,6 +681,37 @@ class HexagonEmitter(PyStmtExprVisitor):
                                               outer_vars=ctx.outer_vars), indent)
             i += 1
         return out
+
+    def _emit_fused_pool_phases(self, first: Any, second: Any, ctx: _Ctx, indent: int) -> list[str]:
+        """Emit two T.parallel pool phases as one worker with a partitioned job
+        range: jobs [0, E0) run the first phase, jobs [E0, E0+E1) the second."""
+        e0 = _i64(first.extent)
+        e1 = _i64(second.extent)
+        if e0 is None or e1 is None:
+            raise HexagonEmitError(f"白名单: 融合 pool 相位的 T.Parallel extent 必须静态{_loc(first)}")
+        wid = len(self._pool_workers)
+        wname = f"{self.func_name or 'tl'}_pool{wid}_worker"
+        ctx_type = f"{self.func_name or 'tl'}_pool{wid}_ctx_t"
+        worker_ctx = _Ctx(block_var=ctx.block_var, row_var=ctx.row_var, worker_var="job", outer_vars=ctx.outer_vars)
+        v0 = _var_name(first.loop_var)
+        v1 = _var_name(second.loop_var)
+        body = [self._ind(1, f"if (job < {e0}) {{"),
+                self._ind(2, f"const int {v0} = job;")]
+        body += self._lower_stmt(first.body, worker_ctx, 2)
+        body += [self._ind(1, "} else {"),
+                 self._ind(2, f"const int {v1} = job - {e0};")]
+        body += self._lower_stmt(second.body, worker_ctx, 2)
+        body += [self._ind(1, "}")]
+        self._pool_workers.append(_PoolWorker(wname, ctx_type, e0 + e1, ctx.outer_vars, body))
+        init_vals = ", ".join([arg.cname for arg in self.global_args] + self._shape_params + list(ctx.outer_vars) + ["abl", "prof"])
+        async_pool = self._consume_pipeline_async_first(ctx)
+        return [
+            self._ind(indent, f"// T.Parallel({e0})+T.Parallel({e1}) -> fused Hexagon worker-pool phase ({'async start' if async_pool else 'sync join'})"),
+            self._ind(indent, f"{ctx_type} ctx{wid} = {{ {init_vals} }};"),
+            *(self._emit_profiled_pool_start(indent, f"attnops_pool_start_ctx({wname}, &ctx{wid}, {e0 + e1});")
+              if async_pool else
+              self._emit_profiled_pool_call(indent, f"attnops_pool_run_ctx({wname}, &ctx{wid}, {e0 + e1});")),
+        ]
 
     def _consume_pipeline_async_first(self, ctx: _Ctx) -> bool:
         if ctx.pipeline_async_first or self._pipeline_async_first_available:
@@ -2432,11 +2514,18 @@ class HexagonEmitter(PyStmtExprVisitor):
         scope = _buffer_scope(buf)
         self.buffers[_buffer_name(buf)] = buf
         if _is_acc(scope):
-            for dim in buf.shape:
+            dims = list(buf.shape)
+            # Software-pipeline multi-versioning prepends a leading version
+            # dimension (e.g. [2, 32, 32]); exempt it from the %32 tile check.
+            if len(dims) >= 3:
+                iv0 = _i64(dims[0])
+                if iv0 is not None and 1 <= iv0 <= 8:
+                    dims = dims[1:]
+            for dim in dims:
                 iv = _i64(dim)
                 if iv is not None and iv % 32:
                     raise HexagonEmitError(f"R5: hmx.acc buffer {_buffer_name(buf)} 维度 {iv} 不是 32 的倍数")
-            shape = [_i64(d) for d in buf.shape]
+            shape = [_i64(d) for d in dims]
             if len(shape) >= 2 and shape[0] and shape[1]:
                 self.block_M_hint = int(shape[0])
                 self.block_N_hint = int(shape[1])

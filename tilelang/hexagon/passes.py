@@ -631,7 +631,15 @@ class _Verifier:
                         f"layout: buffer {_buffer_name(buf)} scope 后缀 .{suffix} 与 annotation {annotated} 不一致"
                     )
         if _is_acc(_buffer_scope(buf)):
-            for dim in buf.shape:
+            dims = list(buf.shape)
+            # Software-pipeline multi-versioning prepends a leading version
+            # dimension (e.g. [2, 32, 32]); it is a small version count, not
+            # an HMX tile extent, so exempt it from the %32 tile check.
+            if len(dims) >= 3:
+                iv0 = _i64(dims[0])
+                if iv0 is not None and 1 <= iv0 <= 8:
+                    dims = dims[1:]
+            for dim in dims:
                 iv = _i64(dim)
                 if iv is not None and iv % 32:
                     raise HexagonEmitError(f"R5: hmx.acc buffer {_buffer_name(buf)} 维度 {iv} 不是 32 的倍数")

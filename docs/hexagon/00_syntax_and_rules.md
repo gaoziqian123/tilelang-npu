@@ -399,6 +399,17 @@ for i in T.Pipelined(N, num_stages=2, order=[0, 1, 2], stage=[0, 1, 1]):
 
 对照测试:/tmp/tl_pipeline_emit_test.py(异步形态)/tl_pipeline_reject_test.py。
 
+**pool 相位融合(num_stages>=3,对齐手写 kernel 的异步 job 数组)**:
+稳态体若恰为 `[T.parallel 生产者, gemm 链..., T.parallel 写回]` 且
+num_stages>=3(写回相位必须是 stage>=2 的迟到消费者,读的是上一迭代的
+buffer 版本),emitter 会把两个 T.parallel 合成**一个**异步 job 数组
+(jobs [0,E0) 跑生产者、[E0,E0+E1) 跑写回),一次 pool_start_ctx 盖住,
+回边一次 join——即手写 kernel "stage 下一个 + writeback 上一个"的单
+异步槽结构。num_stages==2 时写回相位与本轮 gemm 有依赖,**不融合**(
+保持 join 后同步跑)。融合要求两个相位 extent 均静态;非 bare For 的
+包装(SBlockRealize/SBlock)自动剥壳识别。对照测试:
+/tmp/tl_pipeline_fuse_emit_test.py。
+
 ## 7. 实现落点(mirror `tilelang/cuda/` + `src/cuda/`)
 
 | CUDA 路径文件 | Hexagon 对应 |
