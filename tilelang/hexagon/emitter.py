@@ -620,6 +620,7 @@ class HexagonEmitter(PyStmtExprVisitor):
                     raise HexagonEmitError(f"copy_rm_ah: 找不到源/目标 buffer{_loc(call)}")
                 src_ptr = self._buffer_ptr_c(src)
                 dst_off = self._vtcm_offset_c(dst)
+                dst_scope = _buffer_scope(dst)
                 snd = int(_i64(call.args[3]) or 0) if len(call.args) > 3 else 0
                 src_base = self._copy_region_linear_base(call, 4, snd, src)
                 dst_meta = 4 + 2 * snd
@@ -637,12 +638,18 @@ class HexagonEmitter(PyStmtExprVisitor):
                     raise HexagonEmitError(f"R5: copy_rm_ah 目标 tile 维度必须 32 整除, 实际 rows={rows},cols={cols}")
                 kt = cols // 32
                 mt = rows // 32
-                body = [self._ind(indent, "if (!(abl & 2)) {"),
-                        self._ind(indent + 1, "hrt_mask_init();"),
-                        self._ind(indent + 1, f"for (int tl_gm_r = 0; tl_gm_r < {mt}; tl_gm_r++)"),
-                        self._ind(indent + 2, f"hrt_stage_act_hvx_direct((const uint8_t *)({src_ptr} + (size_t)({src_base}) + (size_t)tl_gm_r * 32 * {cols}),"),
-                        self._ind(indent + 3, f"V + {dst_off} + (size_t)tl_gm_r * {kt} * HRT_TILE_BYTES, {cols}, {kt}, HRT_TILE_BYTES, 32);"),
-                        self._ind(indent, "}")]
+                if "wh" in dst_scope:
+                    body = [self._ind(indent, "if (!(abl & 2)) {"),
+                            self._ind(indent + 1, "hrt_mask_init();"),
+                            self._ind(indent + 1, f"hrt_stage_f16_rm_to_wh_nt({src_ptr} + (size_t)({src_base}), V + {dst_off}, {cols}, {rows}, {cols});"),
+                            self._ind(indent, "}")]
+                else:
+                    body = [self._ind(indent, "if (!(abl & 2)) {"),
+                            self._ind(indent + 1, "hrt_mask_init();"),
+                            self._ind(indent + 1, f"for (int tl_gm_r = 0; tl_gm_r < {mt}; tl_gm_r++)"),
+                            self._ind(indent + 2, f"hrt_stage_act_hvx_direct((const uint8_t *)({src_ptr} + (size_t)({src_base}) + (size_t)tl_gm_r * 32 * {cols}),"),
+                            self._ind(indent + 3, f"V + {dst_off} + (size_t)tl_gm_r * {kt} * HRT_TILE_BYTES, {cols}, {kt}, HRT_TILE_BYTES, 32);"),
+                            self._ind(indent, "}")]
                 return body if ctx.worker_var is not None else self._prof_wrap(indent, 1, body)
             if self._is_gemm_b_operand(dst):
                 self.has_copy = True
@@ -1855,7 +1862,7 @@ class HexagonEmitter(PyStmtExprVisitor):
         if dst_is_vtcm:
             dst_off = self._vtcm_offset_c(dst)
             lines += [
-                self._ind(indent + 3, f"hrt_tlgdn_acc_tile_to_vtcm_rm(V, {acc0}, (f16 *)(V + {dst_off}), {n}, {prefix}_r * 32, {prefix}_c * 32);"),
+                self._ind(indent + 3, f"hrt_tlgdn_acc_tile_to_vtcm_rm(V, {acc0}, (f16 *)(V + {dst_off}), {n}, {prefix}_r, {prefix}_c);"),
             ]
         elif dst_scope == "global":
             dst_ptr = self._buffer_ptr_c(dst)
