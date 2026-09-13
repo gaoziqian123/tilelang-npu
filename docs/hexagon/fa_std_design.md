@@ -185,6 +185,21 @@ and `hexagon-clang -fsyntax-only` verifies generated C syntax.
   elementwise PASS, regressions (gdn_std/ffn_std) green.  Prof ticks
   (7.31M wall): rmask 2.58M + arow 2.34M dominate (~70%) — both are scalar
   global-memory loops, next target is HVX vectorization of those phases.
+- v3b HVX vectorization (2026-09-14): the row-parallel phases' inner loops
+  now use `T.vectorized` — score scale (off-diagonal tiles; the diagonal
+  keeps the scalar masked path), exp (full 128-wide padded row with a
+  +32768 bias on pad lanes so they underflow to exactly 0 in fp16), Oacc
+  zero/accumulate and final normalize (256-wide).  Row max and the row-sum
+  reduction stay scalar but accumulate in `T.alloc_var` locals instead of
+  round-tripping global scratch.  Device: **383 -> 172 ms**, strict
+  elementwise PASS; gdn_std/ffn_std regressions green.
+- Emitter fixes landed for v3b: (1) `T.alloc_var` (`local.var`) scalars are
+  redeclared inside pool worker functions that reference them and dropped
+  from the main flow when worker-only (the latter used to trip -Werror
+  -Wunused-variable in the skel build); (2) fp32 uniform (splat) vector
+  stores in 64-lane iteration contexts now emit both 128B halves — the
+  single-store fast path is only legal for genuine 32-lane contexts
+  (extent 32).  Bug (2) silently zeroed only half of each Oacc row.
 - Debugging note (v3 bring-up): the skel entry guards the slab with
   `if (slabLen < prof_off + PROF_BYTES) return -1;`.  **FastRPC masks
   negative skel return values as a generic invoke failure `user err 0x4e`

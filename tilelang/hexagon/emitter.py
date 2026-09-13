@@ -290,6 +290,7 @@ class HexagonEmitter(PyStmtExprVisitor):
         self._pre_has_vector = False
         self._pre_has_parallel = False
         self._pool_workers: list[_PoolWorker] = []
+        self._local_var_decls: dict[str, str] = {}
         self._shape_params: list[str] = []
         self.hexagon_prof = False
         self._prof_next_slot = 5
@@ -1191,11 +1192,19 @@ class HexagonEmitter(PyStmtExprVisitor):
             lines.append(
                 self._ind(indent, f"Q6_dcfetch_A((void *)({p} + {idx_name} + {self.dcfetch_elems}));")
             )
+        f32_store = str(buf.dtype) == "float32" and val.dtype == "float32"
+        pair = len(val.names) == 2 and val.names[0] != val.names[1]
+        # A uniform (splat/single-register) fp32 value in a 64-lane iteration
+        # context still covers 64 elements: the same register must be stored
+        # at +0 and +32.  Only a genuine 32-lane context (extent 32) may skip
+        # the second half.
+        uniform64 = f32_store and not pair and (ctx.vec_extent or 0) != 32
+        second_name = val.names[1] if pair else val.names[0]
         if scope == "global":
             limit = self._shape_numel_c(buf.shape) if buf is not None and len(buf.shape) > 1 else "total"
             guard = "total" if limit == "total" else f"(size_t)({limit})"
             store_lanes = 64
-            if str(buf.dtype) == "float32" and not (len(val.names) == 2 and val.names[0] != val.names[1]):
+            if str(buf.dtype) == "float32" and not pair and not uniform64:
                 store_lanes = 32
             lines += [
                 self._ind(indent, f"if ({idx_name} + {store_lanes} <= {guard}) {{"),
@@ -1205,15 +1214,15 @@ class HexagonEmitter(PyStmtExprVisitor):
             ]
         else:
             lines += [*expr_lines, self._ind(indent, f"*(HVX_Vector *)({ptr} + {idx_name}) = {store_name};")]
-        if str(buf.dtype) == "float32" and val.dtype == "float32" and len(val.names) == 2 and val.names[0] != val.names[1]:
+        if f32_store and (pair or uniform64):
             # One HVX register carries 32 fp32 lanes.  64-lane fp32 elementwise
             # expressions are a lo/hi register pair; store both halves.  A
             # 32-lane context reuses a single register ([name, name]) and must
             # NOT emit the +32 store, which would clobber the next row.
             if scope == "global":
-                lines.insert(-1, self._ind(indent + 1, f"*(HVX_Vector *)({ptr} + {idx_name} + 32) = {val.names[1]};"))
+                lines.insert(-1, self._ind(indent + 1, f"*(HVX_Vector *)({ptr} + {idx_name} + 32) = {second_name};"))
             else:
-                lines.append(self._ind(indent, f"*(HVX_Vector *)({ptr} + {idx_name} + 32) = {val.names[1]};"))
+                lines.append(self._ind(indent, f"*(HVX_Vector *)({ptr} + {idx_name} + 32) = {second_name};"))
         return lines
 
     def _contains_parallel_for(self, op: Any) -> bool:
@@ -2533,6 +2542,12 @@ class HexagonEmitter(PyStmtExprVisitor):
     def _record_alloc(self, buf: Buffer) -> None:
         scope = _buffer_scope(buf)
         self.buffers[_buffer_name(buf)] = buf
+        if scope == "local.var":
+            # Remember function-level scalar locals so pool worker bodies
+            # (rendered as separate C functions) can redeclare the ones they
+            # reference; the _lower_sblock declaration only lands in the
+            # main-thread flow.
+            self._local_var_decls[_buffer_name(buf)] = str(buf.dtype)
         if _is_acc(scope):
             dims = list(buf.shape)
             # Software-pipeline multi-versioning prepends a leading version
@@ -2980,6 +2995,17 @@ int {self.func_name}(remote_handle64 h, unsigned char *slab, int slabLen,
                 for line in locals_
             ]
             voids = "".join(f" (void){n};" for n in ["V", "t0", *local_names])
+            # Function-level scalar locals (T.alloc_var -> local.var) are
+            # declared by _lower_sblock in the main-thread flow only; pool
+            # workers are separate C functions, so redeclare the ones this
+            # worker body actually references.
+            extra_decls = "\n".join(
+                f"    {self._scalar_ctype(dt)} {nm};"
+                for nm, dt in self._local_var_decls.items()
+                if re.search(r"\b%s\b" % re.escape(nm), body)
+            )
+            if extra_decls:
+                extra_decls += "\n"
             chunks.append(f'''
 typedef struct {{
 {fields_s}
@@ -2990,7 +3016,7 @@ static void {worker.name}(int job, void *opaque) {{
 {locals_s}
     uint8_t *V = HRT_VTCM_BASE();
     uint64_t t0;{voids}
-{body}
+{extra_decls}{body}
 }}
 ''')
         return "\n".join(chunks)
@@ -2998,6 +3024,17 @@ static void {worker.name}(int job, void *opaque) {{
     def _render_generic_c(self, m: int, n: int, k: int) -> str:
         del m, n, k  # Generic shell uses per-call static recipe sizes and ABI scalars.
         body = "\n".join(self.body_lines)
+        # Drop main-flow local.var declarations that are only referenced from
+        # pool worker functions (they are redeclared there by
+        # _render_pool_worker_defs); keeping them trips -Werror
+        # -Wunused-variable in the skel build.
+        for nm, dt in self._local_var_decls.items():
+            decl_line = f"{self._scalar_ctype(dt)} {nm};"
+            uses = len(re.findall(r"\b%s\b" % re.escape(nm), body))
+            if uses == 1 and decl_line in body:
+                body = re.sub(
+                    r"^\s*" + re.escape(decl_line) + r"\n", "", body, count=1, flags=re.M
+                )
         func_name = self.func_name
         vtcm_bytes = self._assign_vtcm_offsets()
         shape_params = {name: name for name in self._shape_params}

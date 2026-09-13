@@ -162,26 +162,39 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                             # an earlier qt already has zero pad (nothing else
                             # writes cols >=32).
                             for rmask in T.parallel(tile):
-                                for cmask in T.serial(tile):
-                                    if kt == qt and cmask > rmask:
-                                        Pbuf[kt, rmask, cmask] = T.Cast("float16", -32768.0)
-                                    else:
+                                # Scale is vectorized for off-diagonal tiles
+                                # (the common case); the diagonal tile keeps
+                                # the scalar masked path.  Row start is 128B
+                                # aligned (Pbuf row stride is 256B), so a 64B
+                                # vector op on columns [0,32) is safe.
+                                if kt == qt:
+                                    for cmask in T.serial(tile):
+                                        if cmask > rmask:
+                                            Pbuf[kt, rmask, cmask] = T.Cast("float16", -32768.0)
+                                        else:
+                                            Pbuf[kt, rmask, cmask] = T.Cast("float16", T.Cast("float32", Pbuf[kt, rmask, cmask]) / 16.0)
+                                else:
+                                    for cmask in T.vectorized(tile):
                                         Pbuf[kt, rmask, cmask] = T.Cast("float16", T.Cast("float32", Pbuf[kt, rmask, cmask]) / 16.0)
                                 # Row max stays scalar (T.reduce_max on a
                                 # sliced region trips a known generic
                                 # LowerTileOp slice-substitution bug), but runs
-                                # inside the row-parallel pool job; Mus[kt, r]
-                                # is job-private so it doubles as the
-                                # accumulator (Mtmp is shared, do not use).
-                                Mus[kt, rmask] = T.Cast("float32", -32768.0)
+                                # inside the row-parallel pool job with a local
+                                # accumulator; Mus[kt, r] is written once at
+                                # the end (Mtmp is shared, do not use).
+                                m_row = T.alloc_var(T.float32, init=-32768.0)
                                 for cmax in T.serial(tile):
-                                    Mus[kt, rmask] = T.max(Mus[kt, rmask], T.Cast("float32", Pbuf[kt, rmask, cmax]))
-                                Mfin[rmask] = T.max(Mfin[rmask], Mus[kt, rmask])
+                                    m_row = T.max(m_row, T.Cast("float32", Pbuf[kt, rmask, cmax]))
+                                Mfin[rmask] = T.max(Mfin[rmask], m_row)
                                 Mus[kt, rmask] = Mfin[rmask]
-                                for cprob in T.serial(tile):
+                                # exp over the full padded row width (128):
+                                # pad lanes get an extra +32768 bias so they
+                                # underflow to exactly 0 in fp16, keeping the
+                                # P@V K-pad invariant without a separate store.
+                                for cprob in T.vectorized(128):
                                     Pbuf[kt, rmask, cprob] = T.Cast(
                                         "float16",
-                                        T.exp(T.Cast("float32", Pbuf[kt, rmask, cprob]) - Mfin[rmask]),
+                                        T.exp(T.Cast("float32", Pbuf[kt, rmask, cprob]) - T.if_then_else(cprob >= tile, Mfin[rmask] + 32768.0, Mfin[rmask])),
                                     )
                                 # Pbuf rows have stride 128 fp16.  The live score span
                                 # is columns [0,32), while the padded P@V K dimension
@@ -205,11 +218,13 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                         for kt2 in T.serial(qt + 1):
                             for rsum in T.parallel(tile):
                                 alpha = T.exp(Mus[kt2, rsum] - Mfin[rsum])
-                                for csum in T.serial(tile):
+                                for csum in T.vectorized(tile):
                                     Pbuf[kt2, rsum, csum] = T.Cast(
                                         "float16", T.Cast("float32", Pbuf[kt2, rsum, csum]) * alpha)
+                                l_acc = T.alloc_var(T.float32, init=0.0)
                                 for cadd in T.serial(tile):
-                                    Lbuf[rsum] = Lbuf[rsum] + T.Cast("float32", Pbuf[kt2, rsum, cadd])
+                                    l_acc = l_acc + T.Cast("float32", Pbuf[kt2, rsum, cadd])
+                                Lbuf[rsum] = Lbuf[rsum] + l_acc
 
                         # Phase C: O = sum_kt P_kt @ V_kt.  v1 copies each HMX
                         # product to global scratch and accumulates there,
@@ -220,7 +235,7 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                         # fp16 (hexkl only has acc_read_f16), but the running
                         # sum must not round-trip through fp16 across kt3.
                         for zrow in T.parallel(tile):
-                            for zd in T.serial(D):
+                            for zd in T.vectorized(D):
                                 Oacc[zrow, zd] = 0.0
                         for kt3 in T.serial(qt + 1):
                             for p_stage in T.parallel(2):
@@ -238,13 +253,13 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                             )
                             T.copy(Out, Obuf, layout=("ah", "rm"))
                             for arow in T.parallel(tile):
-                                for ad in T.serial(D):
+                                for ad in T.vectorized(D):
                                     Oacc[arow, ad] = Oacc[arow, ad] + T.Cast("float32", Obuf[arow, ad])
 
                         # Phase D: normalize and write row-major output.
                         for rout in T.parallel(tile):
                             inv_l = 1.0 / Lbuf[rout]
-                            for dout in T.serial(D):
+                            for dout in T.vectorized(D):
                                 O[hq * S + q0 + rout, dout] = T.Cast("float16", Oacc[rout, dout] * inv_l)
 
     return main
