@@ -10,6 +10,9 @@
 #include "support/check.h"
 
 #include <tvm/tirx/builtin.h>
+#include <tvm/runtime/logging.h>
+
+#include <sstream>
 
 namespace tvm {
 namespace tl {
@@ -82,6 +85,28 @@ bool SameDType(const Buffer &a, const Buffer &b) { return a->dtype == b->dtype; 
 bool IsFP16(const Buffer &buf) { return buf->dtype == DataType::Float(16); }
 
 bool IsFP32(const Buffer &buf) { return buf->dtype == DataType::Float(32); }
+
+const char *ModeName(HexagonLayoutMode mode) {
+  switch (mode) {
+  case HexagonLayoutMode::kRM: return "rm";
+  case HexagonLayoutMode::kAH: return "ah";
+  case HexagonLayoutMode::kWH: return "wh";
+  case HexagonLayoutMode::kIdentityForTest: return "identity_for_test";
+  case HexagonLayoutMode::kNone: return "none";
+  }
+  return "unknown";
+}
+
+std::string CopyRoute(const Buffer &src, const Buffer &dst,
+                      HexagonLayoutMode src_layout,
+                      HexagonLayoutMode dst_layout) {
+  std::ostringstream os;
+  os << "src(scope=" << src.scope() << ", dtype=" << src->dtype
+     << ", layout=" << ModeName(src_layout) << ") -> dst(scope="
+     << dst.scope() << ", dtype=" << dst->dtype
+     << ", layout=" << ModeName(dst_layout) << ")";
+  return os.str();
+}
 
 PrimExpr I32(int value) { return IntImm(DataType::Int(32), value); }
 
@@ -181,6 +206,13 @@ struct Copy {
          (IsGlobal(op.src) && IsVTCM(op.dst)) ||
          (IsVTCM(op.src) && IsGlobal(op.dst)))) {
       return MakeExtern("hexagon.copy_ddr", op);
+    }
+    if ((IsVTCM(op.src) || IsVTCM(op.dst) || IsAcc(op.src) || IsAcc(op.dst)) &&
+        !(IsVTCM(op.src) && IsVTCM(op.dst) && IsRM(src_layout) && IsRM(dst_layout) &&
+          SameDType(op.src, op.dst))) {
+      LOG(FATAL) << "Unsupported Hexagon copy route at lowering: "
+                 << CopyRoute(op.src, op.dst, src_layout, dst_layout)
+                 << "; no verified in-tile primitive exists for this layout/dtype/scope combination";
     }
     return tl::LowerNormalCopy(op, lower_args, analyzer);
   }

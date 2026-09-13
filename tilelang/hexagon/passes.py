@@ -665,7 +665,7 @@ class _Verifier:
                         dbuf = getattr(dst, "buffer", None)
                         if _is_vtcm(_buffer_scope(dbuf)):
                             raise HexagonEmitError(f"R2: 归约结果禁止标量写 VTCM buffer {_buffer_name(dbuf)}{_loc(e)}")
-                if callee in ("hexagon.copy_rm_ah", "hexagon.copy_f32_ah", "hexagon.copy_ah_rm", "hexagon.copy_acc_rm", "hexagon.copy_ddr"):
+                if callee in ("hexagon.copy_rm_ah", "hexagon.copy_f32_ah", "hexagon.copy_f32_wh", "hexagon.copy_ah_rm", "hexagon.copy_acc_rm", "hexagon.copy_ddr"):
                     self._check_copy_intrin(e, off)
                 if callee == "hexagon.gemm_hmx":
                     self._check_r4(e)

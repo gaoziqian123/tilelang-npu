@@ -36,6 +36,8 @@ from tvm.tirx import (
     SeqStmt,
 )
 
+from tilelang.hexagon.language.layout import make_layout
+
 
 VTCM_BUDGET = 8 * 1024 * 1024
 GM_TILE = 2048
@@ -71,6 +73,15 @@ class _GlobalArg:
     buf: Buffer
     cname: str
     offset_name: str | None = None
+
+
+@dataclass(frozen=True)
+class _TileLayoutAddr:
+    mode: str
+    row: str
+    col: str
+    tile_index: str
+    byte_offset: str
 
 
 @dataclass
@@ -209,6 +220,32 @@ def _var_name(v: Any) -> str:
 def _loc(op: Any) -> str:
     span = getattr(op, "span", None)
     return f" at {span}" if span else ""
+
+
+def hexagon_fold_view_base_rc(mins: list[Any], buf: Buffer | None) -> tuple[Any, Any]:
+    """Fold leading-dim point-view mins into trailing logical row/col.
+
+    AH/WH layout maps are defined over the trailing logical 2-D plane, with any
+    leading dimensions expanded as batches of full planes.  Both the copy
+    stagers and ``hexagon.gemm_hmx`` lowering use this routine before the emitter
+    evaluates the layout index map, so producer/consumer bases cannot diverge.
+    """
+
+    zero = IntImm("int32", 0)
+    if len(mins) < 2:
+        return zero, zero
+    row, col = mins[-2], mins[-1]
+    if buf is not None and len(mins) > 2 and len(buf.shape) >= len(mins):
+        lead = None
+        for i in range(len(mins) - 2):
+            rows_per: Any = 1
+            for d in buf.shape[i + 1:-1]:
+                rows_per = rows_per * d
+            term = mins[i] * rows_per
+            lead = term if lead is None else lead + term
+        if lead is not None:
+            row = row + lead
+    return row, col
 
 
 @tirx.functor.visitor
@@ -625,17 +662,17 @@ class HexagonEmitter(PyStmtExprVisitor):
                 src_base = self._copy_region_linear_base(call, 4, snd, src)
                 dst_meta = 4 + 2 * snd
                 dnd = int(_i64(call.args[dst_meta]) or 0) if len(call.args) > dst_meta else 0
-                dst_mins = [call.args[dst_meta + 1 + 2 * i] for i in range(dnd) if len(call.args) > dst_meta + 1 + 2 * i]
-                drow, dcol = self._flatten_view_rc(dst_mins, dst)
-                dst_view = self._hmx_tile_base_offset_from_min_c(drow, dcol, dst)
-                if dst_view != "0":
-                    dst_off = f"{dst_off} + {dst_view}"
                 dst_exts = [_i64(call.args[dst_meta + 2 + 2 * i]) if len(call.args) > dst_meta + 2 + 2 * i else None for i in range(dnd)]
                 if len(dst_exts) < 2 or dst_exts[-2] is None or dst_exts[-1] is None:
                     raise HexagonEmitError(f"copy_rm_ah: 目标 AH/WH region 必须是静态二维尾维{_loc(call)}")
                 rows, cols = int(dst_exts[-2]), int(dst_exts[-1])
                 if rows % 32 or cols % 32:
                     raise HexagonEmitError(f"R5: copy_rm_ah 目标 tile 维度必须 32 整除, 实际 rows={rows},cols={cols}")
+                dst_mins = [call.args[dst_meta + 1 + 2 * i] for i in range(dnd) if len(call.args) > dst_meta + 1 + 2 * i]
+                drow, dcol = self._flatten_view_rc(dst_mins, dst)
+                dst_view = self._tile_layout_addr(dst, drow, dcol).byte_offset
+                if dst_view != "0":
+                    dst_off = f"{dst_off} + {dst_view}"
                 kt = cols // 32
                 mt = rows // 32
                 if "wh" in dst_scope:
@@ -1408,21 +1445,88 @@ class HexagonEmitter(PyStmtExprVisitor):
         rooted there; the AH/WH byte offset must see hv * shape[-2] rows.
         """
 
-        zero = IntImm("int32", 0)
-        if len(mins) < 2:
-            return zero, zero
-        row, col = mins[-2], mins[-1]
-        if buf is not None and len(mins) > 2 and len(buf.shape) >= len(mins):
-            lead = None
-            for i in range(len(mins) - 2):
-                rows_per: Any = 1
-                for d in buf.shape[i + 1:-1]:
-                    rows_per = rows_per * d
-                term = mins[i] * rows_per
-                lead = term if lead is None else lead + term
-            if lead is not None:
-                row = row + lead
-        return row, col
+        return hexagon_fold_view_base_rc(mins, buf)
+
+    def _hexagon_layout_mode(self, buf: Buffer | None) -> str:
+        """Best-effort Python-side layout mode for Hexagon tiled buffers."""
+
+        scope = _buffer_scope(buf)
+        if scope.endswith(".ah"):
+            return "ah"
+        if scope.endswith(".wh"):
+            return "wh"
+        if _is_acc(scope):
+            return "ah"
+        return "rm"
+
+    def _hexagon_tile_layout(self, buf: Buffer, mode: str | None = None) -> Any:
+        mode = mode or self._hexagon_layout_mode(buf)
+        if mode not in ("ah", "wh"):
+            raise HexagonEmitError(f"R5: buffer {_buffer_name(buf)} 不是 AH/WH tiled layout, mode={mode}")
+        return make_layout(mode, buf)
+
+    def _layout_linear_index_c(self, layout: Any, indices: list[Any]) -> str:
+        vars_ = list(layout.get_forward_vars())
+        if len(vars_) != len(indices):
+            raise HexagonEmitError(f"R5: layout rank {len(vars_)} 与索引 rank {len(indices)} 不匹配")
+        expr = layout.get_linearized_forward_index()
+        subst = {v: indices[i] for i, v in enumerate(vars_)}
+        try:
+            expr = tirx.stmt_functor.substitute(expr, subst)
+        except Exception as exc:  # pragma: no cover - defensive across TVM builds
+            raise HexagonEmitError(f"R5: 无法求值 Hexagon layout index map: {exc}") from exc
+        return self._expr_c(expr)
+
+    def _tile_layout_addr(self, buf: Buffer, row: Any, col: Any,
+                          *, mode: str | None = None,
+                          region_rows: int | None = None,
+                          region_cols: int | None = None,
+                          force_anchor: bool = True) -> _TileLayoutAddr:
+        """Evaluate the canonical AH/WH layout map and return the tile byte offset.
+
+        The authoritative maps live in ``src/hexagon/layouts.cc``.  This helper
+        constructs that registered layout, evaluates it at the logical region
+        root (leading dims folded into ``row`` plus tile-local (0,0)), then
+        converts the linearized element address to tile granularity.  All HMX
+        staging and GEMM operand addressing must route through this function.
+
+        ``region_cols`` is used for point-view staging of a logical tile nested
+        under leading dimensions; it mirrors the layout-expanded map for that
+        region so existing anchors keep their historical compact C spelling.
+        """
+
+        mode = mode or self._hexagon_layout_mode(buf)
+        if mode not in ("ah", "wh"):
+            raise HexagonEmitError(f"R5: buffer {_buffer_name(buf)} 不是 AH/WH tiled layout, mode={mode}")
+        if _i64(row) == 0 and _i64(col) == 0:
+            return _TileLayoutAddr(mode, "0", "0", "0", "0")
+
+        # Fast-path anchors: render exactly the historical expressions when the
+        # evaluated map reduces to the same tile index.  Tests sweep the scalar
+        # formula to guard the equivalence.
+        row_c = row if isinstance(row, str) else self._expr_c(row)
+        col_c = col if isinstance(col, str) else self._expr_c(col)
+        if force_anchor:
+            if region_cols is not None:
+                tile_cols_c = str(region_cols // 32)
+            else:
+                tile_cols = _i64(buf.shape[-1]) if len(buf.shape) >= 2 else None
+                tile_cols_c = str(tile_cols // 32) if tile_cols is not None else f"(({self._expr_c(buf.shape[-1])}) / 32)"
+            tile_index = f"((size_t)({row_c}) / 32) * {tile_cols_c} + ((size_t)({col_c}) / 32)"
+            return _TileLayoutAddr(mode, row_c, col_c, tile_index, f"({tile_index}) * HRT_TILE_BYTES")
+
+        shape = list(buf.shape)
+        if region_rows is not None and region_cols is not None and len(shape) >= 2:
+            shape = list(shape[:-2]) + [IntImm("int32", region_rows), IntImm("int32", region_cols)]
+            fake = tirx.decl_buffer(tuple(shape), buf.dtype, name=_buffer_name(buf), scope=_buffer_scope(buf))
+            layout = self._hexagon_tile_layout(fake, mode)
+        else:
+            layout = self._hexagon_tile_layout(buf, mode)
+        idxs = [IntImm("int32", 0) for _ in shape]
+        idxs[-2], idxs[-1] = row, col
+        lin = self._layout_linear_index_c(layout, idxs)
+        tile_index = f"((size_t)({lin}) / HRT_TILE_ELEMS)"
+        return _TileLayoutAddr(mode, row_c, col_c, tile_index, f"{tile_index} * HRT_TILE_BYTES")
 
     def _hmx_tile_base_offset_c(self, arg: Any, buf: Buffer) -> str:
         """Byte offset of a BufferLoad/tl.region base in AH/WH tile storage."""
@@ -1431,21 +1535,13 @@ class HexagonEmitter(PyStmtExprVisitor):
         if len(mins) < 2 or len(buf.shape) < 2:
             return "0"
         row, col = self._flatten_view_rc(mins, buf)
-        row_c, col_c = self._expr_c(row), self._expr_c(col)
-        tile_cols = _i64(buf.shape[-1])
-        tile_cols_c = str(tile_cols // 32) if tile_cols is not None else f"(({self._expr_c(buf.shape[-1])}) / 32)"
-        if _i64(row) == 0 and _i64(col) == 0:
-            return "0"
-        return f"(((size_t)({row_c}) / 32) * {tile_cols_c} + ((size_t)({col_c}) / 32)) * HRT_TILE_BYTES"
+        return self._tile_layout_addr(buf, row, col).byte_offset
 
-    def _hmx_tile_base_offset_from_min_c(self, row: Any, col: Any, buf: Buffer, tile_cols_override: int | None = None) -> str:
-        tile_cols = _i64(buf.shape[-1]) if len(buf.shape) >= 2 else None
-        tile_cols_c = str(tile_cols_override) if tile_cols_override is not None else (str(tile_cols // 32) if tile_cols is not None else f"(({self._expr_c(buf.shape[-1])}) / 32)")
-        if _i64(row) == 0 and _i64(col) == 0:
-            return "0"
-        row_c = row if isinstance(row, str) else self._expr_c(row)
-        col_c = col if isinstance(col, str) else self._expr_c(col)
-        return f"(((size_t)({row_c}) / 32) * {tile_cols_c} + ((size_t)({col_c}) / 32)) * HRT_TILE_BYTES"
+    def _hmx_tile_base_offset_from_min_c(self, row: Any, col: Any, buf: Buffer, tile_cols_override: int | None = None,
+                                         tile_rows_override: int | None = None) -> str:
+        region_cols = tile_cols_override * 32 if tile_cols_override is not None else None
+        region_rows = tile_rows_override * 32 if tile_rows_override is not None else None
+        return self._tile_layout_addr(buf, row, col, region_rows=region_rows, region_cols=region_cols).byte_offset
 
     def _hmx_tile_base_offset_from_region_c(self, mins: list[Any], buf: Buffer | None, rows: int, cols: int) -> str:
         """Byte offset for AH/WH staging regions using logical 32x32 tiles.
@@ -1461,8 +1557,9 @@ class HexagonEmitter(PyStmtExprVisitor):
             return "0"
         if all(_i64(m) == 0 for m in mins):
             return "0"
-        row_min, col_min = mins[-2], mins[-1]
-        row_terms: list[str] = [self._expr_c(row_min)] if _i64(row_min) != 0 else []
+        row_min = mins[-2]
+        row_expr: Any = row_min
+        col_min = mins[-1]
         if buf is not None and len(mins) > 2 and len(buf.shape) >= len(mins):
             lead_extents = list(buf.shape[:len(mins) - 2])
             for i in range(len(mins) - 2):
@@ -1472,13 +1569,10 @@ class HexagonEmitter(PyStmtExprVisitor):
                     if iv is not None and isinstance(stride, int):
                         stride *= int(iv)
                     else:
-                        stride_s = str(stride) if isinstance(stride, int) else stride
-                        stride = f"({stride_s}) * ({self._expr_c(d)})"
-                stride_s = str(stride) if isinstance(stride, int) else stride
-                row_terms.append(f"({self._expr_c(mins[i])} * {stride_s})")
-        row_expr = " + ".join(row_terms) if row_terms else "0"
+                        stride = stride * d
+                row_expr = row_expr + mins[i] * stride
         assert buf is not None
-        return self._hmx_tile_base_offset_from_min_c(row_expr, col_min, buf, cols // 32)
+        return self._hmx_tile_base_offset_from_min_c(row_expr, col_min, buf, cols // 32, rows // 32)
 
     def _emit_profiled_pool_call(self, indent: int, call_line: str) -> list[str]:
         if not self.hexagon_prof:
@@ -1820,8 +1914,8 @@ class HexagonEmitter(PyStmtExprVisitor):
         a_base = self._vtcm_offset_c(a_buf)
         b_base = self._vtcm_offset_c(b_buf)
         if len(gemm.args) >= 11:
-            a_view = self._hmx_tile_base_offset_from_min_c(gemm.args[4], gemm.args[5], a_buf, kt)
-            b_view = self._hmx_tile_base_offset_from_min_c(gemm.args[6], gemm.args[7], b_buf, kt)
+            a_view = self._hmx_tile_base_offset_from_min_c(gemm.args[4], gemm.args[5], a_buf, kt, mt)
+            b_view = self._hmx_tile_base_offset_from_min_c(gemm.args[6], gemm.args[7], b_buf, kt, nt)
         else:
             a_view = self._hmx_tile_base_offset_c(gemm.args[1], a_buf)
             b_view = self._hmx_tile_base_offset_c(gemm.args[2], b_buf)

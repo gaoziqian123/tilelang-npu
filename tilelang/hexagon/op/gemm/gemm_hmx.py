@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tilelang import language as T
+from tilelang.hexagon.emitter import hexagon_fold_view_base_rc
 from tilelang.hexagon.language.layout import make_ah_layout, make_wh_layout
 from tilelang.tileop.gemm.gemm_base import GemmBase
 from tvm import DataType, tirx
@@ -53,20 +54,7 @@ def _flatten_view_base(offsets, buffer):
     two mins.  Whole-buffer operands keep [0, 0] and stay byte-identical.
     """
 
-    zero = tirx.const(0, "int32")
-    if len(offsets) < 2:
-        return [zero, zero]
-    row = offsets[-2]
-    col = offsets[-1]
-    lead_rows = None
-    for i in range(len(offsets) - 2):
-        rows_per_step = 1
-        for d in buffer.shape[i + 1:-1]:
-            rows_per_step = rows_per_step * d
-        term = offsets[i] * rows_per_step
-        lead_rows = term if lead_rows is None else lead_rows + term
-    if lead_rows is not None:
-        row = row + lead_rows
+    row, col = hexagon_fold_view_base_rc(list(offsets), buffer)
     return [row, col]
 
 
