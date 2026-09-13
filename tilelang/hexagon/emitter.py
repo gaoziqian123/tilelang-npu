@@ -2269,7 +2269,20 @@ class HexagonEmitter(PyStmtExprVisitor):
             raise HexagonEmitError(
                 "R5: hexagon.gemm_hmx 暂不支持 transpose_B=False: HMX WH 操作数恒编码 [N,K] 源; "
                 "请先在 scratch 里显式转置 B 再使用 transpose_B=True")
-        b_tile = f"(size_t){prefix}_c * {kt} + {prefix}_kb"
+        # B tile loop stride must be the BUFFER's own col-tile count, not the
+        # gemm's kt: a B operand may be a column-sliced view into a wider WH
+        # buffer (e.g. FA v2's V_all[0:D, kt*32:+128] window into a [D,S]
+        # buffer), where the row-block stride is buf_kt >> kt.  For dedicated
+        # [N,K] operand buffers buf_kt == kt and the emitted text is unchanged.
+        if (len(b_buf.shape) >= 4 and _i64(b_buf.shape[-1]) == 64
+                and _i64(b_buf.shape[-2]) == 16 and _i64(b_buf.shape[-3]) is not None):
+            # packed WH physical shape [..., row_blocks, col_tiles, 16, 64];
+            # col-tiles is always shape[-3] (a leading group/head dim may precede)
+            b_buf_kt = int(_i64(b_buf.shape[-3]))
+        else:
+            b_cols_i = _i64(b_buf.shape[-1]) if len(b_buf.shape) >= 1 else None
+            b_buf_kt = int(b_cols_i) // 32 if b_cols_i is not None else kt
+        b_tile = f"(size_t){prefix}_c * {b_buf_kt} + {prefix}_kb"
         lines: list[str] = [
             *self._prof_reset(indent),
             self._ind(indent, f"for (int {prefix}_r = 0; {prefix}_r < {mt}; {prefix}_r++) {{"),

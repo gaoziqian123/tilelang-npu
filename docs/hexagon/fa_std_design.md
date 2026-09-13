@@ -36,7 +36,7 @@ O[h, qt]   = (sum_kt P_kt @ V[g, kt]) / l
   input.
 - `P_tile @ V_tile`, with P staged to AH and V staged to WH.
 
-The v1 implementation keeps P as fp16 global scratch between the online-softmax
+The v2 implementation keeps P as fp16 global scratch between the online-softmax
 and output phases.  To stay within the current standard f16 AH/WH staging
 granularity, the P@V pass pads the reduction dimension from 32 to 128: P
 columns `[32,128)` and V rows `[32,128)` are zero, so the result is
@@ -44,44 +44,55 @@ mathematically identical while all staging still uses standard `T.copy`.
 
 ## Kernel phases
 
-The schedule is synchronous.  `T.parallel` regions lower to worker-pool phases;
-all `T.gemm` HMX chains remain on the caller thread.
+The schedule is mixed sync/async.  `T.parallel` regions lower to worker-pool
+phases; all `T.gemm` HMX chains remain on the caller thread.  The outer KV
+group loop first hoists both K and V staging into VTCM, then each query-head
+group pipelines the per-query-tile Q staging against the previous tile's score
+and value sweeps.
 
-1. **Q staging**: a multi-worker pool phase stages a 32x256 Q tile to AH as
+1. **K full-head staging**: once per KV group, a multi-worker pool phase stages
+   all `K[g] [1024,256]` into a VTCM WH buffer `K_all [1024,256]`.  Jobs cover
+   one 32-row tile and one 64-column slice, so the lowering uses the standard
+   row-major to WH recipe.
+2. **V transpose + full-head staging**: once per KV group, a scalar pool phase
+   builds global scratch `Vt[g, D, S]` (`Vt[g,d,s] = V[g,s,d]`).  A second pool
+   phase stages `Vt[g] [256,1024]` into a VTCM WH buffer `V_all [256,1024]` in
+   64-column slices via `hrt_stage_f16_rm_to_wh_nt_s`.
+3. **Q staging**: a multi-worker pool phase stages a 32x256 Q tile to AH as
    four 64-column slices.  The emitted copy uses the strided AH recipe because
-   the source row stride remains 256 while the copied slice width is 64.
-2. **Score sweep** (`kt = 0..qt`): stage K to WH as four 64-column slices; run
-   `T.gemm(Q, K^T)`; copy the accumulator to row-major P scratch; apply scale
+   the source row stride remains 256 while the copied slice width is 64.  The
+   query-tile loop uses `T.Pipelined(..., num_stages=2, order/stage=...)`: in
+   the steady state this first pool phase is emitted as `attnops_pool_start_ctx`
+   and overlaps with the previous tile's HMX/scalar work until the first later
+   pool phase (P staging) requires a join.
+4. **Score sweep** (`kt = 0..qt`): read point views
+   `K_all[kt*32:(kt+1)*32, 0:256]` directly; run `T.gemm(Q, K^T)`; copy the
+   accumulator to row-major P scratch; apply scale
    and diagonal causal mask; compute per-row max with `T.reduce_max`; store
    `m_used` and `P_kt`.
-3. **Online correction / normalizer**: rescale each P tile by
+5. **Online correction / normalizer**: rescale each P tile by
    `exp(m_used - m_final)` and accumulate the row normalizer `l`.
-4. **Value sweep**: for each visible `kt`, build the padded, *transposed*
-   global scratch `Vpad[D,128]` (`Vpad[d,kv] = V[kv,d]`) with a scalar pool
-   phase (an HVX tile-transpose T.copy route does not exist yet), stage
-   padded P to AH in two 64-column slices and Vpad to WH in two 64-column
-   slices via `hrt_stage_f16_rm_to_wh_nt_s`, then `T.gemm(P_a, V_b,
-   transpose_B=True)`: HMX has no non-transposed-B mode — WH always encodes
-   an `[N,K]` source — so `transpose_B=False` is rejected by the emitter and
-   V must be materialized transposed.  Per-tile partials (fp16, hexkl has no
-   fp32 acc readout) accumulate into an fp32 global `Oacc[32,256]`; the
-   running sum must not round-trip through fp16 across kt.
-   and add it into O.
-5. **Normalize**: multiply each output row by `1/l` and write row-major fp16 O.
+6. **Value sweep**: for each visible `kt`, stage padded P to AH in two
+   64-column slices and read point views `V_all[0:256, kt*32:kt*32+128]`
+   directly.  `T.gemm(P_a, V_all_view, transpose_B=True)` is used because HMX
+   WH always encodes an `[N,K]` source.  Per-tile partials (fp16, hexkl has no
+   fp32 acc readout) accumulate into global fp32 `Oacc[32,256]`; the running
+   sum must not round-trip through fp16 across kt.
+7. **Normalize**: multiply each output row by `1/l` and write row-major fp16 O.
 
 ## VTCM budget
 
-The static VTCM request reported by the generated C self-check is 112,640 bytes,
-well under the 8 MiB cap.
+The static VTCM request reported by the generated C self-check is 1,095,680
+bytes, well under the 8 MiB cap.
 
 | Buffer | Shape/layout | Bytes |
 |---|---:|---:|
-| `Q_a` | `[32,256]` fp16 AH | 16,384 |
-| `K_b` | `[32,256]` fp16 WH | 16,384 |
-| `V_b` | `[256,128]` fp16 WH (V^T) | 65,536 |
+| `Q_a` | two pipeline versions of `[32,256]` fp16 AH | 32,768 |
+| `K_all` | `[1024,256]` fp16 WH | 524,288 |
+| `V_all` | `[256,1024]` fp16 WH (V^T) | 524,288 |
 | `P_a` | `[32,128]` fp16 AH | 8,192 |
 | HMX accumulator/readout area | emitter-managed | small / shared |
-| **Generated static VTCM request** | | **112,640 B** |
+| **Generated static VTCM request** | | **1,095,680 B** |
 
 Global scratch is intentionally in the slab, not VTCM:
 
@@ -89,7 +100,8 @@ Global scratch is intentionally in the slab, not VTCM:
   padded to K=128 for standard AH staging.
 - `Mus [32,32]` fp32: per-KV-tile running max used for online correction.
 - `Mfin [32]`, `Lbuf [32]`, `ScoreRow[32]`, `Mtmp [1]`, `Obuf [32,256]`,
-  `Vpad [256,128]` (transposed), `Oacc [32,256]` fp32.
+  `Vt [4,256,1024]` fp16 (full-head transposed V scratch), `Oacc [32,256]`
+  fp32.
 
 ## Slab ABI v1
 
@@ -117,7 +129,7 @@ Lbuf    [32]            fp32
 ScoreRow[32]            fp16
 Mtmp    [1]             fp32
 Obuf    [32,256]        fp16
-Vpad    [256,128]       fp16, transposed padded V tile scratch
+Vt      [4,256,1024]    fp16, full-head transposed V scratch
 Oacc    [32,256]        fp32, running output accumulator
 prof    int32 qtimer counters emitted by `tl.hexagon_prof`
 ```
@@ -125,7 +137,8 @@ prof    int32 qtimer counters emitted by `tl.hexagon_prof`
 ## v1 exclusions and compiler note
 
 - No host-preconverted QAH/KWH/VWH ABI; all staging happens inside the kernel.
-- No async overlap between worker pool copies and HMX.
+- Q staging uses the standard `T.Pipelined` async pool start; K/V hoist phases
+  and P staging remain synchronous pool phases.
 - No persistent all-P row block in VTCM; P lives in global scratch between phases.
 - Row sums use scalar standard loops instead of the optional `P @ ones` HMX
   shortcut, because `T.reduce_sum` over the row tile is not yet as robust as the
@@ -155,9 +168,12 @@ and `hexagon-clang -fsyntax-only` verifies generated C syntax.
   the fp16-reference to the same deficit, so the residual is the format, not
   logic.  Closing it needs an fp32 accumulator readout path in hexkl.
 - v1 performance: ~1856 ms for S=1024 (16/4 GQA, D=256).  Prof ticks
-  (35.6M wall): pool_vpad 5.8M (scalar V transpose), pool_v 3.8M + pool_k
-  0.7M (per-tile restaging), mm 68K (0.2%).  Perf work (hoisted K/V staging,
-  HVX tile-transpose copy route, async overlap) is a follow-up campaign.
+   (35.6M wall): pool_vpad 5.8M (scalar V transpose), pool_v 3.8M + pool_k
+   0.7M (per-tile restaging), mm 68K (0.2%).  Perf work (hoisted K/V staging,
+   HVX tile-transpose copy route, async overlap) is a follow-up campaign.
+- v2 hoists K/V: `K_all` and `V_all` are staged once per KV group; value
+  transpose now fills ABI scratch `Vt [4,256,1024]`.  The only per-kt pool phase
+  left is P staging.  Device timing is tracked in the current campaign report.
 - Compiler fixes landed for this kernel: WriteSet marks `reduce_max` dst
   buffers; `hrt_reduce_max_f16_32` out-of-bounds 128B load + missing 1-lane
   fold fixed (both f16 helpers); `hexagon.gemm_hmx` carries an explicit

@@ -60,29 +60,63 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
         ScoreRow: T.Tensor((tile,), T.float16),
         Mtmp: T.Tensor((1,), T.float32),
         Obuf: T.Tensor((tile, D), T.float16),
-        Vpad: T.Tensor((D, 4 * tile), T.float16),
+        Vt: T.Tensor((HKV, D, S), T.float16),
         Oacc: T.Tensor((tile, D), T.float32),
     ):
         with T.Kernel(1, threads=1):
             # Per-q-tile resident operands.  All global inputs are logical
             # row-major and are staged with standard T.copy recipes.
             Q_a = T.alloc_shared((tile, D), T.float16, layout="ah")
-            K_b = T.alloc_shared((tile, D), T.float16, layout="wh")
+            # K/V are staged once per KV group.  K_all is logical [S,D] in WH
+            # layout; kt sweeps pass point views K_all[kt*32, 0].  V_all is
+            # logical V^T [D,S] in WH layout; P@V passes point views
+            # V_all[0, kt*32].
+            K_all = T.alloc_shared((S, D), T.float16, layout="wh")
             # P@V is padded to K=128 because the standard f16 rm->AH/WH staging
             # recipe is 64-column granular.  P columns [32,128) and V rows
             # [32,128) are zero, so the math is unchanged.  HMX has no
             # non-transposed B mode (WH always encodes an [N,K] source), so
             # V is staged pre-transposed: Vpad[d, kv] and transpose_B=True.
-            V_b = T.alloc_shared((D, 4 * tile), T.float16, layout="wh")
+            V_all = T.alloc_shared((D, S), T.float16, layout="wh")
             P_a = T.alloc_shared((tile, 4 * tile), T.float16, layout="ah")
             Score = T.alloc_fragment((tile, tile), T.float32)
             Out = T.alloc_fragment((tile, D), T.float32)
 
             # Four KV groups, each serving four query heads (GQA 16/4).
             for g in T.serial(HKV):
+                # Phase G0: stage the full K[g] head into VTCM WH once.  Each
+                # worker owns one 32-row tile and one 64-column slice so the
+                # lowering uses the rm->WH sliced multi-row-block recipe.
+                for k_all_job in T.parallel((S // tile) * (D // 64)):
+                    kt_all = k_all_job // (D // 64)
+                    kc_all = k_all_job % (D // 64)
+                    T.copy(
+                        K[g * S + kt_all * tile : g * S + (kt_all + 1) * tile,
+                          kc_all * 64 : (kc_all + 1) * 64],
+                        K_all[kt_all * tile : (kt_all + 1) * tile,
+                              kc_all * 64 : (kc_all + 1) * 64],
+                        layout=("rm", "wh"),
+                    )
+
+                # Phase G1: build full-head V^T in global scratch once per KV
+                # group.  This is still scalar, but runs four times total
+                # instead of once per (query tile, value tile) pair.
+                for vt_d in T.parallel(D):
+                    for vt_s in T.serial(S):
+                        Vt[g, vt_d, vt_s] = V[g * S + vt_s, vt_d]
+
+                # Phase G2: stage full V^T into VTCM WH once.  Use 64-column
+                # slices so every point view later is 128B-aligned.
+                for v_all_stage in T.parallel(S // 64):
+                    T.copy(
+                        Vt[g, 0:D, v_all_stage * 64 : (v_all_stage + 1) * 64],
+                        V_all[0:D, v_all_stage * 64 : (v_all_stage + 1) * 64],
+                        layout=("rm", "wh"),
+                    )
+
                 for hqg in T.serial(HQ // HKV):
                     hq = g * (HQ // HKV) + hqg
-                    for qt in T.serial(S // tile):
+                    for qt in T.Pipelined(S // tile, num_stages=2, order=[0, 1, 2, 3, 4, 5, 6], stage=[0, 1, 1, 1, 1, 1, 1]):
                         q0 = qt * tile
 
                         # Phase 0: Q staging.  v1 applies the 1/sqrt(256)
@@ -98,7 +132,10 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                             )
 
                         # Initialize online softmax state.
-                        for ri in T.parallel(tile):
+                        # Keep this scalar so the qt+1 Q async stage in the
+                        # pipelined steady loop is not immediately joined by a
+                        # following worker-pool phase.
+                        for ri in T.serial(tile):
                             Mfin[ri] = -32768.0
                             Lbuf[ri] = 0.0
 
@@ -106,14 +143,13 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                         # diagonal tile, update running row max and store
                         # P_kt = exp(score - m_used_kt) in global scratch.
                         for kt in T.serial(qt + 1):
-                            k0 = kt * tile
-                            for k_stage in T.parallel(D // 64):
-                                T.copy(
-                                    K[g * S + k0 : g * S + k0 + tile, k_stage * 64 : (k_stage + 1) * 64],
-                                    K_b[0:tile, k_stage * 64 : (k_stage + 1) * 64],
-                                    layout=("rm", "wh"),
-                                )
-                            T.gemm(Q_a, K_b, Score, transpose_B=True, clear_accum=True)
+                            T.gemm(
+                                Q_a,
+                                K_all[kt * tile : (kt + 1) * tile, 0:D],
+                                Score,
+                                transpose_B=True,
+                                clear_accum=True,
+                            )
                             T.copy(Score, Pbuf[kt, 0, 0], layout=("ah", "rm"))
 
                             for rmask in T.serial(tile):
@@ -169,32 +205,19 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                             for zd in T.serial(D):
                                 Oacc[zrow, zd] = 0.0
                         for kt3 in T.serial(qt + 1):
-                            v0 = kt3 * tile
-                            # Build V^T scratch: Vpad[d, kv] = V[kv, d], kv
-                            # padded to 128 with zeros.  v1 does this with
-                            # scalar elementwise copies: a vectorized
-                            # transpose needs an HVX tile-transpose recipe
-                            # (rm->rm_t T.copy route) that the standard
-                            # lowering does not have yet.  Correctness first.
-                            for pd in T.parallel(D):
-                                for pv in T.serial(4 * tile):
-                                    if pv < tile:
-                                        Vpad[pd, pv] = V[g * S + v0 + pv, pd]
-                                    else:
-                                        Vpad[pd, pv] = T.Cast("float16", 0.0)
                             for p_stage in T.parallel(2):
                                 T.copy(
                                     Pbuf[kt3, 0:tile, p_stage * 64 : (p_stage + 1) * 64],
                                     P_a[0:tile, p_stage * 64 : (p_stage + 1) * 64],
                                     layout=("rm", "ah"),
                                 )
-                            for v_stage in T.parallel(2):
-                                T.copy(
-                                    Vpad[0:D, v_stage * 64 : (v_stage + 1) * 64],
-                                    V_b[0:D, v_stage * 64 : (v_stage + 1) * 64],
-                                    layout=("rm", "wh"),
-                                )
-                            T.gemm(P_a, V_b, Out, transpose_B=True, clear_accum=True)
+                            T.gemm(
+                                P_a,
+                                V_all[0:D, kt3 * tile : kt3 * tile + 4 * tile],
+                                Out,
+                                transpose_B=True,
+                                clear_accum=True,
+                            )
                             T.copy(Out, Obuf, layout=("ah", "rm"))
                             for arow in T.serial(tile):
                                 for ad in T.serial(D):
@@ -261,6 +284,9 @@ def structural_check(src: str) -> int:
     worker_blob = src.split("int attnops_tl_fa_std", 1)[0]
     checks.append(("hmx outside worker functions", "hrt_hmx_mm_f16" not in worker_blob))
     checks.append(("staging recipes present", "hrt_stage_act_hvx_direct" in src and "hrt_stage_f16_rm_to_wh_nt" in src))
+    checks.append(("async qt pipeline emitted", "attnops_pool_start_ctx(" in src and "attnops_pool_join();" in src))
+    checks.append(("full-head KV staging", "const int k_all_job = job" in src and "const int v_all_stage = job" in src and "const int vt_d = job" in src))
+    checks.append(("no per-kt K/V staging", "for (int kt = 0; kt < (qt + 1); kt++)" in src and "kt = ctx->kt" not in src and "Vpad" not in src))
     checks.append(("row reductions present", "hrt_reduce_max" in src))
     checks.append(("fp32 exp lowering", "expf(" in src or "hrt_exp" in src))
     checks.append(("causal mask present", "-32768" in src and "rmask < cmask" in src))
