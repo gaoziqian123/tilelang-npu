@@ -54,7 +54,7 @@ layout 常量:`"rm"`(row-major,默认)、`"ah"`(HMX 激活 tile 布局)、`"wh"`
 | `T.alloc_local(shape, dtype)` | HVX vreg 数组;每元素一个 128B 向量 |
 | `T.copy(src, dst)` | 见 §3 lowering 表;所有 copy 生成 HVX 向量化代码或 pooled copy |
 | `T.gemm(A, B, C)` | HMX 链:`acc_clear → K/32 × hexkl_micro_hmx_mm_f16 → (延迟 acc_read)`;A/B 必须是 `ah` layout 的 VTCM tile,C 是 `hmx.acc` |
-| `T.Pipelined(n, num_stages=k)` | 双缓冲/多缓冲:编译器把循环体内的 global→vtcm copy 拆成 worker pool 异步预取(`pool_start`/`pool_join` 模式,参照 attnops_ffn.c),计算链不停 |
+| `T.Pipelined(n, num_stages=k)` | 与 CUDA `num_stages` 同一作者语义:PipelinePlanning/InjectSoftwarePipeline 先生成 prologue/steady/epilogue 与带 leading version 维的多版本 buffer；Hexagon consume 注入后的纯 stage order,不产生 CUDA async-copy marker。steady-state 循环中第一个 `T.parallel` worker-pool phase 用 `attnops_pool_start_ctx` 异步启动,主线程继续执行后续 HMX/HVX consumer 链；在下一个 pool phase 前(或本轮 loop back-edge 前)自动 `attnops_pool_join`。prologue/epilogue 与其余 pool phase 保持同步 `attnops_pool_run_ctx`。pool 是全局 singleton,所以同一时刻只能有一个 outstanding async phase。 |
 | `T.Parallel` / `T.serial` / `T.unroll` / `T.vectorized` | 常规循环构造;`T.serial` 允许动态标量表达式 extent(如三角循环 `T.serial(i + 1)`),由 emitter 用标量表达式打印 bound;`T.vectorized` 仍强制静态 128B 向量化(失败=编译错,见 R2) |
 | `T.clear` / `T.fill` | fragment → `acc_clear`;vtcm → HVX 向量填充 |
 | `T.reduce_sum(src128, dst_scalar)` | **已支持** 128 维 fp16/fp32 向量→fp32 标量;fp16 先升 fp32,再走双链交错 + `Q6_V_vror_VR` rotate-fold(VLIW in-order 配方)。`dst_scalar` 可是 global/DDR scratch,禁止写 VTCM 标量(R2);src/dst buffer 下标按任意 rank row-major 线性化,不再限 1D/2D |
@@ -102,9 +102,13 @@ layout 常量:`"rm"`(row-major,默认)、`"ah"`(HMX 激活 tile 布局)、`"wh"`
 `LowerNormalCopy`，生成普通 loop + `T.vectorized` 的 HVX 向量 load/store；
 仍受 R1/R2/R10 等 Hexagon verifier 规则约束，不会放行 VTCM 标量访问。
 
-`T.Pipelined(num_stages≥2)` 时,global→vtcm copy 由 pool worker 异步执行
-(`pool_start` 投递下一次迭代的 copy,`pool_join` 在进入迭代体前等齐),
-RPC/主线程上的 HMX mm 链不中断——手写版 FFN 的 ACT/GBUF 双缓冲即此模式。
+`T.Pipelined(num_stages≥2)` 时,注入 pass 会给 VTCM buffer 加 leading version 维,
+访问下标使用 `floormod(loop_var-min, versions)` 轮转。Hexagon 地址折叠规则把 leading
+version 当作完整 tile plane 的批维,因此 version stride = 单版本元素数 × dtype bytes
+(AH/WH tile layout 下等价为完整 tile footprint)。StoragePlan 按静态 shape 计入所有
+version,所以 VTCM 预算天然反映 2x/多倍 buffer。当前 async 只重叠 steady-state
+第一个 `T.parallel` phase 与 caller-thread consumer;如果循环体后面还有 pool phase,
+emitter 必须先 join,以维护 pool singleton 不变量。
 
 ### 3.0.1 HMX GEMM 发射:legacy GEMM 壳 vs 通用 recipe
 
@@ -361,6 +365,39 @@ GDN 显式 scratch 必须使用 `T.alloc_wscratch`，但变量名不参与 ABI �
 `examples/hexagon/gdn_prefill_renamed.py` 用任意 scratch 名覆盖此规则。
 
 v0.1 只承诺 GEMM 端到端;GDN/FA/FFN 是语法表必须能表达、但尚未验证的后续目标。
+
+
+## 6.5 T.Pipelined:软件流水与 pool/HMX 异步交叠(2026-09-13)
+
+标准 `T.Pipelined(extent, num_stages=2)` 在 Hexagon 后端走与 CUDA 相同的
+两个 pass(`PipelinePlanning` + `InjectSoftwarePipeline`,插在 IfStmtBinding
+之后、LayoutInference 之前),自动完成 prologue/steady/epilogue 拆分和
+buffer 多版本化(leading version 维 + floormod 轮换,VTCM 预算按版本数
+翻倍计入)。
+
+**stage 标注必须显式给**:自动 stage 分类器(pool-wrapped copy 识别不了)
+会把所有语句塞进同一 stage 导致注入空转。写法:
+
+```python
+for i in T.Pipelined(N, num_stages=2, order=[0, 1, 2], stage=[0, 1, 1]):
+    # stage 0 = producer(T.parallel staging copy,藏在消费相位下面)
+    for job in T.parallel(...):
+        T.copy(src[i], buf[i % 2 隐含], layout=("rm", "ah"))
+    # stage 1 = consumer(主线程 gemm / 其他 pool 相位)
+    T.gemm(...)
+```
+
+稳态循环 lowering 规则:
+- 循环体内**第一个** T.parallel 相位 → `attnops_pool_start_ctx`(异步,
+  与后续主线程 gemm 链交叠);
+- `attnops_pool_join()` 自动插在**下一个 pool 相位之前**或循环回边
+  (pool 是全局单例,同时只能有一个 outstanding 异步相位);
+- prologue/epilogue 的所有相位保持同步 `attnops_pool_run_ctx`;
+- 安全由注入 pass 保证(依赖分析 + 多版本化防 WAR),emitter 不另做
+  依赖检查;带 `num_stages`/`software_pipeline_*` 残留标注到 emitter =
+  注入失败,报 HexagonEmitError。
+
+对照测试:/tmp/tl_pipeline_emit_test.py(异步形态)/tl_pipeline_reject_test.py。
 
 ## 7. 实现落点(mirror `tilelang/cuda/` + `src/cuda/`)
 

@@ -33,6 +33,9 @@ def HexagonPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
     mod = tilelang.transform.InjectAssumes()(mod)
     mod = tilelang.transform.Simplify()(mod)
     mod = tilelang.transform.IfStmtBinding()(mod)
+    mod = tilelang.transform.PipelinePlanning()(mod)
+    mod = tilelang.transform.InjectSoftwarePipeline()(mod)
+    mod = tilelang.transform.Simplify()(mod)
     pass_config = PassContext.current().config
     hexagon_prof = bool(pass_config.get(PassConfigKey.TL_HEXAGON_PROF.value, False))
     with target:

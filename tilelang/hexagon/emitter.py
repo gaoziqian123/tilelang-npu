@@ -92,6 +92,7 @@ class _Ctx:
     vec_extent: int | None = None
     worker_var: str | None = None
     outer_vars: tuple[str, ...] = ()
+    pipeline_async_first: bool = False
 
 
 @dataclass
@@ -292,6 +293,8 @@ class HexagonEmitter(PyStmtExprVisitor):
         self._shape_params: list[str] = []
         self.hexagon_prof = False
         self._prof_next_slot = 5
+        self._pending_async_pool_slot: int | None = None
+        self._pipeline_async_first_available = False
 
     def emit(self, output_path: str | os.PathLike[str] | None = None) -> str:
         funcs = [self.mod] if isinstance(self.mod, PrimFunc) else [f for _, f in self.mod.functions.items()]
@@ -394,6 +397,9 @@ class HexagonEmitter(PyStmtExprVisitor):
                         out.append(self._ind(indent, "}"))
                         i += 2
                         continue
+                if self._pending_async_pool_slot is not None and self._contains_pool_phase(seq[i]):
+                    out += self._emit_profiled_pool_join(indent, self._pending_async_pool_slot)
+                    self._pending_async_pool_slot = None
                 out += self._lower_stmt(seq[i], ctx, indent)
                 i += 1
             return out
@@ -440,9 +446,10 @@ class HexagonEmitter(PyStmtExprVisitor):
     def _lower_for(self, op: For, ctx: _Ctx, indent: int) -> list[str]:
         anns = {str(k): str(v) for k, v in (getattr(op, "annotations", {}) or {}).items()}
         kind = str(getattr(op, "kind", ""))
-        if ("Pipelined" in kind or any("pipeline" in k.lower() or "pipelined" in str(v).lower() for k, v in anns.items())
-                or ("num_stages" in anns and anns.get("num_stages") not in ("0", "1", "T.int64(0)", "T.int64(1)"))):
-            raise HexagonEmitError(f"暂不支持 Pipelined: For { _var_name(op.loop_var) }{_loc(op)}")
+        if self._is_unconsumed_pipeline_for(kind, anns):
+            raise HexagonEmitError(f"Hexagon software pipeline annotations were not consumed before emit: For { _var_name(op.loop_var) } anns={sorted(anns)}{_loc(op)}")
+        if self._is_injected_pipeline_for(kind, anns):
+            return self._lower_injected_pipeline_for(op, ctx, indent)
 
         tb = getattr(op, "thread_binding", None)
         ttag = getattr(tb, "thread_tag", None) if tb is not None else None
@@ -472,10 +479,13 @@ class HexagonEmitter(PyStmtExprVisitor):
                 body += self._lower_stmt(op.body, worker_ctx, 1)
                 self._pool_workers.append(_PoolWorker(wname, ctx_type, extent, ctx.outer_vars, body))
                 init_vals = ", ".join([arg.cname for arg in self.global_args] + self._shape_params + list(ctx.outer_vars) + ["abl", "prof"])
+                async_pool = self._consume_pipeline_async_first(ctx)
                 return [
-                    self._ind(indent, f"// T.Parallel({extent}) -> Hexagon worker-pool phase (sync join)"),
+                    self._ind(indent, f"// T.Parallel({extent}) -> Hexagon worker-pool phase ({'async start' if async_pool else 'sync join'})"),
                     self._ind(indent, f"{ctx_type} ctx{wid} = {{ {init_vals} }};"),
-                    *self._emit_profiled_pool_call(indent, f"attnops_pool_run_ctx({wname}, &ctx{wid}, {extent});"),
+                    *(self._emit_profiled_pool_start(indent, f"attnops_pool_start_ctx({wname}, &ctx{wid}, {extent});")
+                      if async_pool else
+                      self._emit_profiled_pool_call(indent, f"attnops_pool_run_ctx({wname}, &ctx{wid}, {extent});")),
                 ]
             # Hexagon elementwise kernels lower T.Parallel as an outer strip-mined
             # loop around inner T.vectorized stores.  The HVX work is still the
@@ -557,6 +567,75 @@ class HexagonEmitter(PyStmtExprVisitor):
                 self._ind(indent + 1, "(void)mbt;  // 同上,防 -Werror"),
             ] + body
         return [self._ind(indent, f"for (int {var} = 0; {var} < {bound}; {var}++) {{")] + body + [self._ind(indent, "}")]
+
+    def _is_unconsumed_pipeline_for(self, kind: str, anns: dict[str, str]) -> bool:
+        if "Pipelined" in kind:
+            return True
+        bad = {"num_stages", "software_pipeline_stage", "software_pipeline_order"}
+        if any(k in bad for k in anns):
+            return True
+        for k, v in anns.items():
+            kl = k.lower()
+            vl = v.lower()
+            if ("pipeline" in kl or "pipelined" in kl or "pipeline" in vl or "pipelined" in vl) and k != "tl_pipelined_num_stages":
+                return True
+        return False
+
+    def _is_injected_pipeline_for(self, kind: str, anns: dict[str, str]) -> bool:
+        return "tl_pipelined_num_stages" in anns and not self._is_unconsumed_pipeline_for(kind, anns)
+
+    def _contains_pool_phase(self, op: Any) -> bool:
+        return self._pre_has_gemm and self._contains_parallel_for(op)
+
+    def _lower_injected_pipeline_for(self, op: For, ctx: _Ctx, indent: int) -> list[str]:
+        var = _var_name(op.loop_var)
+        minv = _i64(op.min)
+        if minv not in (0, None):
+            raise HexagonEmitError(f"白名单: 暂只支持 min=0 的 pipelined For, {var} min={minv}{_loc(op)}")
+        extent = _i64(op.extent)
+        bound = str(extent) if extent is not None else self._expr_scalar(op.extent)
+        outer = ctx.outer_vars + ((var,) if var != (ctx.row_var or "") else ())
+        loop_ctx = _Ctx(block_var=ctx.block_var, row_var=ctx.row_var, worker_var=ctx.worker_var, outer_vars=outer)
+        old_pending = self._pending_async_pool_slot
+        old_async = self._pipeline_async_first_available
+        self._pending_async_pool_slot = None
+        self._pipeline_async_first_available = True
+        body = self._lower_pipeline_body(op.body, loop_ctx, indent + 1)
+        if self._pending_async_pool_slot is not None:
+            body += self._emit_profiled_pool_join(indent + 1, self._pending_async_pool_slot)
+            self._pending_async_pool_slot = None
+        self._pending_async_pool_slot = old_pending
+        self._pipeline_async_first_available = old_async
+        return [
+            self._ind(indent, f"// T.Pipelined steady loop: first worker-pool phase is async; join before next pool phase or loop back-edge"),
+            self._ind(indent, f"for (int {var} = 0; {var} < {bound}; {var}++) {{"),
+        ] + body + [self._ind(indent, "}")]
+
+    def _lower_pipeline_body(self, op: Any, ctx: _Ctx, indent: int) -> list[str]:
+        seq = list(op.seq) if isinstance(op, SeqStmt) else [op]
+        out: list[str] = []
+        i = 0
+        while i < len(seq):
+            stmt = seq[i]
+            if self._pending_async_pool_slot is not None and self._contains_pool_phase(stmt):
+                out += self._emit_profiled_pool_join(indent, self._pending_async_pool_slot)
+                self._pending_async_pool_slot = None
+            if (i + 1 < len(seq)
+                    and self._is_gemm_intrin_eval(stmt)
+                    and self._is_acc_copy_intrin_eval(seq[i + 1])):
+                out += self._emit_gemm_intrin_with_copy(self._eval_call(stmt), self._eval_call(seq[i + 1]), ctx, indent)
+                i += 2
+                continue
+            out += self._lower_stmt(stmt, _Ctx(block_var=ctx.block_var, row_var=ctx.row_var, worker_var=ctx.worker_var,
+                                              outer_vars=ctx.outer_vars), indent)
+            i += 1
+        return out
+
+    def _consume_pipeline_async_first(self, ctx: _Ctx) -> bool:
+        if ctx.pipeline_async_first or self._pipeline_async_first_available:
+            self._pipeline_async_first_available = False
+            return True
+        return False
 
     def _lower_if(self, op: IfThenElse, ctx: _Ctx, indent: int) -> list[str]:
         cond = self._expr_c(op.condition)
@@ -1711,6 +1790,26 @@ class HexagonEmitter(PyStmtExprVisitor):
         return [
             self._ind(indent, "tl_prof_phase_t0 = HAP_perf_get_qtimer_count();"),
             self._ind(indent, call_line),
+            self._ind(indent, f"prof[{slot}] += (int32_t)(HAP_perf_get_qtimer_count() - tl_prof_phase_t0);"),
+        ]
+
+    def _emit_profiled_pool_start(self, indent: int, call_line: str) -> list[str]:
+        if not self.hexagon_prof:
+            self._pending_async_pool_slot = -1
+            return [self._ind(indent, call_line)]
+        slot = self._prof_next_slot
+        self._prof_next_slot += 1
+        self._pending_async_pool_slot = slot
+        return [
+            self._ind(indent, "tl_prof_phase_t0 = HAP_perf_get_qtimer_count();"),
+            self._ind(indent, call_line),
+        ]
+
+    def _emit_profiled_pool_join(self, indent: int, slot: int) -> list[str]:
+        if not self.hexagon_prof or slot < 0:
+            return [self._ind(indent, "attnops_pool_join();")]
+        return [
+            self._ind(indent, "attnops_pool_join();"),
             self._ind(indent, f"prof[{slot}] += (int32_t)(HAP_perf_get_qtimer_count() - tl_prof_phase_t0);"),
         ]
 
