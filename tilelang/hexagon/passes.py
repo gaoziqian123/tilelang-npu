@@ -781,7 +781,12 @@ class _Verifier:
     def _check_gemm_intrin(self, call: Call, off: int) -> None:
         if len(call.args) < off + 6:
             raise HexagonEmitError("R5: hexagon.gemm_hmx 参数数量不足")
-        m, n, k = (_i64(call.args[-3]), _i64(call.args[-2]), _i64(call.args[-1]))
+        # Trailing args: (M, N, K) legacy, or (M, N, K, transB) with the flag.
+        nargs = len(call.args) - off
+        if nargs >= 11:
+            m, n, k = (_i64(call.args[off + nargs - 4]), _i64(call.args[off + nargs - 3]), _i64(call.args[off + nargs - 2]))
+        else:
+            m, n, k = (_i64(call.args[-3]), _i64(call.args[-2]), _i64(call.args[-1]))
         if None in (m, n, k):
             raise HexagonEmitError("R5: hexagon.gemm_hmx 的 M/N/K 必须是静态整数")
         assert m is not None and n is not None and k is not None

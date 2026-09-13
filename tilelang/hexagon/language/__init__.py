@@ -103,6 +103,25 @@ def reduce_sum(buffer, out, dim: int = -1, clear: bool = True, batch: int = 1, a
     return reduce_sum128(buffer, out)
 
 
+def reduce_max(buffer, out, dim: int = -1, clear: bool = True, batch: int = 1, nan_propagate: bool = False, annotations: dict | None = None) -> None:
+    """Hexagon row max for 32-lane FA rows or 128-lane row vectors.
+
+    This is intentionally row-major only: callers copy HMX score tiles out of AH
+    first, then reduce each row with an HVX rotate-fold helper.
+    """
+
+    if dim not in (-1, 0):
+        raise ValueError(f"Hexagon reduce_max currently supports dim=0/-1, got {dim}")
+    shape = getattr(buffer, "shape", None) or getattr(getattr(buffer, "buffer", None), "shape", None)
+    try:
+        n = 1
+        for s in shape or ():
+            n *= int(s)
+    except Exception:
+        n = None
+    return reduce_max128(buffer, out) if n == 128 else reduce_max32(buffer, out)
+
+
 # 对齐文档中的 ``T.hexagon.exp_fp16`` 写法，同时函数也直接导出。
 hexagon = SimpleNamespace(
     exp_fp16=exp_fp16,
@@ -112,6 +131,8 @@ hexagon = SimpleNamespace(
     f2h=f2h,
     dcfetch_hint=dcfetch_hint,
     reduce_sum128=reduce_sum128,
+    reduce_max32=reduce_max32,
+    reduce_max128=reduce_max128,
     gdn_prefill=gdn_prefill,
     load_state128=load_state128,
     store_state128=store_state128,
@@ -140,6 +161,7 @@ __all__ = tuple(
             "alloc_fragment",
             "copy",
             "reduce_sum",
+            "reduce_max",
             "hexagon",
         )
     )

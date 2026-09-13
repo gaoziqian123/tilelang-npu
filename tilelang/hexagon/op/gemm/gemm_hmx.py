@@ -37,10 +37,11 @@ class GemmHMX(GemmBase):
         A_base = _flatten_view_base(self.A_base_offsets, self.A)
         B_base = _flatten_view_base(self.B_base_offsets, self.B)
         M, N, K = self.M, self.N, self.K
+        trans_b = 1 if self.trans_B else 0
 
         @T.prim_func
         def _gemm_hmx() -> None:
-            T.evaluate(T.call_pure_extern("handle", "hexagon.gemm_hmx", A_data, B_data, C_data, A_base[0], A_base[1], B_base[0], B_base[1], M, N, K))
+            T.evaluate(T.call_pure_extern("handle", "hexagon.gemm_hmx", A_data, B_data, C_data, A_base[0], A_base[1], B_base[0], B_base[1], M, N, K, trans_b))
 
         return _gemm_hmx.with_attr("global_symbol", "hexagon.gemm_hmx")
 
