@@ -33,13 +33,24 @@ copy its handwritten worker code or leaf intrinsics.
 
 ## Kernel phases
 
-The row-block sweeps use `T.Pipelined(..., num_stages=2)` to overlap activation
-staging with caller-thread HMX work.  In the steady-state loop the first
-worker-pool `T.parallel` phase is emitted as `attnops_pool_start_ctx`, while the
-caller thread continues into the HMX GEMM / readout chain.  The outstanding pool
-is joined before the next worker-pool phase (the SwiGLU/store or final store),
-and prologue/epilogue phases stay synchronous.  The weight-panel loops remain
-ordinary `T.serial` loops so Wg/Wu/Wd are not double-buffered in VTCM.
+The row-block sweeps use `T.Pipelined(..., num_stages=3)` with explicit stage
+annotations so the Hexagon emitter can use the fused pool-phase async pattern
+from `00_syntax_and_rules.md` §6.5.  In the steady-state body each loop is shaped
+as `[T.parallel producer, HMX GEMM/readout chain..., T.parallel writeback]`:
+
+- phase 1 uses `stage=[0,1,1,1,1,2]`, where stage 0 stages `X`, stage 1 runs the
+  gate/up HMX chains and accumulator readouts, and stage 2 computes SwiGLU and
+  stores `h`;
+- phase 2 uses `stage=[0,1,1,2]`, where stage 0 stages `h`, stage 1 runs the down
+  HMX chain and readout, and stage 2 stores `y`.
+
+For each steady-state loop the two `T.parallel` phases are emitted as one fused
+async worker array: jobs `[0,E0)` run the producer and jobs `[E0,E0+E1)` run the
+writeback from the delayed buffer version.  The caller thread starts the fused
+array with one `attnops_pool_start_ctx`, runs the HMX chain, then joins once at
+the loop back-edge.  Prologue/epilogue phases stay synchronous
+`attnops_pool_run_ctx`.  The weight-panel loops remain ordinary `T.serial` loops
+so Wg/Wu/Wd are not double-buffered in VTCM.
 
 ### Phase 1: gate/up panels and SwiGLU scratch
 
@@ -47,13 +58,14 @@ The FF axis is split into static `FF_PANEL = 256` panels.  For each panel:
 
 1. Stage `Wg[p:p+FF_PANEL, :]` and `Wu[p:p+FF_PANEL, :]` to VTCM WH layout with
    `T.copy`.
-2. For each 32-row block of `x`, the pipelined stage-0 `T.parallel` phase stages
-   the activation block to VTCM AH once; in steady state this staging for block
-   `mb+1` overlaps the stage-1 gate/up `T.gemm` calls for block `mb`.
-3. Copy accumulator tiles to VTCM fp16 temporaries, join the outstanding staging
-   pool, then a synchronous `T.parallel` phase computes `silu(gate) * up`
-   elementwise using standard math (`T.exp`) and writes the result to global `h`
-   scratch.
+2. For each 32-row block of `x`, the pipelined stage-0 producer stages the
+   activation block to VTCM AH once; in steady state this staging for the next
+   logical block is fused with the delayed stage-2 SwiGLU/writeback of the
+   previous block in the same async job array.
+3. The caller thread runs the stage-1 gate/up `T.gemm` calls and copies
+   accumulator tiles to versioned VTCM fp16 temporaries while the fused pool
+   array runs.  The stage-2 `T.parallel` computes `silu(gate) * up` with standard
+   math (`T.exp`) and writes the result to global `h` scratch.
 
 `h` is global scratch in row-major `[M, FF]`.  A fully raw HMX-AH global scratch
 with no accumulator unpermute would require a standard TileLang global-layout
@@ -67,11 +79,11 @@ For each output-channel panel:
 
 1. Stage `Wd[k:k+K_PANEL, :]` to WH once and keep it resident.
 2. The pipelined row-block loop stages a row-major 32-row block of `h` as the HMX
-   A operand.  In steady state, H staging for `rb2+1` overlaps the down-projection
-   `T.gemm(h, Wd_panel^T)` for `rb2`.
-3. Copy the accumulator to a VTCM fp16 tile, join the outstanding staging pool,
-   and a synchronous worker-pool phase writes it to the row-major `y` region of
-   the slab.
+   A operand.  In steady state, H staging for the next logical block is fused
+   with the delayed final-store phase for the previous block.
+3. The caller thread runs `T.gemm(h, Wd_panel^T)` and copies the accumulator to a
+   versioned VTCM fp16 tile; the fused async pool writes the delayed tile to the
+   row-major `y` region of the slab.
 
 ## VTCM budget
 
@@ -83,11 +95,12 @@ The panels are chosen by a simple under-8MB budget check, matching the spirit of
 | `X_a` | 2 × `[32, 2560]` fp16 AH (pipeline versions) | 327,680 |
 | `Wg_b` | `[256, 2560]` fp16 WH | 1,310,720 |
 | `Wu_b` | `[256, 2560]` fp16 WH | 1,310,720 |
-| gate/up/h panel tmp | 3 × `[32,256]` fp16 RM | 49,152 |
+| `Gate`, `Up` | 2 × 2 × `[32,256]` fp16 RM (delayed writeback versions) | 65,536 |
 | `H_a` | 2 × `[32, 9216]` fp16 AH (pipeline versions) | 1,179,648 |
 | `Wd_b` | `[128, 9216]` fp16 WH | 2,359,296 |
+| `Ytile` | 2 × `[32,128]` fp16 RM (delayed final-store versions) | 16,384 |
 | HMX accumulator/readout area | emitter-managed | ~64 KiB |
-| **Total static VTCM request** | | **< 7.2 MiB generated** |
+| **Total static VTCM request** | | **6,606,848 bytes (~6.30 MiB) generated** |
 
 `FF_PANEL = 512` would require two resident phase-1 weight panels of about
 5.0 MiB before the down-projection panel and full-row `h` staging buffers are

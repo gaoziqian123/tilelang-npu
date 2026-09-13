@@ -1105,6 +1105,9 @@ class HexagonEmitter(PyStmtExprVisitor):
             mi = start + 2 * i
             if len(call.args) <= mi:
                 break
+            iv = _i64(call.args[mi])
+            if iv == 0:
+                continue
             min_c = self._expr_c(call.args[mi])
             suffix = buf.shape[i + 1:] if buf is not None and len(buf.shape) > i + 1 else ()
             stride = self._shape_numel_c(suffix) if suffix else "1"
@@ -2287,8 +2290,12 @@ class HexagonEmitter(PyStmtExprVisitor):
         ]
         if dst_is_vtcm:
             dst_off = self._vtcm_offset_c(dst)
+            # Software-pipeline multi-versioning: the dst region's leading
+            # version index is folded into dst_base (element-linear); the
+            # tile coords only cover the last two dims.
+            dst_expr = f"(f16 *)(V + {dst_off})" if dst_base == "0" else f"(f16 *)(V + {dst_off}) + (size_t)({dst_base})"
             lines += [
-                self._ind(indent + 3, f"hrt_tlgdn_acc_tile_to_vtcm_rm(V, {acc0}, (f16 *)(V + {dst_off}), {dst_stride}, {prefix}_r, {prefix}_c);"),
+                self._ind(indent + 3, f"hrt_tlgdn_acc_tile_to_vtcm_rm(V, {acc0}, {dst_expr}, {dst_stride}, {prefix}_r, {prefix}_c);"),
             ]
         elif dst_scope == "global":
             dst_ptr = self._buffer_ptr_c(dst)
