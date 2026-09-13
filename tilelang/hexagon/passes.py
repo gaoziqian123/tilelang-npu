@@ -353,6 +353,8 @@ def HexagonWriteSet():
                 outs = []
                 if callee == "hexagon.reduce_sum128" and len(node.args) >= off + 2:
                     outs = [node.args[off + 1]]
+                elif callee in ("hexagon.reduce_max32", "hexagon.reduce_max128") and len(node.args) >= off + 2:
+                    outs = [node.args[off + 1]]
                 elif callee == "hexagon.reduce_prod128" and len(node.args) >= off + 3:
                     outs = [node.args[off + 2]]
                 elif callee == "hexagon.reduce_prod2_128" and len(node.args) >= off + 6:
