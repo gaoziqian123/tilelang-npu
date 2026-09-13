@@ -152,23 +152,36 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                             )
                             T.copy(Score, Pbuf[kt, 0, 0], layout=("ah", "rm"))
 
-                            for rmask in T.serial(tile):
+                            # Mask+scale, running max, exp and pad-zeroing are
+                            # row-parallel pool jobs (one row per job): scalar
+                            # global ops are unchanged, but six workers hide
+                            # ~6x of the latency.  Job r exclusively owns
+                            # Mfin[r]/Lbuf[r]/Pbuf[kt, r, :], so no races.
+                            # The pad columns [32,128) are zeroed here only for
+                            # kt slots first touched this qt; a slot reused from
+                            # an earlier qt already has zero pad (nothing else
+                            # writes cols >=32).
+                            for rmask in T.parallel(tile):
                                 for cmask in T.serial(tile):
                                     if kt == qt and cmask > rmask:
                                         Pbuf[kt, rmask, cmask] = T.Cast("float16", -32768.0)
                                     else:
                                         Pbuf[kt, rmask, cmask] = T.Cast("float16", T.Cast("float32", Pbuf[kt, rmask, cmask]) / 16.0)
-
-                            for rmax in T.serial(tile):
+                                # Row max stays scalar (T.reduce_max on a
+                                # sliced region trips a known generic
+                                # LowerTileOp slice-substitution bug), but runs
+                                # inside the row-parallel pool job; Mus[kt, r]
+                                # is job-private so it doubles as the
+                                # accumulator (Mtmp is shared, do not use).
+                                Mus[kt, rmask] = T.Cast("float32", -32768.0)
                                 for cmax in T.serial(tile):
-                                    ScoreRow[cmax] = Pbuf[kt, rmax, cmax]
-                                T.reduce_max(ScoreRow, Mtmp, dim=-1)
-                                Mfin[rmax] = T.max(Mfin[rmax], Mtmp[0])
-                                Mus[kt, rmax] = Mfin[rmax]
+                                    Mus[kt, rmask] = T.max(Mus[kt, rmask], T.Cast("float32", Pbuf[kt, rmask, cmax]))
+                                Mfin[rmask] = T.max(Mfin[rmask], Mus[kt, rmask])
+                                Mus[kt, rmask] = Mfin[rmask]
                                 for cprob in T.serial(tile):
-                                    Pbuf[kt, rmax, cprob] = T.Cast(
+                                    Pbuf[kt, rmask, cprob] = T.Cast(
                                         "float16",
-                                        T.exp(T.Cast("float32", Pbuf[kt, rmax, cprob]) - Mfin[rmax]),
+                                        T.exp(T.Cast("float32", Pbuf[kt, rmask, cprob]) - Mfin[rmask]),
                                     )
                                 # Pbuf rows have stride 128 fp16.  The live score span
                                 # is columns [0,32), while the padded P@V K dimension
@@ -177,15 +190,20 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                                 # stores silently align down to 128B, clobbering the
                                 # live score row.  Scalar global stores are slower but
                                 # keep the producer/consumer region intact.
-                                for czero in T.serial(3 * tile):
-                                    Pbuf[kt, rmax, tile + czero] = T.Cast("float16", 0.0)
+                                # Pad columns [32,128) are zeroed on the first
+                                # qt that touches this slot (qt == kt); from
+                                # then on no phase writes cols >=32, so the pad
+                                # stays zero for all later qt.
+                                if kt == qt:
+                                    for czero in T.serial(3 * tile):
+                                        Pbuf[kt, rmask, tile + czero] = T.Cast("float16", 0.0)
 
                         # Phase B: online rescale to the final row max and row
                         # normalizer l.  v1 uses a scalar row sum here because
                         # Hexagon's current standard reduce_sum helper is 128
                         # lanes only; P stays fp16 for the HMX P@V pass.
                         for kt2 in T.serial(qt + 1):
-                            for rsum in T.serial(tile):
+                            for rsum in T.parallel(tile):
                                 alpha = T.exp(Mus[kt2, rsum] - Mfin[rsum])
                                 for csum in T.serial(tile):
                                     Pbuf[kt2, rsum, csum] = T.Cast(
@@ -201,7 +219,7 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                         # O accumulates in fp32 scratch: per-tile partials are
                         # fp16 (hexkl only has acc_read_f16), but the running
                         # sum must not round-trip through fp16 across kt3.
-                        for zrow in T.serial(tile):
+                        for zrow in T.parallel(tile):
                             for zd in T.serial(D):
                                 Oacc[zrow, zd] = 0.0
                         for kt3 in T.serial(qt + 1):
@@ -219,12 +237,12 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                                 clear_accum=True,
                             )
                             T.copy(Out, Obuf, layout=("ah", "rm"))
-                            for arow in T.serial(tile):
+                            for arow in T.parallel(tile):
                                 for ad in T.serial(D):
                                     Oacc[arow, ad] = Oacc[arow, ad] + T.Cast("float32", Obuf[arow, ad])
 
                         # Phase D: normalize and write row-major output.
-                        for rout in T.serial(tile):
+                        for rout in T.parallel(tile):
                             inv_l = 1.0 / Lbuf[rout]
                             for dout in T.serial(D):
                                 O[hq * S + q0 + rout, dout] = T.Cast("float16", Oacc[rout, dout] * inv_l)
@@ -286,8 +304,8 @@ def structural_check(src: str) -> int:
     checks.append(("staging recipes present", "hrt_stage_act_hvx_direct" in src and "hrt_stage_f16_rm_to_wh_nt" in src))
     checks.append(("async qt pipeline emitted", "attnops_pool_start_ctx(" in src and "attnops_pool_join();" in src))
     checks.append(("full-head KV staging", "const int k_all_job = job" in src and "const int v_all_stage = job" in src and "const int vt_d = job" in src))
-    checks.append(("no per-kt K/V staging", "for (int kt = 0; kt < (qt + 1); kt++)" in src and "kt = ctx->kt" not in src and "Vpad" not in src))
-    checks.append(("row reductions present", "hrt_reduce_max" in src))
+    checks.append(("no per-kt K/V staging", "for (int kt = 0; kt < (qt + 1); kt++)" in src and "const int k_stage = job" not in src and "Vpad" not in src))
+    checks.append(("row-parallel softmax pool phases", "const int rmask = job" in src and "const int rsum = job" in src and "const int arow = job" in src and "const int rout = job" in src))
     checks.append(("fp32 exp lowering", "expf(" in src or "hrt_exp" in src))
     checks.append(("causal mask present", "-32768" in src and "rmask < cmask" in src))
     checks.append(("prof counters", "tl.hexagon_prof profile slots" in src and "tl_prof_phase_t0" in src and "prof[5.." in src))

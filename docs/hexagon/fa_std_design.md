@@ -174,6 +174,26 @@ and `hexagon-clang -fsyntax-only` verifies generated C syntax.
 - v2 hoists K/V: `K_all` and `V_all` are staged once per KV group; value
   transpose now fills ABI scratch `Vt [4,256,1024]`.  The only per-kt pool phase
   left is P staging.  Device timing is tracked in the current campaign report.
+- v3 row-parallel softmax (2026-09-14): mask+scale / running row max / exp /
+  pad-zeroing (phase A), rescale+rowsum (phase B), Oacc zero/accumulate
+  (phase C) and final normalize (phase D) moved from caller-thread
+  `T.serial(tile)` loops to `T.parallel(tile)` worker-pool phases.  Each job
+  owns one row exclusively (`Mfin[r]`/`Lbuf[r]`/`Pbuf[kt,r,:]`), so no races;
+  the row max stays scalar inside the job (generic LowerTileOp sliced
+  `T.reduce_max` is still broken) with `Mus[kt,r]` doubling as the
+  job-private accumulator.  Device: **1321 -> 383 ms** (3.4x), strict
+  elementwise PASS, regressions (gdn_std/ffn_std) green.  Prof ticks
+  (7.31M wall): rmask 2.58M + arow 2.34M dominate (~70%) — both are scalar
+  global-memory loops, next target is HVX vectorization of those phases.
+- Debugging note (v3 bring-up): the skel entry guards the slab with
+  `if (slabLen < prof_off + PROF_BYTES) return -1;`.  **FastRPC masks
+  negative skel return values as a generic invoke failure `user err 0x4e`
+  (78)** — the host never sees the -1.  v3 grew the prof array from 48 to 88
+  bytes while the test still reserved 48, so every call "crashed" at what
+  looked like random entry points during bisection (early returns before the
+  guard propagated fine because they were positive).  Lesson: keep skel error
+  returns non-negative, or treat host-side 0x4e as "check your negative
+  return paths" first.
 - Compiler fixes landed for this kernel: WriteSet marks `reduce_max` dst
   buffers; `hrt_reduce_max_f16_32` out-of-bounds 128B load + missing 1-lane
   fold fixed (both f16 helpers); `hexagon.gemm_hmx` carries an explicit
