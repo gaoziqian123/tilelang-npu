@@ -670,7 +670,19 @@ class HexagonEmitter(PyStmtExprVisitor):
                     raise HexagonEmitError(f"R5: copy_rm_ah 目标 tile 维度必须 32 整除, 实际 rows={rows},cols={cols}")
                 dst_mins = [call.args[dst_meta + 1 + 2 * i] for i in range(dnd) if len(call.args) > dst_meta + 1 + 2 * i]
                 drow, dcol = self._flatten_view_rc(dst_mins, dst)
-                dst_view = self._tile_layout_addr(dst, drow, dcol).byte_offset
+                if "wh" in dst_scope:
+                    # WH staged sub-panels are addressed within the copied
+                    # logical [rows, cols] region.  The generic tile-layout
+                    # fast path is tuned for HMX operand addressing and can use
+                    # the parent WH map's compact column count; for sliced
+                    # staging we need the row-slice offset in the destination
+                    # panel itself (row_tile * kt + col_tile).
+                    kt_c = str(cols // 32)
+                    drow_c = self._expr_c(drow)
+                    dcol_c = self._expr_c(dcol)
+                    dst_view = f"(((size_t)({drow_c}) / 32) * {kt_c} + ((size_t)({dcol_c}) / 32)) * HRT_TILE_BYTES"
+                else:
+                    dst_view = self._tile_layout_addr(dst, drow, dcol).byte_offset
                 if dst_view != "0":
                     dst_off = f"{dst_off} + {dst_view}"
                 kt = cols // 32
@@ -681,12 +693,21 @@ class HexagonEmitter(PyStmtExprVisitor):
                             self._ind(indent + 1, f"hrt_stage_f16_rm_to_wh_nt({src_ptr} + (size_t)({src_base}), V + {dst_off}, {cols}, {rows}, {cols});"),
                             self._ind(indent, "}")]
                 else:
-                    body = [self._ind(indent, "if (!(abl & 2)) {"),
-                            self._ind(indent + 1, "hrt_mask_init();"),
-                            self._ind(indent + 1, f"for (int tl_gm_r = 0; tl_gm_r < {mt}; tl_gm_r++)"),
-                            self._ind(indent + 2, f"hrt_stage_act_hvx_direct((const uint8_t *)({src_ptr} + (size_t)({src_base}) + (size_t)tl_gm_r * 32 * {cols}),"),
-                            self._ind(indent + 3, f"V + {dst_off} + (size_t)tl_gm_r * {kt} * HRT_TILE_BYTES, {cols}, {kt}, HRT_TILE_BYTES, 32);"),
-                            self._ind(indent, "}")]
+                    src_ld_i = _i64(src.shape[-1]) if src is not None and len(src.shape) >= 1 else None
+                    if src_ld_i is not None and int(src_ld_i) != cols:
+                        body = [self._ind(indent, "if (!(abl & 2)) {"),
+                                self._ind(indent + 1, "hrt_mask_init();"),
+                                self._ind(indent + 1, f"for (int tl_gm_r = 0; tl_gm_r < {mt}; tl_gm_r++)"),
+                                self._ind(indent + 2, f"hrt_stage_act_hvx_direct_strided((const uint8_t *)({src_ptr} + (size_t)({src_base}) + (size_t)tl_gm_r * 32 * {src_ld_i}),"),
+                                self._ind(indent + 3, f"V + {dst_off} + (size_t)tl_gm_r * {kt} * HRT_TILE_BYTES, {src_ld_i}, {cols}, {kt}, HRT_TILE_BYTES, 32);"),
+                                self._ind(indent, "}")]
+                    else:
+                        body = [self._ind(indent, "if (!(abl & 2)) {"),
+                                self._ind(indent + 1, "hrt_mask_init();"),
+                                self._ind(indent + 1, f"for (int tl_gm_r = 0; tl_gm_r < {mt}; tl_gm_r++)"),
+                                self._ind(indent + 2, f"hrt_stage_act_hvx_direct((const uint8_t *)({src_ptr} + (size_t)({src_base}) + (size_t)tl_gm_r * 32 * {cols}),"),
+                                self._ind(indent + 3, f"V + {dst_off} + (size_t)tl_gm_r * {kt} * HRT_TILE_BYTES, {cols}, {kt}, HRT_TILE_BYTES, 32);"),
+                                self._ind(indent, "}")]
                 return body if ctx.worker_var is not None else self._prof_wrap(indent, 1, body)
             if self._is_gemm_b_operand(dst):
                 self.has_copy = True

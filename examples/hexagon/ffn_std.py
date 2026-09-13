@@ -74,10 +74,18 @@ def ffn_std(M: int = 1024, K: int = 2560, FF: int = 9216, ff_panel: int = 256, k
             # Phase 1: h = silu(x @ Wg^T) * (x @ Wu^T), stored in global
             # row-major scratch Slab[0:M, 0:FF].
             for p in T.serial(FF // ff_panel):
-                T.copy(Wg[p * ff_panel, 0], Wg_b, layout=("rm", "wh"))
-                T.copy(Wu[p * ff_panel, 0], Wu_b, layout=("rm", "wh"))
+                # Stage each weight panel once, before the row-block sweep.  Use
+                # explicit regions so each pool job stages a disjoint 32-row WH
+                # slice instead of a degenerate job-0 full-panel copy.
+                for wg_job in T.parallel(ff_panel // 32):
+                    T.copy(Wg[p * ff_panel + wg_job * 32 : p * ff_panel + (wg_job + 1) * 32, 0:K], Wg_b[wg_job * 32 : (wg_job + 1) * 32, 0:K], layout=("rm", "wh"))
+                for wu_job in T.parallel(ff_panel // 32):
+                    T.copy(Wu[p * ff_panel + wu_job * 32 : p * ff_panel + (wu_job + 1) * 32, 0:K], Wu_b[wu_job * 32 : (wu_job + 1) * 32, 0:K], layout=("rm", "wh"))
                 for mb in T.serial(M // 32):
-                    T.copy(X[mb * 32, 0], X_a, layout=("rm", "ah"))
+                    # Activation staging is per row block.  Keep it in a pool
+                    # phase so the caller thread only runs HMX chains.
+                    for xjob in T.parallel(8):
+                        T.copy(X[mb * 32 : (mb + 1) * 32, xjob * (K // 8) : (xjob + 1) * (K // 8)], X_a[0:32, xjob * (K // 8) : (xjob + 1) * (K // 8)], layout=("rm", "ah"))
                     T.gemm(X_a, Wg_b, Gate_acc, transpose_B=True, clear_accum=True)
                     T.copy(Gate_acc, Gate, layout=("ah", "rm"))
                     T.gemm(X_a, Wu_b, Up_acc, transpose_B=True, clear_accum=True)
@@ -93,10 +101,14 @@ def ffn_std(M: int = 1024, K: int = 2560, FF: int = 9216, ff_panel: int = 256, k
             # Phase 2: y = h @ Wd^T.  The output y lives after h in the same
             # slab at Slab[M:M+M, 0:K]; columns [K:FF) are padding kept only to
             # preserve a 2-D standard-copy-friendly slab.
-            for rb2 in T.serial(M // 32):
-                T.copy(Slab[rb2 * 32, 0], H_a, layout=("rm", "ah"))
-                for kp in T.serial(K // k_panel):
-                    T.copy(Wd[kp * k_panel, 0], Wd_b, layout=("rm", "wh"))
+            for kp in T.serial(K // k_panel):
+                # Wd is independent of the row-block loop; keep it resident for
+                # all M/32 row blocks for this output-channel panel.
+                for wd_job in T.parallel(k_panel // 32):
+                    T.copy(Wd[kp * k_panel + wd_job * 32 : kp * k_panel + (wd_job + 1) * 32, 0:FF], Wd_b[wd_job * 32 : (wd_job + 1) * 32, 0:FF], layout=("rm", "wh"))
+                for rb2 in T.serial(M // 32):
+                    for hjob in T.parallel(36):
+                        T.copy(Slab[rb2 * 32 : (rb2 + 1) * 32, hjob * (FF // 36) : (hjob + 1) * (FF // 36)], H_a[0:32, hjob * (FF // 36) : (hjob + 1) * (FF // 36)], layout=("rm", "ah"))
                     T.gemm(H_a, Wd_b, Y_acc, transpose_B=True, clear_accum=True)
                     T.copy(Y_acc, Ytile, layout=("ah", "rm"))
                     # Slab is intentionally the single out buffer.
