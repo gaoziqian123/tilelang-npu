@@ -31,6 +31,7 @@
 #include "common/bind_utils.h"
 #include "common/mbarrier.h"
 #include "common/pipeline_utils.h"
+#include "hexagon/target_utils.h"
 #include "layout/layout.h"
 #include "op/builtin.h"
 #include "op/copy.h"
@@ -359,17 +360,31 @@ private:
 
 class AsyncCommitWaitAttrLowerer : public StmtExprMutator {
 public:
-  static Stmt Lower(const Stmt &stmt) {
-    AsyncCommitWaitAttrLowerer lowerer;
+  explicit AsyncCommitWaitAttrLowerer(Optional<Target> target)
+      : target_(std::move(target)) {}
+
+  static Stmt Lower(const Stmt &stmt, Optional<Target> target) {
+    AsyncCommitWaitAttrLowerer lowerer(std::move(target));
     return lowerer.VisitStmt(stmt);
   }
 
 private:
+  const Op &CommitOp() const {
+    return target_.defined() && TargetIsHexagon(target_.value())
+               ? builtin::async_commit_group()
+               : builtin::ptx_commit_group();
+  }
+
+  const Op &WaitOp() const {
+    return target_.defined() && TargetIsHexagon(target_.value())
+               ? builtin::async_wait_group()
+               : builtin::ptx_wait_group();
+  }
+
   Stmt VisitStmt_(const AttrStmtNode *op) final {
     if (op->attr_key == s_tir::attr::async_commit_queue_scope) {
       Stmt body = VisitStmt(op->body);
-      Stmt commit =
-          Evaluate(Call(DataType::Handle(), builtin::ptx_commit_group(), {}));
+      Stmt commit = Evaluate(Call(DataType::Handle(), CommitOp(), {}));
       if (is_no_op(body)) {
         return commit;
       }
@@ -384,7 +399,7 @@ private:
         }
       }
       body = VisitStmt(body);
-      Stmt wait = Evaluate(Call(DataType::Handle(), builtin::ptx_wait_group(),
+      Stmt wait = Evaluate(Call(DataType::Handle(), WaitOp(),
                                 {wait_attrs.second}));
       if (is_no_op(body)) {
         return wait;
@@ -396,6 +411,8 @@ private:
     }
     return StmtExprMutator::VisitStmt_(op);
   }
+
+  Optional<Target> target_;
 };
 
 } // namespace
@@ -529,8 +546,8 @@ Stmt AnnotateTileOpMbarPhase(const Stmt &stmt, PrimExpr phase_expr) {
   return TileOpMbarPhaseAnnotator::Annotate(stmt, std::move(phase_expr));
 }
 
-Stmt LowerAsyncCommitWaitAttrs(const Stmt &stmt) {
-  return AsyncCommitWaitAttrLowerer::Lower(stmt);
+Stmt LowerAsyncCommitWaitAttrs(const Stmt &stmt, Optional<Target> target) {
+  return AsyncCommitWaitAttrLowerer::Lower(stmt, std::move(target));
 }
 
 /*!
@@ -3793,7 +3810,7 @@ private:
     for (const auto &kv : rewrite_result.buffer_remap) {
       pending_buffer_remap_.Set(kv.first, kv.second);
     }
-    pipeline = LowerAsyncCommitWaitAttrs(pipeline);
+    pipeline = LowerAsyncCommitWaitAttrs(pipeline, target_);
 
     return pipeline;
   }

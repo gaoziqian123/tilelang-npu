@@ -63,6 +63,15 @@ private:
   bool within_condition_expr_ = false;
 };
 
+bool IsAsyncCopyDstBuffer(const Buffer &buffer) {
+  if (!buffer.defined()) {
+    return false;
+  }
+  const std::string scope = buffer.scope();
+  return IsSharedBuffer(buffer) || scope == "vtcm" ||
+         scope.rfind("vtcm.", 0) == 0;
+}
+
 /*!
  * \brief Check whether two regions have intersections.
  * \param region1 The first region.
@@ -123,13 +132,13 @@ void BufferRegionCollector::HandleTileOp(const TileOperator &tile_op) {
   reads_.insert(reads_.end(), access.reads.begin(), access.reads.end());
   writes_.insert(writes_.end(), access.writes.begin(), access.writes.end());
   if (const auto *copy = tile_op.as<CopyNode>()) {
-    if (IsGlobalLikeBuffer(copy->src) && IsSharedBuffer(copy->dst)) {
+    if (IsGlobalLikeBuffer(copy->src) && IsAsyncCopyDstBuffer(copy->dst)) {
       is_global_copy_pattern_ = true;
     }
   }
   // Im2Col always uses TMA on Hopper.
   if (const auto *im2col = tile_op.as<Im2ColOpNode>()) {
-    if (IsGlobalLikeBuffer(im2col->src_) && IsSharedBuffer(im2col->dst_)) {
+    if (IsGlobalLikeBuffer(im2col->src_) && IsAsyncCopyDstBuffer(im2col->dst_)) {
       is_global_copy_pattern_ = true;
       if (TargetIsHopper(target_)) {
         is_tma_copy_ = true;
@@ -155,7 +164,7 @@ void BufferRegionCollector::VisitStmt_(const BufferStoreNode *op) {
 
   is_global_read_ = false;
   this->VisitExpr(op->value);
-  if (is_global_read_ && IsSharedBuffer(store_buffer)) {
+  if (is_global_read_ && IsAsyncCopyDstBuffer(store_buffer)) {
     is_global_copy_pattern_ = true;
   }
   is_global_read_ = false;
@@ -528,7 +537,7 @@ public:
       }
       if (const auto *store = node.as<BufferStoreNode>()) {
         saw_copy = true;
-        if ((!IsSharedBuffer(store->buffer) &&
+        if ((!IsAsyncCopyDstBuffer(store->buffer) &&
              !IsLocalBuffer(store->buffer, /*allow_var=*/true)) ||
             !is_pure_raw_copy_value(store->value, is_pure_raw_copy_value)) {
           saw_non_copy_buffer_store = true;
@@ -615,7 +624,7 @@ public:
     }
 
     if (const auto *copy = copy_tile_op.value().as<CopyNode>()) {
-      if (!IsGlobalLikeBuffer(copy->src) || !IsSharedBuffer(copy->dst)) {
+      if (!IsGlobalLikeBuffer(copy->src) || !IsAsyncCopyDstBuffer(copy->dst)) {
         return;
       }
       pinfo->copy_stage = true;
@@ -623,7 +632,7 @@ public:
     }
 
     if (const auto *im2col = copy_tile_op.value().as<Im2ColOpNode>()) {
-      if (!IsGlobalLikeBuffer(im2col->src_) || !IsSharedBuffer(im2col->dst_)) {
+      if (!IsGlobalLikeBuffer(im2col->src_) || !IsAsyncCopyDstBuffer(im2col->dst_)) {
         return;
       }
       pinfo->copy_stage = true;
@@ -953,7 +962,7 @@ public:
           }
         }
         for (const BufferRegion &write : pinfo.writes) {
-          if (IsSharedBuffer(write->buffer)) {
+          if (IsAsyncCopyDstBuffer(write->buffer)) {
             writes_shared = true;
             break;
           }

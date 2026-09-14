@@ -5,6 +5,8 @@
 
 #include "backend/common/target_utils.h"
 
+#include "hexagon/target_utils.h"
+
 #include <tvm/ffi/reflection/registry.h>
 
 namespace tvm {
@@ -16,6 +18,9 @@ bool TargetHasAsyncCopy(Target target) {
   }
   if (TargetIsRocm(target)) {
     return TargetRocmHasAsyncCopy(target);
+  }
+  if (TargetIsHexagon(target)) {
+    return true;
   }
   return false;
 }

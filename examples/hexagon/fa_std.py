@@ -276,7 +276,7 @@ def structural_check(src: str) -> int:
     worker_blob = src.split("int attnops_tl_fa_std", 1)[0]
     checks.append(("hmx outside worker functions", "hrt_hmx_mm_f16" not in worker_blob))
     checks.append(("staging recipes present", "hrt_stage_act_hvx_direct" in src and "hrt_stage_f16_rm_to_wh_nt" in src))
-    checks.append(("async qt pipeline emitted", "attnops_pool_start_ctx(" in src and "attnops_pool_join();" in src))
+    checks.append(("async qt pipeline emitted", (("attnops_pool_start_ctx(" in src and "attnops_pool_join();" in src) or ("attnops_pool_commit_w_ctx_copy(" in src and "attnops_pool_wait_le_w(1);" in src and "attnops_pool_wait_le_w(0);" in src))))
     checks.append(("full-head KV staging", "const int k_all_job = job" in src and "const int v_all_stage = job" in src and "const int vt_d = job" not in src))
     checks.append(("no per-kt K/V staging", "for (int kt = 0; kt < (qt + 1); kt++)" in src and "const int k_stage = job" not in src and "Vpad" not in src))
     checks.append(("streaming row-parallel pool phases", "const int rmask = job" in src and "const int p_stage = job" in src and "const int arow = job" in src and "const int rout = job" in src and "const int rscale = job" not in src))

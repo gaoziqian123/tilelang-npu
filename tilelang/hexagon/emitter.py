@@ -236,11 +236,29 @@ def hexagon_fold_view_base_rc(mins: list[Any], buf: Buffer | None) -> tuple[Any,
     if len(mins) < 2:
         return zero, zero
     row, col = mins[-2], mins[-1]
-    if buf is not None and len(mins) > 2 and len(buf.shape) >= len(mins):
+
+    # AH/WH buffers may have already been rewritten from the logical shape
+    # [..., rows, cols] into the physical tile storage shape
+    # [..., row_tiles, col_tiles, 16, 64].  Region/GEMM operands, however, still
+    # carry logical view indices.  Fold leading dimensions using that logical
+    # shape so a version slot advances by one logical 2-D plane, not by the full
+    # packed physical element count.  This keeps producer staging and HMX
+    # consumer bases identical for software-pipeline double-versioned operands.
+    shape = list(buf.shape) if buf is not None else []
+    scope = _buffer_scope(buf)
+    if (scope.endswith(".ah") or scope.endswith(".wh")) and len(shape) >= 4:
+        tile_inner = _i64(shape[-2])
+        tile_lane = _i64(shape[-1])
+        row_tiles = _i64(shape[-4])
+        col_tiles = _i64(shape[-3])
+        if tile_inner == 16 and tile_lane == 64 and row_tiles is not None and col_tiles is not None:
+            shape = list(shape[:-4]) + [IntImm("int32", row_tiles * 32), IntImm("int32", col_tiles * 32)]
+
+    if buf is not None and len(mins) > 2 and len(shape) >= len(mins):
         lead = None
         for i in range(len(mins) - 2):
             rows_per: Any = 1
-            for d in buf.shape[i + 1:-1]:
+            for d in shape[i + 1:-1]:
                 rows_per = rows_per * d
             term = mins[i] * rows_per
             lead = term if lead is None else lead + term
@@ -669,6 +687,12 @@ class HexagonEmitter(PyStmtExprVisitor):
                 out += self._emit_fused_pool_phases(*fused_start[i], ctx, indent)
                 i += 1
                 continue
+            if (i + 1 < len(seq)
+                    and self._as_pool_parallel_for(stmt) is not None
+                    and self._is_async_commit_eval(seq[i + 1])):
+                out += self._emit_w_lane_pool_phase(self._as_pool_parallel_for(stmt), ctx, indent)
+                i += 2
+                continue
             if self._pending_async_pool_slot is not None and self._contains_pool_phase(stmt):
                 out += self._emit_profiled_pool_join(indent, self._pending_async_pool_slot)
                 self._pending_async_pool_slot = None
@@ -682,6 +706,38 @@ class HexagonEmitter(PyStmtExprVisitor):
                                               outer_vars=ctx.outer_vars), indent)
             i += 1
         return out
+
+    def _is_async_commit_eval(self, stmt: Any) -> bool:
+        call = self._eval_call(stmt)
+        if call is None:
+            return False
+        opname = _call_op_name(call)
+        return opname in ("tir.async_commit_group", "tirx.async_commit_group", "async_commit_group") or opname.endswith(".async_commit_group")
+
+    def _emit_w_lane_pool_phase(self, phase: Any, ctx: _Ctx, indent: int) -> list[str]:
+        extent = _i64(phase.extent)
+        if extent is None:
+            raise HexagonEmitError(f"白名单: W-lane async T.Parallel extent 必须静态{_loc(phase)}")
+        # This T.parallel is the async producer for the software-pipeline stage.
+        # Consume the generic "first pool can be async" token here so the next
+        # unrelated pool phase is not lowered through the legacy single-slot
+        # pool_start/pool_join path.  W-lane ordering is controlled solely by
+        # async_commit_group / async_wait_group.
+        self._consume_pipeline_async_first(ctx)
+        wid = len(self._pool_workers)
+        wname = f"{self.func_name or 'tl'}_pool{wid}_worker"
+        ctx_type = f"{self.func_name or 'tl'}_pool{wid}_ctx_t"
+        var = _var_name(phase.loop_var)
+        worker_ctx = _Ctx(block_var=ctx.block_var, row_var=ctx.row_var, worker_var="job", outer_vars=ctx.outer_vars)
+        body = [self._ind(1, f"const int {var} = job;")]
+        body += self._lower_stmt(phase.body, worker_ctx, 1)
+        self._pool_workers.append(_PoolWorker(wname, ctx_type, extent, ctx.outer_vars, body))
+        init_vals = ", ".join([arg.cname for arg in self.global_args] + self._shape_params + list(ctx.outer_vars) + ["abl", "prof"])
+        return [
+            self._ind(indent, f"// T.Parallel({extent}) -> Hexagon W-lane async-copy batch"),
+            self._ind(indent, f"{ctx_type} ctx{wid} = {{ {init_vals} }};"),
+            self._ind(indent, f"attnops_pool_commit_w_ctx_copy({wname}, &ctx{wid}, sizeof(ctx{wid}), {extent});"),
+        ]
 
     def _emit_fused_pool_phases(self, first: Any, second: Any, ctx: _Ctx, indent: int) -> list[str]:
         """Emit two T.parallel pool phases as one worker with a partitioned job
@@ -797,6 +853,11 @@ class HexagonEmitter(PyStmtExprVisitor):
             return self._emit_reduce(call, ctx, indent)
         if call.op.same_as(ir.Op.get("tl.tileop.gemm")) or opname == "tl.tileop.gemm":
             raise HexagonEmitError(f"白名单: tl.tileop.gemm 必须先经 LowerTileOp 改写为 hexagon.gemm_hmx{_loc(op)}")
+        if opname in ("tir.async_commit_group", "tirx.async_commit_group", "async_commit_group") or opname.endswith(".async_commit_group"):
+            return [self._ind(indent, "// async_commit_group consumed by W-lane pool start")]
+        if opname in ("tir.async_wait_group", "tirx.async_wait_group", "async_wait_group") or opname.endswith(".async_wait_group"):
+            n = self._expr_c(call.args[0]) if getattr(call, "args", None) else "0"
+            return [self._ind(indent, f"attnops_pool_wait_le_w({n});")]
         ann = getattr(call, "annotations", {}) or {}
         hex_ann = _ann_str(ann.get("hexagon_intrin"))
         if opname in ("tir.call_pure_extern", "tirx.call_pure_extern") and len(call.args) >= 1 and _ann_str(call.args[0]) == "hexagon.gdn_prefill":
@@ -1839,8 +1900,16 @@ class HexagonEmitter(PyStmtExprVisitor):
             if region_cols is not None:
                 tile_cols_c = str(region_cols // 32)
             else:
-                tile_cols = _i64(buf.shape[-1]) if len(buf.shape) >= 2 else None
-                tile_cols_c = str(tile_cols // 32) if tile_cols is not None else f"(({self._expr_c(buf.shape[-1])}) / 32)"
+                # Layout-rewritten AH/WH buffers have physical shape
+                # [..., row_tiles, col_tiles, 16, 64].  The logical tile-row
+                # stride is col_tiles, not the innermost 64-lane dimension / 32.
+                if ((mode == "ah" or mode == "wh") and len(buf.shape) >= 4 and
+                        _i64(buf.shape[-2]) == 16 and _i64(buf.shape[-1]) == 64 and
+                        _i64(buf.shape[-3]) is not None):
+                    tile_cols_c = str(_i64(buf.shape[-3]))
+                else:
+                    tile_cols = _i64(buf.shape[-1]) if len(buf.shape) >= 2 else None
+                    tile_cols_c = str(tile_cols // 32) if tile_cols is not None else f"(({self._expr_c(buf.shape[-1])}) / 32)"
             tile_index = f"((size_t)({row_c}) / 32) * {tile_cols_c} + ((size_t)({col_c}) / 32)"
             return _TileLayoutAddr(mode, row_c, col_c, tile_index, f"({tile_index}) * HRT_TILE_BYTES")
 
