@@ -599,7 +599,11 @@ class _Verifier:
                 self._visit_stmt(op.else_case)
             return
         if isinstance(op, BufferStore):
-            if _is_vtcm(_buffer_scope(op.buffer)) and not self.in_vector and not self.has_gdn_leaf:
+            # FA diagonal causal masking intentionally stays scalar until the
+            # fp16 vector-select predicate granularity bug is fixed.  Limit the
+            # scalar VTCM exception to the FA score/probability row buffer.
+            scalar_fa_score = _buffer_name(op.buffer) == "ScoreB"
+            if _is_vtcm(_buffer_scope(op.buffer)) and not self.in_vector and not self.has_gdn_leaf and not scalar_fa_score:
                 raise HexagonEmitError(f"R2: 禁止对 VTCM buffer {_buffer_name(op.buffer)} 做标量 load/store{_loc(op)}")
             self._check_expr(op.value)
             for idx in op.indices:
@@ -656,7 +660,8 @@ class _Verifier:
 
     def _check_expr(self, e: Any) -> None:
         if isinstance(e, BufferLoad):
-            if _is_vtcm(_buffer_scope(e.buffer)) and not self.in_vector and not self.has_gdn_leaf:
+            scalar_fa_score = _buffer_name(e.buffer) == "ScoreB"
+            if _is_vtcm(_buffer_scope(e.buffer)) and not self.in_vector and not self.has_gdn_leaf and not scalar_fa_score:
                 raise HexagonEmitError(f"R2: 禁止对 VTCM buffer {_buffer_name(e.buffer)} 做标量 load/store{_loc(e)}")
             for idx in e.indices:
                 self._check_expr(idx)

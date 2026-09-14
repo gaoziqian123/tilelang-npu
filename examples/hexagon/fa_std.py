@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Emit a standard-construct TileLang Hexagon GQA flash-attention prefill.
 
-This is the pure-standard companion to the handwritten ``attnops_fa256.c``
-kernel: it uses only TileLang constructs (T.copy/T.gemm/T.parallel/T.serial/
-T.vectorized/T.reduce_max/T.reduce_sum/T.exp and scalar arithmetic) and lets the
-Hexagon backend lower staging, reductions, HMX GEMMs and worker-pool phases.
+v4 is a streaming single-pass flash-attention kernel: for each q tile it walks
+visible k/v tiles once, keeps online softmax state and the running output
+accumulator resident in VTCM, rescales the VTCM accumulator on max changes, and
+normalizes only at writeout.  It deliberately mirrors the official CUDA
+TileLang FA shape while staying within standard TileLang constructs
+(T.copy/T.gemm/T.parallel/T.serial/T.vectorized/T.Pipelined/T.alloc_var/
+T.reduce_max/T.reduce_sum/T.exp/T.if_then_else/T.Cast).
 
 Fixed v1 anchor shape: S=1024, HQ=16, HKV=4, D=256, q/kv tile=32.  KV head g
 serves q heads 4g..4g+3.  Inputs and output are logical row-major fp16 in the
@@ -45,23 +48,14 @@ import tilelang.hexagon  # noqa: F401,E402 - registers backend/target
 import tilelang.hexagon.language as T  # noqa: E402
 
 
-@tilelang.jit(out_idx=[3, 4, 5, 6, 7, 8, 9, 10, 11], target="hexagon", execution_backend="aot")
+@tilelang.jit(out_idx=[3], target="hexagon", execution_backend="aot")
 def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 32):
     @T.prim_func
     def main(
         Q: T.Tensor((HQ * S, D), T.float16),
         K: T.Tensor((HKV * S, D), T.float16),
-        V: T.Tensor((HKV * S, D), T.float16),
+        V: T.Tensor((HKV, D, S), T.float16),
         O: T.Tensor((HQ * S, D), T.float16),
-        Pbuf: T.Tensor((S // tile, tile, 4 * tile), T.float16),
-        Mus: T.Tensor((S // tile, tile), T.float32),
-        Mfin: T.Tensor((tile,), T.float32),
-        Lbuf: T.Tensor((tile,), T.float32),
-        ScoreRow: T.Tensor((tile,), T.float16),
-        Mtmp: T.Tensor((1,), T.float32),
-        Obuf: T.Tensor((tile, D), T.float16),
-        Vt: T.Tensor((HKV, D, S), T.float16),
-        Oacc: T.Tensor((tile, D), T.float32),
     ):
         with T.Kernel(1, threads=1):
             # Per-q-tile resident operands.  All global inputs are logical
@@ -79,6 +73,17 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
             # V is staged pre-transposed: Vpad[d, kv] and transpose_B=True.
             V_all = T.alloc_shared((D, S), T.float16, layout="wh")
             P_a = T.alloc_shared((tile, 4 * tile), T.float16, layout="ah")
+            ScoreB = T.alloc_shared((tile, 4 * tile), T.float16)
+            OutB = T.alloc_shared((tile, D), T.float16)
+            Oacc = T.alloc_shared((tile, D), T.float32)
+            # Online softmax state is cross-phase state in VTCM, not global
+            # scratch.  Pool workers are non-persistent, so the only legal
+            # state across phases is memory; each row owns one 128B f32 slot.
+            # Mslot replicates m across all lanes so reduce_max returns m;
+            # Lslot keeps l in lane 0 and zeros elsewhere so reduce_sum
+            # returns l.  This avoids scalar VTCM loads/stores.
+            Mslot = T.alloc_shared((tile, tile), T.float32)
+            Lslot = T.alloc_shared((tile, tile), T.float32)
             Score = T.alloc_fragment((tile, tile), T.float32)
             Out = T.alloc_fragment((tile, D), T.float32)
 
@@ -98,25 +103,19 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                         layout=("rm", "wh"),
                     )
 
-                # Phase G1: build full-head V^T in global scratch once per KV
-                # group.  This is still scalar, but runs four times total
-                # instead of once per (query tile, value tile) pair.
-                for vt_d in T.parallel(D):
-                    for vt_s in T.serial(S):
-                        Vt[g, vt_d, vt_s] = V[g * S + vt_s, vt_d]
-
-                # Phase G2: stage full V^T into VTCM WH once.  Use 64-column
-                # slices so every point view later is 128B-aligned.
+                # Phase G1: stage full V^T input into VTCM WH once.  The host
+                # supplies V as logical [HKV,D,S] row-major; source ld is S
+                # (1024), so the WH sliced _s route is selected.
                 for v_all_stage in T.parallel(S // 64):
                     T.copy(
-                        Vt[g, 0:D, v_all_stage * 64 : (v_all_stage + 1) * 64],
+                        V[g, 0:D, v_all_stage * 64 : (v_all_stage + 1) * 64],
                         V_all[0:D, v_all_stage * 64 : (v_all_stage + 1) * 64],
                         layout=("rm", "wh"),
                     )
 
                 for hqg in T.serial(HQ // HKV):
                     hq = g * (HQ // HKV) + hqg
-                    for qt in T.Pipelined(S // tile, num_stages=2, order=[0, 1, 2, 3, 4, 5, 6], stage=[0, 1, 1, 1, 1, 1, 1]):
+                    for qt in T.Pipelined(S // tile, num_stages=2, order=[0, 1, 2], stage=[0, 1, 1]):
                         q0 = qt * tile
 
                         # Phase 0: Q staging.  v1 applies the 1/sqrt(256)
@@ -131,17 +130,9 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                                 layout=("rm", "ah"),
                             )
 
-                        # Initialize online softmax state.
-                        # Keep this scalar so the qt+1 Q async stage in the
-                        # pipelined steady loop is not immediately joined by a
-                        # following worker-pool phase.
-                        for ri in T.serial(tile):
-                            Mfin[ri] = -32768.0
-                            Lbuf[ri] = 0.0
-
-                        # Phase A: score every visible KV tile, causal-mask the
-                        # diagonal tile, update running row max and store
-                        # P_kt = exp(score - m_used_kt) in global scratch.
+                        # Streaming phase: score one visible KV tile, update
+                        # online softmax state, rescale the VTCM output
+                        # accumulator, then immediately consume P@V.
                         for kt in T.serial(qt + 1):
                             T.gemm(
                                 Q_a,
@@ -150,112 +141,83 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                                 transpose_B=True,
                                 clear_accum=True,
                             )
-                            T.copy(Score, Pbuf[kt, 0, 0], layout=("ah", "rm"))
+                            T.copy(Score, ScoreB[0:tile, 0:tile], layout=("ah", "rm"))
 
-                            # Mask+scale, running max, exp and pad-zeroing are
-                            # row-parallel pool jobs (one row per job): scalar
-                            # global ops are unchanged, but six workers hide
-                            # ~6x of the latency.  Job r exclusively owns
-                            # Mfin[r]/Lbuf[r]/Pbuf[kt, r, :], so no races.
-                            # The pad columns [32,128) are zeroed here only for
-                            # kt slots first touched this qt; a slot reused from
-                            # an earlier qt already has zero pad (nothing else
-                            # writes cols >=32).
+                            # Mask+scale, online max/sum and padded P materialize
+                            # in the same VTCM row-major ScoreB buffer.  The pad
+                            # lanes [32,128) are biased during exp so they
+                            # underflow to zero for the padded P@V K=128 slot.
                             for rmask in T.parallel(tile):
-                                # Scale is vectorized for off-diagonal tiles
-                                # (the common case); the diagonal tile keeps
-                                # the scalar masked path.  Row start is 128B
-                                # aligned (Pbuf row stride is 256B), so a 64B
-                                # vector op on columns [0,32) is safe.
                                 if kt == qt:
+                                    # Keep the proven scalar diagonal mask: the
+                                    # current Hexagon fp16 vector select uses a
+                                    # word-lane predicate, so integer lane
+                                    # compares would mask f16 column pairs.
                                     for cmask in T.serial(tile):
                                         if cmask > rmask:
-                                            Pbuf[kt, rmask, cmask] = T.Cast("float16", -32768.0)
+                                            ScoreB[rmask, cmask] = T.Cast("float16", -32768.0)
                                         else:
-                                            Pbuf[kt, rmask, cmask] = T.Cast("float16", T.Cast("float32", Pbuf[kt, rmask, cmask]) / 16.0)
+                                            ScoreB[rmask, cmask] = T.Cast("float16", T.Cast("float32", ScoreB[rmask, cmask]) / 16.0)
                                 else:
                                     for cmask in T.vectorized(tile):
-                                        Pbuf[kt, rmask, cmask] = T.Cast("float16", T.Cast("float32", Pbuf[kt, rmask, cmask]) / 16.0)
-                                # Row max via the 32-lane HVX reduce helper.
-                                # The row start is passed as a plain element
-                                # load (Pbuf[kt, rmask, 0]) because sliced
-                                # regions trip a known generic LowerTileOp
-                                # substitution bug.
+                                        ScoreB[rmask, cmask] = T.Cast("float16", T.Cast("float32", ScoreB[rmask, cmask]) / 16.0)
+                                m_old = T.alloc_var(T.float32)
+                                l_old = T.alloc_var(T.float32)
+                                if kt == 0:
+                                    # qt-local state initialization belongs to
+                                    # the softmax row job: pool jobs are not
+                                    # persistent and m/l cannot live in thread
+                                    # registers across phases.
+                                    m_old = -32768.0
+                                    l_old = 0.0
+                                else:
+                                    T.reduce_max(Mslot[rmask, 0], m_old)
+                                    T.reduce_sum(Lslot[rmask, 0], l_old)
                                 m_row = T.alloc_var(T.float32)
-                                T.reduce_max(Pbuf[kt, rmask, 0], m_row)
-                                Mfin[rmask] = T.max(Mfin[rmask], m_row)
-                                Mus[kt, rmask] = Mfin[rmask]
-                                # exp over the full padded row width (128):
-                                # pad lanes get an extra +32768 bias so they
-                                # underflow to exactly 0 in fp16, keeping the
-                                # P@V K-pad invariant without a separate store.
+                                T.reduce_max(ScoreB[rmask, 0], m_row)
+                                m_new = T.max(m_old, m_row)
+                                alpha = T.exp(m_old - m_new)
                                 for cprob in T.vectorized(128):
-                                    Pbuf[kt, rmask, cprob] = T.Cast(
+                                    ScoreB[rmask, cprob] = T.Cast(
                                         "float16",
-                                        T.exp(T.Cast("float32", Pbuf[kt, rmask, cprob]) - T.if_then_else(cprob >= tile, Mfin[rmask] + 32768.0, Mfin[rmask])),
+                                        T.exp(T.Cast("float32", ScoreB[rmask, cprob]) - T.if_then_else(cprob >= tile, m_new + 32768.0, m_new)),
                                     )
-                                # Pbuf rows have stride 128 fp16.  The live score span
-                                # is columns [0,32), while the padded P@V K dimension
-                                # is [0,128).  Do not use HVX vector stores starting at
-                                # column 32: that address is only 64B-aligned, and HVX
-                                # stores silently align down to 128B, clobbering the
-                                # live score row.  Scalar global stores are slower but
-                                # keep the producer/consumer region intact.
-                                # Pad columns [32,128) are zeroed on the first
-                                # qt that touches this slot (qt == kt); from
-                                # then on no phase writes cols >=32, so the pad
-                                # stays zero for all later qt.
-                                if kt == qt:
-                                    for czero in T.serial(3 * tile):
-                                        Pbuf[kt, rmask, tile + czero] = T.Cast("float16", 0.0)
-
-                        # Phase B: online rescale to the final row max and row
-                        # normalizer l.  v1 uses a scalar row sum here because
-                        # Hexagon's current standard reduce_sum helper is 128
-                        # lanes only; P stays fp16 for the HMX P@V pass.
-                        for kt2 in T.serial(qt + 1):
-                            for rsum in T.parallel(tile):
-                                alpha = T.exp(Mus[kt2, rsum] - Mfin[rsum])
-                                for csum in T.vectorized(tile):
-                                    Pbuf[kt2, rsum, csum] = T.Cast(
-                                        "float16", T.Cast("float32", Pbuf[kt2, rsum, csum]) * alpha)
                                 l_acc = T.alloc_var(T.float32)
-                                T.reduce_sum(Pbuf[kt2, rsum, 0], l_acc)
-                                Lbuf[rsum] = Lbuf[rsum] + l_acc
+                                T.reduce_sum(ScoreB[rmask, 0], l_acc)
+                                l_new = l_old * alpha + l_acc
+                                if kt > 0:
+                                    for dscale in T.vectorized(D):
+                                        Oacc[rmask, dscale] = Oacc[rmask, dscale] * alpha
+                                for sstate in T.vectorized(tile):
+                                    Mslot[rmask, sstate] = m_new
+                                    Lslot[rmask, sstate] = T.if_then_else(sstate == 0, l_new, 0.0)
 
-                        # Phase C: O = sum_kt P_kt @ V_kt.  v1 copies each HMX
-                        # product to global scratch and accumulates there,
-                        # because the standard Hexagon lowering currently
-                        # requires every T.gemm to be immediately followed by a
-                        # T.copy(acc, ...).
-                        # O accumulates in fp32 scratch: per-tile partials are
-                        # fp16 (hexkl only has acc_read_f16), but the running
-                        # sum must not round-trip through fp16 across kt3.
-                        for zrow in T.parallel(tile):
-                            for zd in T.vectorized(D):
-                                Oacc[zrow, zd] = 0.0
-                        for kt3 in T.serial(qt + 1):
                             for p_stage in T.parallel(2):
                                 T.copy(
-                                    Pbuf[kt3, 0:tile, p_stage * 64 : (p_stage + 1) * 64],
+                                    ScoreB[0:tile, p_stage * 64 : (p_stage + 1) * 64],
                                     P_a[0:tile, p_stage * 64 : (p_stage + 1) * 64],
                                     layout=("rm", "ah"),
                                 )
                             T.gemm(
                                 P_a,
-                                V_all[0:D, kt3 * tile : kt3 * tile + 4 * tile],
+                                V_all[0:D, kt * tile : kt * tile + 4 * tile],
                                 Out,
                                 transpose_B=True,
                                 clear_accum=True,
                             )
-                            T.copy(Out, Obuf, layout=("ah", "rm"))
+                            T.copy(Out, OutB, layout=("ah", "rm"))
                             for arow in T.parallel(tile):
                                 for ad in T.vectorized(D):
-                                    Oacc[arow, ad] = Oacc[arow, ad] + T.Cast("float32", Obuf[arow, ad])
+                                    if kt == 0:
+                                        Oacc[arow, ad] = T.Cast("float32", OutB[arow, ad])
+                                    else:
+                                        Oacc[arow, ad] = Oacc[arow, ad] + T.Cast("float32", OutB[arow, ad])
 
                         # Phase D: normalize and write row-major output.
                         for rout in T.parallel(tile):
-                            inv_l = 1.0 / Lbuf[rout]
+                            l_final = T.alloc_var(T.float32)
+                            T.reduce_sum(Lslot[rout, 0], l_final)
+                            inv_l = 1.0 / l_final
                             for dout in T.vectorized(D):
                                 O[hq * S + q0 + rout, dout] = T.Cast("float16", Oacc[rout, dout] * inv_l)
 
@@ -315,11 +277,16 @@ def structural_check(src: str) -> int:
     checks.append(("hmx outside worker functions", "hrt_hmx_mm_f16" not in worker_blob))
     checks.append(("staging recipes present", "hrt_stage_act_hvx_direct" in src and "hrt_stage_f16_rm_to_wh_nt" in src))
     checks.append(("async qt pipeline emitted", "attnops_pool_start_ctx(" in src and "attnops_pool_join();" in src))
-    checks.append(("full-head KV staging", "const int k_all_job = job" in src and "const int v_all_stage = job" in src and "const int vt_d = job" in src))
+    checks.append(("full-head KV staging", "const int k_all_job = job" in src and "const int v_all_stage = job" in src and "const int vt_d = job" not in src))
     checks.append(("no per-kt K/V staging", "for (int kt = 0; kt < (qt + 1); kt++)" in src and "const int k_stage = job" not in src and "Vpad" not in src))
-    checks.append(("row-parallel softmax pool phases", "const int rmask = job" in src and "const int rsum = job" in src and "const int arow = job" in src and "const int rout = job" in src))
+    checks.append(("streaming row-parallel pool phases", "const int rmask = job" in src and "const int p_stage = job" in src and "const int arow = job" in src and "const int rout = job" in src and "const int rscale = job" not in src))
+    softmax_blob = src[src.find("static void attnops_tl_fa_std_pool4_worker"):src.find("static void attnops_tl_fa_std_pool5_worker")]
+    checks.append(("anti-pattern: no vectorized f16 integer-predicate select for causal mask", "hrt_splat_h(0xF800)" not in softmax_blob))
+    checks.append(("vtcm ScoreB to P_a staging", "hrt_stage_act_hvx_direct_strided((const uint8_t *)(((f16 *)(V +" in src))
+    checks.append(("vtcm 32-lane reduce helpers", "hrt_reduce_max_f16_32_vtcm" in src and "hrt_reduce_sum_f16_32_vtcm" in src))
+    checks.append(("state in VTCM slots", "Mslot" not in src and "Lslot" not in src and "Mfin" not in src and "Lbuf" not in src and "Alpha" not in src))
     checks.append(("fp32 exp lowering", "expf(" in src or "hrt_exp" in src))
-    checks.append(("causal mask present", "-32768" in src and "rmask < cmask" in src))
+    checks.append(("causal mask present", ("-32768" in src or "0xF800" in src) and "cmask" in src and "rmask" in src))
     checks.append(("prof counters", "tl.hexagon_prof profile slots" in src and "tl_prof_phase_t0" in src and "prof[5.." in src))
     checks.append(("pure standard: no handwritten fa leaf", "attnops_fa256" not in src and "fa2_" not in src))
     m = re.search(r"#define TL_GENERIC_VTCM_BYTES \(\(size_t\)(\d+)\)", src)

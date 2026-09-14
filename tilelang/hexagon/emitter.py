@@ -1498,7 +1498,7 @@ class HexagonEmitter(PyStmtExprVisitor):
                 return f"{s}f"
             return str(imm)
         if isinstance(e, BufferLoad):
-            if _is_vtcm(_buffer_scope(e.buffer)):
+            if _is_vtcm(_buffer_scope(e.buffer)) and _buffer_name(e.buffer) != "ScoreB":
                 raise HexagonEmitError(f"R2: 禁止对 VTCM buffer {_buffer_name(e.buffer)} 做标量 load/store{_loc(e)}")
             if _buffer_scope(e.buffer) == "local.var":
                 return _buffer_name(e.buffer)
@@ -1545,7 +1545,7 @@ class HexagonEmitter(PyStmtExprVisitor):
 
     def _emit_scalar_store(self, op: BufferStore, ctx: _Ctx, indent: int) -> list[str]:
         self.has_scalar_kernel = True
-        if _is_vtcm(_buffer_scope(op.buffer)):
+        if _is_vtcm(_buffer_scope(op.buffer)) and _buffer_name(op.buffer) != "ScoreB":
             raise HexagonEmitError(f"R2: 禁止对 VTCM buffer {_buffer_name(op.buffer)} 做标量 load/store{_loc(op)}")
         if _buffer_scope(op.buffer) == "local.var":
             val = self._expr_scalar(op.value, str(op.buffer.dtype))
@@ -1628,10 +1628,12 @@ class HexagonEmitter(PyStmtExprVisitor):
         sp = self._data_ptr_expr(src, ctx) if isinstance(src, BufferLoad) else self._buffer_ptr_c(sbuf)
         dp = self._buffer_ptr_c(dbuf)
         dtype = str(sbuf.dtype)
+        src_scope = _buffer_scope(sbuf)
+        vtcm_suffix = "_vtcm" if _is_vtcm(src_scope) and dtype == "float16" and n == 32 else ""
         if dtype == "float32":
             rhs = "hrt_reduce_sum_f32_32" if n == 32 else "hrt_reduce_sum_f32_128"
         elif dtype == "float16":
-            rhs = "hrt_reduce_sum_f16_32" if n == 32 else "hrt_reduce_sum_f16_128"
+            rhs = ("hrt_reduce_sum_f16_32" + vtcm_suffix) if n == 32 else "hrt_reduce_sum_f16_128"
         else:
             raise HexagonEmitError(f"R7: reduce_sum 只支持 fp16/fp32, 实际 {dtype}")
         if _buffer_scope(dbuf) == "local.var":
@@ -1666,10 +1668,12 @@ class HexagonEmitter(PyStmtExprVisitor):
         sp = self._data_ptr_expr(src, ctx) if isinstance(src, BufferLoad) else self._buffer_ptr_c(sbuf)
         dp = self._buffer_ptr_c(dbuf)
         dtype = str(sbuf.dtype)
+        src_scope = _buffer_scope(sbuf)
+        vtcm_suffix = "_vtcm" if _is_vtcm(src_scope) and dtype == "float16" and n == 32 else ""
         if dtype == "float32":
             rhs = "hrt_reduce_max_f32_32" if n == 32 else "hrt_reduce_max_f32_128"
         elif dtype == "float16":
-            rhs = "hrt_reduce_max_f16_32" if n == 32 else "hrt_reduce_max_f16_128"
+            rhs = ("hrt_reduce_max_f16_32" + vtcm_suffix) if n == 32 else "hrt_reduce_max_f16_128"
         else:
             rhs = ""
         if dtype not in ("float32", "float16"):

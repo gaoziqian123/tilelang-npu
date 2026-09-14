@@ -176,8 +176,10 @@ struct Copy {
     const HexagonLayoutMode dst_layout = LayoutModeOf(
         op.dst, lower_args, op.annotations, "hexagon.copy.dst_layout");
 
-    if (IsGlobal(op.src) && IsVTCM(op.dst) && IsFP16(op.src) &&
-        IsRM(src_layout) && IsAHLike(dst_layout)) {
+    if ((IsGlobal(op.src) || IsVTCM(op.src)) && IsVTCM(op.dst) &&
+        IsFP16(op.src) && IsRM(src_layout) && IsAHLike(dst_layout)) {
+      // The rm->ah staging recipe (hrt_stage_act_hvx_direct) is pure
+      // pointer-based HVX vector loads; a VTCM rm source is equally valid.
       return MakeExtern("hexagon.copy_rm_ah", op);
     }
     if ((IsGlobal(op.src) || IsVTCM(op.src)) && IsVTCM(op.dst) && IsFP32(op.src) &&
