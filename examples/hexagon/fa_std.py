@@ -176,15 +176,13 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                                 else:
                                     for cmask in T.vectorized(tile):
                                         Pbuf[kt, rmask, cmask] = T.Cast("float16", T.Cast("float32", Pbuf[kt, rmask, cmask]) / 16.0)
-                                # Row max stays scalar (T.reduce_max on a
-                                # sliced region trips a known generic
-                                # LowerTileOp slice-substitution bug), but runs
-                                # inside the row-parallel pool job with a local
-                                # accumulator; Mus[kt, r] is written once at
-                                # the end (Mtmp is shared, do not use).
-                                m_row = T.alloc_var(T.float32, init=-32768.0)
-                                for cmax in T.serial(tile):
-                                    m_row = T.max(m_row, T.Cast("float32", Pbuf[kt, rmask, cmax]))
+                                # Row max via the 32-lane HVX reduce helper.
+                                # The row start is passed as a plain element
+                                # load (Pbuf[kt, rmask, 0]) because sliced
+                                # regions trip a known generic LowerTileOp
+                                # substitution bug.
+                                m_row = T.alloc_var(T.float32)
+                                T.reduce_max(Pbuf[kt, rmask, 0], m_row)
                                 Mfin[rmask] = T.max(Mfin[rmask], m_row)
                                 Mus[kt, rmask] = Mfin[rmask]
                                 # exp over the full padded row width (128):
@@ -221,9 +219,8 @@ def fa_std(S: int = 1024, HQ: int = 16, HKV: int = 4, D: int = 256, tile: int = 
                                 for csum in T.vectorized(tile):
                                     Pbuf[kt2, rsum, csum] = T.Cast(
                                         "float16", T.Cast("float32", Pbuf[kt2, rsum, csum]) * alpha)
-                                l_acc = T.alloc_var(T.float32, init=0.0)
-                                for cadd in T.serial(tile):
-                                    l_acc = l_acc + T.Cast("float32", Pbuf[kt2, rsum, cadd])
+                                l_acc = T.alloc_var(T.float32)
+                                T.reduce_sum(Pbuf[kt2, rsum, 0], l_acc)
                                 Lbuf[rsum] = Lbuf[rsum] + l_acc
 
                         # Phase C: O = sum_kt P_kt @ V_kt.  v1 copies each HMX

@@ -140,6 +140,18 @@ def state_update32(S, kf, w, eGC):
     return _leaf("state_update32", S, kf, w, eGC)
 
 
+def reduce_sum32(src, dst):
+    """Reduce one 32-lane fp16/fp32 row vector to a scalar output buffer.
+
+    ``src`` is the row-start element load (e.g. ``Pbuf[kt, r, 0]``); the
+    backend reads 32 lanes starting at that address.  A plain element load
+    is used instead of a slice because sliced regions trip a known generic
+    LowerTileOp substitution bug.
+    """
+
+    return _leaf("reduce_sum32", src, dst)
+
+
 def reduce_sum128(src, dst):
     """Reduce one 128-lane fp16/fp32 vector to a scalar output buffer."""
 
@@ -162,5 +174,5 @@ __all__ = (
     "exp_fp16", "exp_fp32", "silu_fp16", "h2f", "f2h", "dcfetch_hint", "gdn_prefill",
     "load_state128", "store_state128", "load_h2f_rows128", "scan_exp32", "dot128x2_store",
     "state_x2_matvec128", "affine_rows128", "forward_solve32", "output_rows128",
-    "state_decay_rows128", "state_update32", "reduce_sum128", "reduce_max32", "reduce_max128",
+    "state_decay_rows128", "state_update32", "reduce_sum32", "reduce_sum128", "reduce_max32", "reduce_max128",
 )

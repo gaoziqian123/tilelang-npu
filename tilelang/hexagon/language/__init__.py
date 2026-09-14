@@ -100,7 +100,16 @@ def reduce_sum(buffer, out, dim: int = -1, clear: bool = True, batch: int = 1, a
 
     if dim not in (-1, 0):
         raise ValueError(f"Hexagon reduce_sum currently supports dim=0/-1, got {dim}")
-    return reduce_sum128(buffer, out)
+    shape = getattr(buffer, "shape", None) or getattr(getattr(buffer, "buffer", None), "shape", None)
+    try:
+        n = 1
+        for s in shape or ():
+            n *= int(s)
+    except Exception:
+        n = None
+    # A 32-lane row is passed as its row-start element load (buf[.., 0]);
+    # sliced regions trip a known generic LowerTileOp substitution bug.
+    return reduce_sum128(buffer, out) if n == 128 else reduce_sum32(buffer, out)
 
 
 def reduce_max(buffer, out, dim: int = -1, clear: bool = True, batch: int = 1, nan_propagate: bool = False, annotations: dict | None = None) -> None:

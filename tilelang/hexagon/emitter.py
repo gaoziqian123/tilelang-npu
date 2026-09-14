@@ -331,7 +331,7 @@ class HexagonEmitter(PyStmtExprVisitor):
         opname = _call_op_name(op)
         if opname == "tirx.call_pure_extern" and len(op.args) >= 1:
             callee = _ann_str(op.args[0])
-            if callee in ("hexagon.gdn_prefill", "hexagon.silu_fp16", "hexagon.exp_fp16", "hexagon.exp_fp32", "hexagon.h2f", "hexagon.f2h", "hexagon.reduce_sum128", "hexagon.reduce_max32", "hexagon.reduce_max128", "hexagon.reduce_prod128", "hexagon.reduce_prod2_128") or (callee and callee.startswith("hexagon.") and callee.split(".", 1)[1] in self._gdn_leaf_names()):
+            if callee in ("hexagon.gdn_prefill", "hexagon.silu_fp16", "hexagon.exp_fp16", "hexagon.exp_fp32", "hexagon.h2f", "hexagon.f2h", "hexagon.reduce_sum32", "hexagon.reduce_sum128", "hexagon.reduce_max32", "hexagon.reduce_max128", "hexagon.reduce_prod128", "hexagon.reduce_prod2_128") or (callee and callee.startswith("hexagon.") and callee.split(".", 1)[1] in self._gdn_leaf_names()):
                 return
             if callee and callee.startswith("hexagon."):
                 raise HexagonEmitError(f"白名单: 未支持的 Hexagon 原语 {callee}{_loc(op)}")
@@ -803,7 +803,7 @@ class HexagonEmitter(PyStmtExprVisitor):
             return self._emit_gdn_prefill(call, ctx, indent)
         if opname in ("tir.call_pure_extern", "tirx.call_pure_extern") and len(call.args) >= 1:
             callee = _ann_str(call.args[0])
-            if callee == "hexagon.reduce_sum128":
+            if callee in ("hexagon.reduce_sum32", "hexagon.reduce_sum128"):
                 return self._emit_reduce_sum128(call, ctx, indent)
             if callee in ("hexagon.reduce_max32", "hexagon.reduce_max128"):
                 return self._emit_reduce_max(call, ctx, indent)
@@ -1611,15 +1611,28 @@ class HexagonEmitter(PyStmtExprVisitor):
         dbuf = getattr(dst, "buffer", None) or self._buffer_from_data_arg(dst)
         if _is_vtcm(_buffer_scope(dbuf)):
             raise HexagonEmitError(f"R2: 归约结果禁止标量写 VTCM buffer {_buffer_name(dbuf)}{_loc(call)}")
+        callee = _ann_str(call.args[0]) if off else ""
         ext = _region_extents(src)
-        n = ext[-1] if ext else ((_i64(sbuf.shape[-1]) if sbuf is not None and len(sbuf.shape) > 1 else _shape_numel(sbuf.shape)) if sbuf is not None else None)
-        if n != 128:
-            raise HexagonEmitError(f"R7: 当前 HVX reduce_sum 支持 128 维向量, 实际 {n}")
-        sp = self._buffer_ptr_c(sbuf)
+        if ext:
+            n = ext[-1]
+        elif callee.endswith("32"):
+            n = 32
+        elif callee.endswith("128"):
+            n = 128
+        else:
+            n = (_i64(sbuf.shape[-1]) if sbuf is not None and len(sbuf.shape) > 1 else _shape_numel(sbuf.shape)) if sbuf is not None else None
+        if n not in (32, 128):
+            raise HexagonEmitError(f"R7: 当前 HVX reduce_sum 支持 32/128 维向量, 实际 {n}")
+        # A sliced/element row start arrives as a plain BufferLoad (slices trip
+        # a known generic LowerTileOp substitution bug): use its address.
+        sp = self._data_ptr_expr(src, ctx) if isinstance(src, BufferLoad) else self._buffer_ptr_c(sbuf)
         dp = self._buffer_ptr_c(dbuf)
         dtype = str(sbuf.dtype)
-        rhs = "hrt_reduce_sum_f32_128" if dtype == "float32" else "hrt_reduce_sum_f16_128"
-        if dtype not in ("float32", "float16"):
+        if dtype == "float32":
+            rhs = "hrt_reduce_sum_f32_32" if n == 32 else "hrt_reduce_sum_f32_128"
+        elif dtype == "float16":
+            rhs = "hrt_reduce_sum_f16_32" if n == 32 else "hrt_reduce_sum_f16_128"
+        else:
             raise HexagonEmitError(f"R7: reduce_sum 只支持 fp16/fp32, 实际 {dtype}")
         if _buffer_scope(dbuf) == "local.var":
             return [self._ind(indent, f"{dp} = {rhs}({sp});")]
@@ -1636,11 +1649,21 @@ class HexagonEmitter(PyStmtExprVisitor):
         dbuf = _region_buffer(dst) or getattr(dst, "buffer", None) or self._buffer_from_data_arg(dst)
         if _is_vtcm(_buffer_scope(dbuf)):
             raise HexagonEmitError(f"R2: 归约结果禁止标量写 VTCM buffer {_buffer_name(dbuf)}{_loc(call)}")
+        callee = _ann_str(call.args[0]) if off else ""
         ext = _region_extents(src)
-        n = ext[-1] if ext else ((_i64(sbuf.shape[-1]) if sbuf is not None and len(sbuf.shape) > 1 else _shape_numel(sbuf.shape)) if sbuf is not None else None)
+        if ext:
+            n = ext[-1]
+        elif callee.endswith("32"):
+            n = 32
+        elif callee.endswith("128"):
+            n = 128
+        else:
+            n = (_i64(sbuf.shape[-1]) if sbuf is not None and len(sbuf.shape) > 1 else _shape_numel(sbuf.shape)) if sbuf is not None else None
         if n not in (32, 128):
             raise HexagonEmitError(f"FA: 当前 HVX reduce_max 支持 32/128 维行向量, 实际 {n}")
-        sp = self._buffer_ptr_c(sbuf)
+        # A sliced/element row start arrives as a plain BufferLoad (slices trip
+        # a known generic LowerTileOp substitution bug): use its address.
+        sp = self._data_ptr_expr(src, ctx) if isinstance(src, BufferLoad) else self._buffer_ptr_c(sbuf)
         dp = self._buffer_ptr_c(dbuf)
         dtype = str(sbuf.dtype)
         if dtype == "float32":

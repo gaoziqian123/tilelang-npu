@@ -193,6 +193,16 @@ and `hexagon-clang -fsyntax-only` verifies generated C syntax.
   reduction stay scalar but accumulate in `T.alloc_var` locals instead of
   round-tripping global scratch.  Device: **383 -> 172 ms**, strict
   elementwise PASS; gdn_std/ffn_std regressions green.
+- v3c 32-lane HVX row reductions (2026-09-14): rowmax/rowsum now use
+  `hrt_reduce_max_f16_32` / new `hrt_reduce_sum_f16_32` via
+  `T.reduce_max`/`T.reduce_sum` on an element load at row start.  The
+  element-load convention is intentional: sliced loads still trip the generic
+  `LowerTileOp` substitution bug, while the emitter can recover sliced-row
+  addresses from `BufferLoad` and derive reduce width from the callee suffix
+  (32/128).  Device: **172 -> 151.421 ms** (20 iters; 1 iter 153.174 ms),
+  strict elementwise PASS; gdn_std/ffn_std regressions green.  Main pool ticks:
+  rmask 715428, rsum 539626, pstage 389321, arow 465201, qasync 22275,
+  rmask2 45763, rsum2 34867, arow2 30003.
 - Emitter fixes landed for v3b: (1) `T.alloc_var` (`local.var`) scalars are
   redeclared inside pool worker functions that reference them and dropped
   from the main flow when worker-only (the latter used to trip -Werror
