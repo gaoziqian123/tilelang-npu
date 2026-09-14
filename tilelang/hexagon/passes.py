@@ -88,6 +88,10 @@ def _buffer_scope(buf: Buffer | None) -> str:
         return "global"
 
 
+def _is_global(scope: str) -> bool:
+    return scope == "global" or scope.startswith("global.")
+
+
 def _buffer_name(buf: Buffer | None) -> str:
     if buf is None:
         return "unknown"
@@ -341,11 +345,11 @@ def HexagonWriteSet():
         data_to_buf: dict[str, Buffer] = {
             _var_name(getattr(buf, "data", "")): buf
             for _, buf in func.buffer_map.items()
-            if _buffer_scope(buf) == "global"
+            if _is_global(_buffer_scope(buf))
         }
 
         def visit(node: Any) -> None:
-            if isinstance(node, BufferStore) and _buffer_scope(node.buffer) == "global":
+            if isinstance(node, BufferStore) and _is_global(_buffer_scope(node.buffer)):
                 _mark_write(writes, node.buffer)
             if isinstance(node, Call) and _is_extern(node):
                 callee = _extern_callee(node)
@@ -363,11 +367,11 @@ def HexagonWriteSet():
                     outs = [node.args[off + 1]]
                 for arg in outs:
                     buf = getattr(arg, "buffer", None) or data_to_buf.get(_var_name(arg))
-                    if buf is not None and _buffer_scope(buf) == "global":
+                    if buf is not None and _is_global(_buffer_scope(buf)):
                         _mark_write(writes, buf)
             if isinstance(node, Call) and _call_op_name(node) == "tl.tileop.reduce" and len(node.args) >= 2:
                 buf = _region_buffer(node.args[1])
-                if buf is not None and _buffer_scope(buf) == "global":
+                if buf is not None and _is_global(_buffer_scope(buf)):
                     _mark_write(writes, buf)
 
         post_order_visit(func.body, visit)
@@ -680,7 +684,7 @@ class _Verifier:
                         dbuf = getattr(dst, "buffer", None)
                         if _is_vtcm(_buffer_scope(dbuf)):
                             raise HexagonEmitError(f"R2: 归约结果禁止标量写 VTCM buffer {_buffer_name(dbuf)}{_loc(e)}")
-                if callee in ("hexagon.copy_rm_ah", "hexagon.copy_f32_ah", "hexagon.copy_f32_wh", "hexagon.copy_ah_rm", "hexagon.copy_acc_rm", "hexagon.copy_ddr"):
+                if callee in ("hexagon.copy_rm_ah", "hexagon.copy_f32_ah", "hexagon.copy_f32_wh", "hexagon.copy_wh_wh", "hexagon.copy_ah_rm", "hexagon.copy_acc_rm", "hexagon.copy_ddr"):
                     self._check_copy_intrin(e, off)
                 if callee == "hexagon.gemm_hmx":
                     self._check_r4(e)

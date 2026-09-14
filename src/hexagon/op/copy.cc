@@ -61,8 +61,13 @@ HexagonLayoutMode FallbackLayoutModeOf(const Buffer &buf,
 }
 
 HexagonLayoutMode LayoutModeOf(const Buffer &buf, const LowerArgs &lower_args,
-                               const Map<String, ObjectRef> &ann,
-                               const char *key) {
+                                const Map<String, ObjectRef> &ann,
+                                const char *key) {
+  if (auto val = ann.Get(key)) {
+    if (const auto *s = val.value().as<StringImmNode>()) {
+      return HexagonLayoutModeFromString(String(s->value));
+    }
+  }
   if (auto layout = lower_args.layout_map.Get(buf)) {
     HexagonLayoutMode mode = DetectHexagonLayoutMode(layout.value(), buf);
     if (mode != HexagonLayoutMode::kNone) {
@@ -78,7 +83,10 @@ bool IsAHLike(HexagonLayoutMode mode) {
 
 bool IsRM(HexagonLayoutMode mode) { return mode == HexagonLayoutMode::kRM; }
 
-bool IsGlobal(const Buffer &buf) { return buf.scope() == "global"; }
+bool IsGlobal(const Buffer &buf) {
+  std::string scope = buf.scope();
+  return scope == "global" || scope.rfind("global.", 0) == 0;
+}
 
 bool SameDType(const Buffer &a, const Buffer &b) { return a->dtype == b->dtype; }
 
@@ -191,6 +199,11 @@ struct Copy {
         IsFP16(op.dst) && IsRM(src_layout) &&
         dst_layout == HexagonLayoutMode::kWH) {
       return MakeExtern("hexagon.copy_f32_wh", op);
+    }
+    if (IsGlobal(op.src) && IsVTCM(op.dst) && SameDType(op.src, op.dst) &&
+        IsFP16(op.src) && src_layout == HexagonLayoutMode::kWH &&
+        dst_layout == HexagonLayoutMode::kWH) {
+      return MakeExtern("hexagon.copy_wh_wh", op);
     }
     if (IsVTCM(op.src) && IsGlobal(op.dst) && IsAHLike(src_layout) &&
         IsRM(dst_layout)) {

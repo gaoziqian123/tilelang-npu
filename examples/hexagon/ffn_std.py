@@ -48,9 +48,9 @@ def ffn_std(M: int = 1024, K: int = 2560, FF: int = 9216, ff_panel: int = 256, k
     @T.prim_func
     def main(
         X: T.Tensor((M, K), T.float16),
-        Wg: T.Tensor((FF, K), T.float16),
-        Wu: T.Tensor((FF, K), T.float16),
-        Wd: T.Tensor((K, FF), T.float16),
+        Wg: T.Tensor((FF, K), T.float16, layout="wh"),
+        Wu: T.Tensor((FF, K), T.float16, layout="wh"),
+        Wd: T.Tensor((K, FF), T.float16, layout="wh"),
         Slab: T.Tensor((2 * M, FF), T.float16),
     ):
         with T.Kernel(1, threads=1):
@@ -78,9 +78,9 @@ def ffn_std(M: int = 1024, K: int = 2560, FF: int = 9216, ff_panel: int = 256, k
                 # slice instead of a degenerate job-0 full-panel copy.
                 for w_job in T.parallel(2 * (ff_panel // 32)):
                     if w_job < ff_panel // 32:
-                        T.copy(Wg[p * ff_panel + w_job * 32 : p * ff_panel + (w_job + 1) * 32, 0:K], W_b[w_job * 32 : (w_job + 1) * 32, 0:K], layout=("rm", "wh"))
+                        T.copy(Wg[p * ff_panel + w_job * 32 : p * ff_panel + (w_job + 1) * 32, 0:K], W_b[w_job * 32 : (w_job + 1) * 32, 0:K], layout=("wh", "wh"))
                     else:
-                        T.copy(Wu[p * ff_panel + (w_job - ff_panel // 32) * 32 : p * ff_panel + (w_job - ff_panel // 32 + 1) * 32, 0:K], W_b[w_job * 32 : (w_job + 1) * 32, 0:K], layout=("rm", "wh"))
+                        T.copy(Wu[p * ff_panel + (w_job - ff_panel // 32) * 32 : p * ff_panel + (w_job - ff_panel // 32 + 1) * 32, 0:K], W_b[w_job * 32 : (w_job + 1) * 32, 0:K], layout=("wh", "wh"))
                 for mb in T.Pipelined(M // 32, num_stages=3, order=[0, 1, 2, 3, 4, 5], stage=[0, 1, 1, 1, 1, 2]):
                     # Activation staging is per row block.  Keep it in a pool
                     # phase so the caller thread only runs HMX chains.
@@ -105,7 +105,7 @@ def ffn_std(M: int = 1024, K: int = 2560, FF: int = 9216, ff_panel: int = 256, k
                 # Wd is independent of the row-block loop; keep it resident for
                 # all M/32 row blocks for this output-channel panel.
                 for wd_job in T.parallel(k_panel // 32):
-                    T.copy(Wd[kp * k_panel + wd_job * 32 : kp * k_panel + (wd_job + 1) * 32, 0:FF], Wd_b[wd_job * 32 : (wd_job + 1) * 32, 0:FF], layout=("rm", "wh"))
+                    T.copy(Wd[kp * k_panel + wd_job * 32 : kp * k_panel + (wd_job + 1) * 32, 0:FF], Wd_b[wd_job * 32 : (wd_job + 1) * 32, 0:FF], layout=("wh", "wh"))
                 for rb2 in T.Pipelined(M // 32, num_stages=3, order=[0, 1, 2, 3], stage=[0, 1, 1, 2]):
                     for hjob in T.parallel(36):
                         T.copy(Slab[rb2 * 32 : (rb2 + 1) * 32, hjob * (FF // 36) : (hjob + 1) * (FF // 36)], H_a[0:32, hjob * (FF // 36) : (hjob + 1) * (FF // 36)], layout=("rm", "ah"))
@@ -175,7 +175,7 @@ def structural_check(src: str) -> int:
     worker_blob = src.split("int attnops_tl_ffn_std", 1)[0]
     checks.append(("hmx outside worker functions", "hrt_hmx_mm_f16" not in worker_blob))
     checks.append(("standard silu lowering", "expf(" in src or "hrt_exp" in src))
-    checks.append(("copy recipe staging", "hrt_tl" in src and ("copy" in src or "stage" in src)))
+    checks.append(("WH block-copy staging", "hrt_copy_wh_block" in src and "hrt_stage_f16_rm_to_wh_nt" not in src))
     checks.append(("prof counters", "tl.hexagon_prof profile slots" in src and "tl_prof_phase_t0" in src and "prof[5.." in src))
     checks.append(("no handwritten ffn leaf", "attnops_ffn(" not in src and "fn_silu_ah_worker" not in src))
     checks.append(("rotated pipeline buffers", "floormod" in src or "% 2" in src or "% 3" in src))

@@ -150,6 +150,10 @@ def _buffer_scope(buf: Buffer | None) -> str:
         return "global"
 
 
+def _is_global(scope: str) -> bool:
+    return scope == "global" or scope.startswith("global.")
+
+
 def _buffer_name(buf: Buffer | None) -> str:
     if buf is None:
         return "unknown"
@@ -874,7 +878,7 @@ class HexagonEmitter(PyStmtExprVisitor):
                 return self._emit_reduce_prod2_128(call, ctx, indent)
             if callee == "hexagon.gemm_hmx":
                 raise HexagonEmitError(f"白名单: hexagon.gemm_hmx 必须后接 hexagon.copy_acc_rm 以执行延迟 acc_read{_loc(op)}")
-            if callee in ("hexagon.copy_rm_ah", "hexagon.copy_f32_ah", "hexagon.copy_f32_wh", "hexagon.copy_ah_rm", "hexagon.copy_acc_rm", "hexagon.copy_ddr"):
+            if callee in ("hexagon.copy_rm_ah", "hexagon.copy_f32_ah", "hexagon.copy_f32_wh", "hexagon.copy_wh_wh", "hexagon.copy_ah_rm", "hexagon.copy_acc_rm", "hexagon.copy_ddr"):
                 return self._emit_copy_intrin(call, ctx, indent)
             if callee and callee.startswith("hexagon.") and callee.split(".", 1)[1] in self._gdn_leaf_names():
                 return self._emit_gdn_leaf(callee.split(".", 1)[1], call, ctx, indent)
@@ -1063,6 +1067,48 @@ class HexagonEmitter(PyStmtExprVisitor):
                 self._ind(indent, "}"),
             ]
             return body if ctx.worker_var is not None else self._prof_wrap(indent, 1, body)
+        if callee == "hexagon.copy_wh_wh":
+            self.has_copy = True
+            src = self._buffer_from_data_arg(call.args[1]) if len(call.args) > 1 else None
+            dst = self._buffer_from_data_arg(call.args[2]) if len(call.args) > 2 else None
+            if src is None or dst is None:
+                raise HexagonEmitError(f"copy_wh_wh: 找不到源/目标 buffer{_loc(call)}")
+            src_ptr = self._buffer_ptr_c(src)
+            dst_off = self._vtcm_offset_c(dst)
+            snd = int(_i64(call.args[3]) or 0) if len(call.args) > 3 else 0
+            dst_meta = 4 + 2 * snd
+            dnd = int(_i64(call.args[dst_meta]) or 0) if len(call.args) > dst_meta else 0
+            src_exts = [_i64(call.args[5 + 2 * i]) if len(call.args) > 5 + 2 * i else None for i in range(snd)]
+            dst_exts = [_i64(call.args[dst_meta + 2 + 2 * i]) if len(call.args) > dst_meta + 2 + 2 * i else None for i in range(dnd)]
+            if len(src_exts) < 2 or len(dst_exts) < 2 or src_exts[-2] is None or src_exts[-1] is None or dst_exts[-2] is None or dst_exts[-1] is None:
+                raise HexagonEmitError(f"copy_wh_wh: 源/目标 WH region 必须是静态二维尾维{_loc(call)}")
+            rows, cols = int(dst_exts[-2]), int(dst_exts[-1])
+            if int(src_exts[-2]) != rows or int(src_exts[-1]) != cols:
+                raise HexagonEmitError(f"copy_wh_wh: 源/目标 logical shape 不一致{_loc(call)}")
+            if rows % 32 or cols % 32:
+                raise HexagonEmitError(f"R5: copy_wh_wh tile 维度必须 32 整除, 实际 rows={rows},cols={cols}")
+            src_mins = [call.args[4 + 2 * i] for i in range(snd) if len(call.args) > 4 + 2 * i]
+            dst_mins = [call.args[dst_meta + 1 + 2 * i] for i in range(dnd) if len(call.args) > dst_meta + 1 + 2 * i]
+            srow, scol = self._flatten_view_rc(src_mins, src)
+            drow, dcol = self._flatten_view_rc(dst_mins, dst)
+            src_base = self._tile_layout_addr(src, srow, scol, mode="wh").byte_offset
+            if "wh" in _buffer_scope(dst):
+                if len(dst.shape) >= 4 and _i64(dst.shape[1]) is not None:
+                    dst_kt = int(_i64(dst.shape[1]))
+                else:
+                    dst_cols_i = _i64(dst.shape[-1]) if len(dst.shape) >= 1 else None
+                    dst_kt = int(dst_cols_i) // 32 if dst_cols_i is not None else cols // 32
+                drow_c = self._expr_c(drow)
+                dcol_c = self._expr_c(dcol)
+                dst_view = f"(((size_t)({drow_c}) / 32) * {dst_kt} + ((size_t)({dcol_c}) / 32)) * HRT_TILE_BYTES"
+            else:
+                dst_view = self._tile_layout_addr(dst, drow, dcol, mode="wh").byte_offset
+            dst_c = f"V + {dst_off}" if dst_view == "0" else f"V + {dst_off} + {dst_view}"
+            src_c = f"(const uint8_t *)({src_ptr})" if src_base == "0" else f"(const uint8_t *)({src_ptr}) + {src_base}"
+            body = [self._ind(indent, "if (!(abl & 2)) {"),
+                    self._ind(indent + 1, f"hrt_copy_wh_block({dst_c}, {src_c}, {rows}, {cols});"),
+                    self._ind(indent, "}")]
+            return body if ctx.worker_var is not None else self._prof_wrap(indent, 1, body)
         if callee == "hexagon.copy_ddr":
             self.has_copy = True
             src = self._buffer_from_data_arg(call.args[1]) if len(call.args) > 1 else None
@@ -1080,7 +1126,7 @@ class HexagonEmitter(PyStmtExprVisitor):
             dnd = int(dnd or 0)
             dst_base = self._expr_c(call.args[dst_meta + 1]) if len(call.args) > dst_meta + 1 and dnd else "0"
             elems = self._expr_c(call.args[dst_meta + 2]) if len(call.args) > dst_meta + 2 and dnd else "1"
-            global_base = src_base if ss == "global" else dst_base
+            global_base = src_base if _is_global(ss) else dst_base
             lines = [
                 self._ind(indent, "{"),
                 self._ind(indent + 1, f"size_t copy_base = (size_t)({global_base});"),
@@ -1090,9 +1136,9 @@ class HexagonEmitter(PyStmtExprVisitor):
                 self._ind(indent + 1, "size_t copy_bytes = copy_elems * sizeof(f16);"),
                 self._ind(indent + 1, "if (copy_bytes) {"),
             ]
-            if ss == "global" and _is_vtcm(ds):
+            if _is_global(ss) and _is_vtcm(ds):
                 lines.append(self._ind(indent + 2, f"hrt_copy_128_dcfetch((uint8_t *)({dst_ptr} + (size_t)({dst_base})), (const uint8_t *)({src_ptr} + (size_t)({src_base})), copy_bytes);"))
-            elif _is_vtcm(ss) and ds == "global":
+            elif _is_vtcm(ss) and _is_global(ds):
                 lines += [
                     self._ind(indent + 2, "for (size_t copy_i = 0; copy_i < copy_bytes; copy_i += 128) {"),
                     self._ind(indent + 3, f"*(HVX_Vector *)((uint8_t *)({dst_ptr} + (size_t)({dst_base})) + copy_i) = *(const HVX_Vector *)((const uint8_t *)({src_ptr} + (size_t)({src_base})) + copy_i);"),
@@ -1137,7 +1183,7 @@ class HexagonEmitter(PyStmtExprVisitor):
             return self._buffer_ptr_c(buf)
         if buf is not None and _is_vtcm(_buffer_scope(buf)):
             raise HexagonEmitError(f"GDN: scratch buffer {name} 必须用 T.alloc_wscratch, 不能用 VTCM alloc_shared")
-        if buf is not None and _buffer_scope(buf) == "global":
+        if buf is not None and _is_global(_buffer_scope(buf)):
             return self._buffer_ptr_c(buf)
         return name
 
@@ -1238,7 +1284,7 @@ class HexagonEmitter(PyStmtExprVisitor):
         load_ptrs: list[str] = []
 
         def _collect_loads(e: Any) -> None:
-            if isinstance(e, BufferLoad) and _buffer_scope(e.buffer) == "global":
+            if isinstance(e, BufferLoad) and _is_global(_buffer_scope(e.buffer)):
                 p = self._buffer_ptr_c(e.buffer)
                 if p not in load_ptrs:
                     load_ptrs.append(p)
@@ -1261,7 +1307,7 @@ class HexagonEmitter(PyStmtExprVisitor):
         # the second half.
         uniform64 = f32_store and not pair and (ctx.vec_extent or 0) != 32
         second_name = val.names[1] if pair else val.names[0]
-        if scope == "global":
+        if _is_global(scope):
             limit = self._shape_numel_c(buf.shape) if buf is not None and len(buf.shape) > 1 else "total"
             guard = "total" if limit == "total" else f"(size_t)({limit})"
             store_lanes = 64
@@ -1280,7 +1326,7 @@ class HexagonEmitter(PyStmtExprVisitor):
             # expressions are a lo/hi register pair; store both halves.  A
             # 32-lane context reuses a single register ([name, name]) and must
             # NOT emit the +32 store, which would clobber the next row.
-            if scope == "global":
+            if _is_global(scope):
                 lines.insert(-1, self._ind(indent + 1, f"*(HVX_Vector *)({ptr} + {idx_name} + 32) = {second_name};"))
             else:
                 lines.append(self._ind(indent, f"*(HVX_Vector *)({ptr} + {idx_name} + 32) = {second_name};"))
@@ -1339,7 +1385,7 @@ class HexagonEmitter(PyStmtExprVisitor):
 
     def _buffer_ptr_c(self, buf: Buffer | None) -> str:
         bname = _buffer_name(buf)
-        if _buffer_scope(buf) == "global" and bname in self.global_ptrs:
+        if _is_global(_buffer_scope(buf)) and bname in self.global_ptrs:
             return self.global_ptrs[bname]
         if _is_wscratch(_buffer_scope(buf)):
             field = self._wscratch_field(buf)
@@ -2179,7 +2225,7 @@ class HexagonEmitter(PyStmtExprVisitor):
         if imm is not None:
             return self._const_hvx(imm, want or self._expr_dtype_hint(e) or "float16", lines, indent)
         if isinstance(e, BufferLoad):
-            if _buffer_scope(e.buffer) != "global" and not _is_vtcm(_buffer_scope(e.buffer)) and not _is_wscratch(_buffer_scope(e.buffer)):
+            if not _is_global(_buffer_scope(e.buffer)) and not _is_vtcm(_buffer_scope(e.buffer)) and not _is_wscratch(_buffer_scope(e.buffer)):
                 raise HexagonEmitError(f"R2: 当前向量表达式 load 只支持 global/vtcm/wscratch, 实际 {_buffer_scope(e.buffer)}{_loc(e)}")
             dtype = str(e.buffer.dtype)
             if dtype not in ("float16", "float32"):
@@ -2415,7 +2461,7 @@ class HexagonEmitter(PyStmtExprVisitor):
             lines += [
                 self._ind(indent + 3, f"hrt_tlgdn_acc_tile_to_vtcm_rm(V, {acc0}, {dst_expr}, {dst_stride}, {prefix}_r, {prefix}_c);"),
             ]
-        elif dst_scope == "global":
+        elif _is_global(dst_scope):
             dst_ptr = self._buffer_ptr_c(dst)
             lines += [
                 self._ind(indent + 3, "hrt_mask_init();"),
@@ -2560,7 +2606,7 @@ class HexagonEmitter(PyStmtExprVisitor):
         args: list[_GlobalArg] = []
         used: set[str] = set()
         for _, buf in func.buffer_map.items():
-            if _buffer_scope(buf) != "global":
+            if not _is_global(_buffer_scope(buf)):
                 continue
             bname = _buffer_name(buf)
             cname = self._c_var_name(bname, used)
@@ -2882,7 +2928,7 @@ class HexagonEmitter(PyStmtExprVisitor):
 
     def _infer_problem_shape(self) -> tuple[int, int, int]:
         kg = self.gemm_mnk[2] if self.gemm_mnk is not None else None
-        globals_2d = [b for b in self.buffers.values() if _buffer_scope(b) == "global" and len(b.shape) == 2]
+        globals_2d = [b for b in self.buffers.values() if _is_global(_buffer_scope(b)) and len(b.shape) == 2]
         shapes = [tuple(_i64(d) for d in b.shape) for b in globals_2d]
         shapes = [s for s in shapes if len(s) == 2 and s[0] is not None and s[1] is not None]
         if len(shapes) >= 3:

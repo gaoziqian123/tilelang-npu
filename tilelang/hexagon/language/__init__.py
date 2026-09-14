@@ -15,6 +15,7 @@ from tilelang.language.allocate import alloc_shared as _alloc_shared
 from tilelang.language.allocate import alloc_local as _alloc_local
 from tilelang.language.allocate import alloc_fragment as _alloc_fragment
 from tilelang.language.copy_op import copy as _copy
+from tilelang.language.proxy import Tensor as _Tensor
 from tilelang.language.utils import _normalize_annotations
 
 from .intrinsics import *  # noqa: F401,F403
@@ -51,6 +52,25 @@ def alloc_shared(shape, dtype, scope: str = "vtcm", *, layout: str | None = None
     return buffer
 
 
+def Tensor(shape, dtype="float32", data=None, scope=None, *, layout: str | None = None, **kwargs):
+    """Declare a Hexagon global tensor, optionally with AH/WH physical layout.
+
+    The normal TileLang ``T.Tensor`` surface has no Hexagon-specific layout
+    metadata.  The Hexagon dialect extends it with ``layout=\"rm|ah|wh\"`` and
+    encodes non-row-major global layouts as scope suffixes (``global.wh``),
+    mirroring the existing VTCM convention (``vtcm.wh``).  Emitters and lowering
+    still treat ``global.*`` as ABI-global buffers; the suffix is only generic
+    layout metadata.
+    """
+
+    layout = _validate_layout(layout)
+    physical_scope = scope
+    if layout in ("ah", "wh"):
+        base_scope = scope or "global"
+        physical_scope = f"{base_scope}.{layout}"
+    return _Tensor(shape, dtype=dtype, data=data, scope=physical_scope, **kwargs)
+
+
 def alloc_wscratch(shape, dtype):
     """分配 per-worker DDR scratch buffer。
 
@@ -82,9 +102,25 @@ def copy(src, dst, *, layout: tuple[str, str] | None = None, annotations: dict |
     """
 
     ann = _normalize_annotations(annotations)
+    if layout is None:
+        def _obj_layout(obj) -> str:
+            buf = getattr(obj, "buffer", None) or obj
+            try:
+                scope = str(buf.scope())
+            except Exception:
+                return "rm"
+            if scope.endswith(".ah"):
+                return "ah"
+            if scope.endswith(".wh"):
+                return "wh"
+            return "rm"
+
+        inferred = (_obj_layout(src), _obj_layout(dst))
+        if inferred != ("rm", "rm"):
+            layout = inferred
     if layout is not None:
-        if tuple(layout) not in (("rm", "ah"), ("ah", "rm"), ("rm", "wh")):
-            raise ValueError(f"Hexagon copy layout must be ('rm','ah'), ('ah','rm') or ('rm','wh'), got {layout!r}")
+        if tuple(layout) not in (("rm", "ah"), ("ah", "rm"), ("wh", "rm"), ("rm", "wh"), ("wh", "wh")):
+            raise ValueError(f"Hexagon copy layout must be ('rm','ah'), ('ah','rm'), ('wh','rm'), ('rm','wh') or ('wh','wh'), got {layout!r}")
         ann["hexagon.copy.src_layout"] = tirx.StringImm(layout[0])
         ann["hexagon.copy.dst_layout"] = tirx.StringImm(layout[1])
     return _copy(src, dst, annotations=ann, **kwargs)
@@ -168,6 +204,7 @@ __all__ = tuple(
             "alloc_wscratch",
             "alloc_local",
             "alloc_fragment",
+            "Tensor",
             "copy",
             "reduce_sum",
             "reduce_max",
