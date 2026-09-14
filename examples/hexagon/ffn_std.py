@@ -54,11 +54,10 @@ def ffn_std(M: int = 1024, K: int = 2560, FF: int = 9216, ff_panel: int = 256, k
         Slab: T.Tensor((2 * M, FF), T.float16),
     ):
         with T.Kernel(1, threads=1):
-            # Phase-1 resident panels: one activation row block and one gate/up
-            # weight panel pair.  HMX calls stay in the caller thread.
+            # Phase-1 resident panels: one activation row block and one fused
+            # gate/up weight panel pair.  HMX calls stay in the caller thread.
             X_a = T.alloc_shared((32, K), T.float16, layout="ah")
-            Wg_b = T.alloc_shared((ff_panel, K), T.float16, layout="wh")
-            Wu_b = T.alloc_shared((ff_panel, K), T.float16, layout="wh")
+            W_b = T.alloc_shared((2 * ff_panel, K), T.float16, layout="wh")
             Gate = T.alloc_shared((32, ff_panel), T.float16)
             Up = T.alloc_shared((32, ff_panel), T.float16)
             Gate_acc = T.alloc_fragment((32, ff_panel), T.float32)
@@ -77,18 +76,19 @@ def ffn_std(M: int = 1024, K: int = 2560, FF: int = 9216, ff_panel: int = 256, k
                 # Stage each weight panel once, before the row-block sweep.  Use
                 # explicit regions so each pool job stages a disjoint 32-row WH
                 # slice instead of a degenerate job-0 full-panel copy.
-                for wg_job in T.parallel(ff_panel // 32):
-                    T.copy(Wg[p * ff_panel + wg_job * 32 : p * ff_panel + (wg_job + 1) * 32, 0:K], Wg_b[wg_job * 32 : (wg_job + 1) * 32, 0:K], layout=("rm", "wh"))
-                for wu_job in T.parallel(ff_panel // 32):
-                    T.copy(Wu[p * ff_panel + wu_job * 32 : p * ff_panel + (wu_job + 1) * 32, 0:K], Wu_b[wu_job * 32 : (wu_job + 1) * 32, 0:K], layout=("rm", "wh"))
+                for w_job in T.parallel(2 * (ff_panel // 32)):
+                    if w_job < ff_panel // 32:
+                        T.copy(Wg[p * ff_panel + w_job * 32 : p * ff_panel + (w_job + 1) * 32, 0:K], W_b[w_job * 32 : (w_job + 1) * 32, 0:K], layout=("rm", "wh"))
+                    else:
+                        T.copy(Wu[p * ff_panel + (w_job - ff_panel // 32) * 32 : p * ff_panel + (w_job - ff_panel // 32 + 1) * 32, 0:K], W_b[w_job * 32 : (w_job + 1) * 32, 0:K], layout=("rm", "wh"))
                 for mb in T.Pipelined(M // 32, num_stages=3, order=[0, 1, 2, 3, 4, 5], stage=[0, 1, 1, 1, 1, 2]):
                     # Activation staging is per row block.  Keep it in a pool
                     # phase so the caller thread only runs HMX chains.
                     for xjob in T.parallel(8):
                         T.copy(X[mb * 32 : (mb + 1) * 32, xjob * (K // 8) : (xjob + 1) * (K // 8)], X_a[0:32, xjob * (K // 8) : (xjob + 1) * (K // 8)], layout=("rm", "ah"))
-                    T.gemm(X_a, Wg_b, Gate_acc, transpose_B=True, clear_accum=True)
+                    T.gemm(X_a, W_b[0:ff_panel, 0:K], Gate_acc, transpose_B=True, clear_accum=True)
                     T.copy(Gate_acc, Gate, layout=("ah", "rm"))
-                    T.gemm(X_a, Wu_b, Up_acc, transpose_B=True, clear_accum=True)
+                    T.gemm(X_a, W_b[ff_panel : 2 * ff_panel, 0:K], Up_acc, transpose_B=True, clear_accum=True)
                     T.copy(Up_acc, Up, layout=("ah", "rm"))
                     for r in T.parallel(32):
                         for c in T.vectorized(ff_panel):
@@ -180,7 +180,7 @@ def structural_check(src: str) -> int:
     checks.append(("no handwritten ffn leaf", "attnops_ffn(" not in src and "fn_silu_ah_worker" not in src))
     checks.append(("rotated pipeline buffers", "floormod" in src or "% 2" in src or "% 3" in src))
     checks.append(("fused worker partition", src.count("if (job < ") >= 2))
-    checks.append(("fused async extent sum", "T.Parallel(8)+T.Parallel(32)" in src and "attnops_pool_start_ctx(attnops_tl_ffn_std_pool4_worker, &ctx4, 40)" in src and "T.Parallel(36)+T.Parallel(32)" in src and "attnops_pool_start_ctx(attnops_tl_ffn_std_pool10_worker, &ctx10, 68)" in src))
+    checks.append(("fused async extent sum", "T.Parallel(8)+T.Parallel(32)" in src and "attnops_pool_start_ctx(attnops_tl_ffn_std_pool3_worker, &ctx3, 40)" in src and "T.Parallel(36)+T.Parallel(32)" in src and "attnops_pool_start_ctx(attnops_tl_ffn_std_pool9_worker, &ctx9, 68)" in src))
     async_start_pos = src.find("attnops_pool_start_ctx(")
     async_join_pos = src.find("attnops_pool_join();", async_start_pos)
     sync_after_join_pos = src.find("attnops_pool_run_ctx(", async_join_pos)

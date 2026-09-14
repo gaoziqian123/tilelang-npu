@@ -56,8 +56,10 @@ so Wg/Wu/Wd are not double-buffered in VTCM.
 
 The FF axis is split into static `FF_PANEL = 256` panels.  For each panel:
 
-1. Stage `Wg[p:p+FF_PANEL, :]` and `Wu[p:p+FF_PANEL, :]` to VTCM WH layout with
-   `T.copy`.
+1. Stage `Wg[p:p+FF_PANEL, :]` and `Wu[p:p+FF_PANEL, :]` into one fused VTCM WH
+   buffer `W_b[0:2*FF_PANEL, :]` with a single 16-job pool phase (jobs 0..7 for
+   Wg, jobs 8..15 for Wu).  This avoids two separate 8-job phases on the 6-worker
+   pool and reduces tail-worker bubbles.
 2. For each 32-row block of `x`, the pipelined stage-0 producer stages the
    activation block to VTCM AH once; in steady state this staging for the next
    logical block is fused with the delayed stage-2 SwiGLU/writeback of the
@@ -93,8 +95,7 @@ The panels are chosen by a simple under-8MB budget check, matching the spirit of
 | Buffer | Shape/layout | Bytes |
 |---|---:|---:|
 | `X_a` | 2 × `[32, 2560]` fp16 AH (pipeline versions) | 327,680 |
-| `Wg_b` | `[256, 2560]` fp16 WH | 1,310,720 |
-| `Wu_b` | `[256, 2560]` fp16 WH | 1,310,720 |
+| `W_b` | `[2*256, 2560]` fp16 WH (`Wg` then `Wu`) | 2,621,440 |
 | `Gate`, `Up` | 2 × 2 × `[32,256]` fp16 RM (delayed writeback versions) | 65,536 |
 | `H_a` | 2 × `[32, 9216]` fp16 AH (pipeline versions) | 1,179,648 |
 | `Wd_b` | `[128, 9216]` fp16 WH | 2,359,296 |
@@ -146,6 +147,15 @@ The generated function also accepts `abl`, as in other Hexagon examples.  The
 profile tail uses the same convention as `gdn_std`: slots 0..4 are aggregate
 staging/HMX/writeback/wall counters and slots 5..N describe worker-pool phases in
 source order.
+
+## Performance notes
+
+- 2026-09-14 OnePlus 13, skel with R5 staging optimization: fusing the phase-1
+  Wg/Wu staging phases changed the first weight-stage pool from two 8-job phases
+  (`p5=175792`, `p6=173536` ticks baseline) to one 16-job phase (`p5=281862`
+  ticks).  Staging span improved from 349,328 to 281,862 ticks (19.3% lower;
+  close to the expected 4-wave -> 3-wave tail-bubble reduction).  End-to-end
+  `ffn_std_test 3`: 70.0 ms baseline -> 67.673 ms.
 
 ## v1 exclusions
 
