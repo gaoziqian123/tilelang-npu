@@ -12,6 +12,8 @@
 #include <tvm/ffi/reflection/enum_def.h>
 #include <tvm/ir/cast.h>
 #include <tvm/runtime/logging.h>
+#include <tvm/tirx/op.h>
+#include <tvm/tirx/op_attr_types.h>
 #include <tvm/tirx/stmt.h>
 
 #include <tvm/arith/analyzer.h>
@@ -25,6 +27,20 @@ namespace tl {
 
 using namespace script::ir_builder::tirx;
 using namespace ffi;
+
+TVM_REGISTER_OP("tir.async_commit_group")
+    .set_attr<tvm::tirx::TScriptPrinterName>("TScriptPrinterName",
+                                             "async_commit_group")
+    .set_num_inputs(0)
+    .set_attr<tvm::tirx::TCallEffectKind>(
+        "TCallEffectKind", Integer(tvm::tirx::CallEffectKind::kOpaque));
+
+TVM_REGISTER_OP("tir.async_wait_group")
+    .set_attr<tvm::tirx::TScriptPrinterName>("TScriptPrinterName",
+                                             "async_wait_group")
+    .set_num_inputs(1)
+    .set_attr<tvm::tirx::TCallEffectKind>(
+        "TCallEffectKind", Integer(tvm::tirx::CallEffectKind::kOpaque));
 
 // Build a ForFrame that emits a target-neutral kThreadBinding loop for one
 // kernel-launch dimension. The launch nest is materialized into the

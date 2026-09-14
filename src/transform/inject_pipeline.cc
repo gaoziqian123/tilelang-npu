@@ -371,13 +371,13 @@ public:
 private:
   const Op &CommitOp() const {
     return target_.defined() && TargetIsHexagon(target_.value())
-               ? builtin::async_commit_group()
+               ? Op::Get("tir.async_commit_group")
                : builtin::ptx_commit_group();
   }
 
   const Op &WaitOp() const {
     return target_.defined() && TargetIsHexagon(target_.value())
-               ? builtin::async_wait_group()
+               ? Op::Get("tir.async_wait_group")
                : builtin::ptx_wait_group();
   }
 
