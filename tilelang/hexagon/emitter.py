@@ -493,7 +493,7 @@ class HexagonEmitter(PyStmtExprVisitor):
         if is_parallel:
             if extent is None:
                 raise HexagonEmitError(f"白名单: T.Parallel extent 必须是静态整数: {var}{_loc(op)}")
-            if self._pre_has_gemm:
+            if self._pre_has_gemm or "hexagon.pool" in anns:
                 wid = len(self._pool_workers)
                 wname = f"{self.func_name or 'tl'}_pool{wid}_worker"
                 ctx_type = f"{self.func_name or 'tl'}_pool{wid}_ctx_t"
@@ -2164,6 +2164,11 @@ class HexagonEmitter(PyStmtExprVisitor):
                 lines.append(self._ind(indent, f"HVX_Vector {name} = Q6_V_vsplat_R({vname});"))
             return name
         cls = type(e).__name__
+        if cls == "BufferLoad" and _buffer_scope(e.buffer) == "local.var":
+            # local.var lowers to a plain C scalar; splat it like a Var.
+            name = self._new_hvx_tmp("iv")
+            lines.append(self._ind(indent, f"HVX_Vector {name} = Q6_V_vsplat_R({_buffer_name(e.buffer)});"))
+            return name
         if cls in ("Add", "Sub"):
             a = self._lower_hvx_int_expr(e.a, ctx, lines, indent, lane_off)
             b = self._lower_hvx_int_expr(e.b, ctx, lines, indent, lane_off)

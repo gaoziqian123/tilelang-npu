@@ -12,7 +12,7 @@ import tilelang
 from tilelang.transform import PassConfigKey, PassContext
 
 from .emitter import emit_hexagon_c
-from .passes import ProductReduceFusion, StoragePlan, WScratchPlan, HexagonProfileConfig, HexagonVerify, WriteSet
+from .passes import HexagonCopyPartition, ProductReduceFusion, StoragePlan, WScratchPlan, HexagonProfileConfig, HexagonVerify, WriteSet
 
 
 def default_emit_path() -> str:
@@ -47,6 +47,7 @@ def HexagonPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
         ):
             mod = tilelang.transform.LayoutInference()(mod)
         mod = tilelang.transform.LowerTileOp()(mod)
+    mod = HexagonCopyPartition()(mod)
     mod = ProductReduceFusion()(mod)
     mod = WriteSet()(mod)
     mod = StoragePlan()(mod)

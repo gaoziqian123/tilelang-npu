@@ -9,6 +9,7 @@ with rule-numbered diagnostics.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from typing import Any
 
 from tvm import tirx
@@ -20,6 +21,7 @@ from tvm.tirx import (
     Call,
     Evaluate,
     For,
+    ForKind,
     IfThenElse,
     IntImm,
     PrimFunc,
@@ -27,6 +29,7 @@ from tvm.tirx import (
     SBlock,
     SBlockRealize,
     SeqStmt,
+    Var,
 )
 from tvm.tirx.stmt_functor import post_order_visit, substitute
 from tvm.tirx.transform import prim_func_pass
@@ -335,6 +338,220 @@ def HexagonProductReduceFusion():
         return func.with_body(mut.visit_stmt(func.body), span=func.span)
 
     return prim_func_pass(pass_fn, opt_level=0, name="tl.hexagon.ProductReduceFusion")
+
+
+@dataclass
+class _CopyRegion:
+    snd: int
+    dnd: int
+    src_min0: int
+    src_extent0: int
+    dst_nd_idx: int
+    dst_min0: int
+    dst_extent0: int
+
+
+@tirx.functor.mutator
+class _HexagonCopyPartitionMutator(PyStmtExprMutator):
+    def __init__(self, min_bytes: int, max_jobs: int) -> None:
+        super().__init__()
+        self.min_bytes = min_bytes
+        self.max_jobs = max(1, max_jobs)
+        self._parallel_depth = 0
+
+    @staticmethod
+    def _is_parallel_for(op: For) -> bool:
+        return op.kind == ForKind.PARALLEL or "parallel" in str(getattr(op, "kind", "")).lower() or str(getattr(op, "kind", "")) == "1"
+
+    def visit_for_(self, op: For) -> Any:
+        was_parallel = self._is_parallel_for(op)
+        if was_parallel:
+            self._parallel_depth += 1
+        try:
+            body = self.visit_stmt(op.body)
+        finally:
+            if was_parallel:
+                self._parallel_depth -= 1
+        if body is op.body:
+            return op
+        return For(op.loop_var, op.min, op.extent, op.kind, body, op.thread_binding, op.annotations, op.step)
+
+    def visit_evaluate_(self, op: Evaluate) -> Any:
+        value = self.visit_expr(op.value)
+        new_op = op if value is op.value else Evaluate(value)
+        if self._parallel_depth:
+            return new_op
+        if not isinstance(value, Call):
+            return new_op
+        rewritten = self._partition_call(value)
+        if rewritten is None:
+            return new_op
+        return rewritten
+
+    def _partition_call(self, call: Call) -> For | None:
+        callee = _extern_callee(call)
+        if not callee or not callee.startswith("hexagon.copy"):
+            return None
+        off = _extern_arg_offset(call)
+        if off + 3 > len(call.args):
+            return None
+        region = self._parse_region(call, off)
+        if region is None:
+            return None
+        axis, gran = self._split_rule(callee, region)
+        if axis < 0:
+            return None
+        extent = self._extent_at(call, region, axis)
+        if extent is None:
+            return None
+        elem_bytes = self._elem_bytes(call, off)
+        total_elems = self._total_elems(call, region)
+        if total_elems is None or total_elems * elem_bytes < self.min_bytes:
+            return None
+        max_jobs = self._call_workers(call) or self.max_jobs
+        jobs = self._choose_jobs(extent, gran, max_jobs)
+        if jobs is None:
+            return None
+        chunk = extent // jobs
+        args = list(call.args)
+        job = Var("cpy_job", "int32")
+        delta = job * IntImm("int32", chunk)
+        src_min_idx = region.src_min0 + 2 * axis
+        src_ext_idx = region.src_extent0 + 2 * axis
+        dst_min_idx = region.dst_min0 + 2 * axis
+        dst_ext_idx = region.dst_extent0 + 2 * axis
+        args[src_min_idx] = args[src_min_idx] + delta
+        args[src_ext_idx] = IntImm("int32", chunk)
+        args[dst_min_idx] = args[dst_min_idx] + delta
+        args[dst_ext_idx] = IntImm("int32", chunk)
+        new_call = Call(call.dtype, call.op, args, getattr(call, "annotations", None), getattr(call, "span", None))
+        body = Evaluate(new_call)
+        return For(job, IntImm("int32", 0), IntImm("int32", jobs), ForKind.PARALLEL, body, None, {"hexagon.pool": IntImm("int32", 1)})
+
+    def _parse_region(self, call: Call, off: int) -> _CopyRegion | None:
+        snd = _i64(call.args[off + 2]) if len(call.args) > off + 2 else None
+        if snd is None:
+            return None
+        src_min0 = off + 3
+        src_extent0 = src_min0 + 1
+        dst_nd_idx = src_min0 + 2 * int(snd)
+        if len(call.args) <= dst_nd_idx:
+            return None
+        dnd = _i64(call.args[dst_nd_idx])
+        if dnd is None or int(dnd) != int(snd):
+            return None
+        dst_min0 = dst_nd_idx + 1
+        dst_extent0 = dst_min0 + 1
+        if len(call.args) < dst_min0 + 2 * int(dnd):
+            return None
+        return _CopyRegion(int(snd), int(dnd), src_min0, src_extent0, dst_nd_idx, dst_min0, dst_extent0)
+
+    def _split_rule(self, callee: str, region: _CopyRegion) -> tuple[int, int]:
+        if callee in ("hexagon.copy_wh_wh", "hexagon.copy_f32_wh"):
+            return 0, 32
+        if callee in ("hexagon.copy_rm_ah", "hexagon.copy_f32_ah"):
+            return max(0, region.dnd - 1), 128
+        if callee in ("hexagon.copy_acc_rm", "hexagon.copy_ah_rm"):
+            return -1, 1
+        return 0, 1
+
+    def _extent_at(self, call: Call, region: _CopyRegion, axis: int) -> int | None:
+        if axis >= region.snd or axis >= region.dnd:
+            return None
+        se = _i64(call.args[region.src_extent0 + 2 * axis])
+        de = _i64(call.args[region.dst_extent0 + 2 * axis])
+        return se if se is not None and de is not None and se == de else None
+
+    def _elem_bytes(self, call: Call, off: int) -> int:
+        for arg in call.args[off : off + 2]:
+            buf = getattr(arg, "buffer", None)
+            if buf is not None:
+                try:
+                    return _dtype_bytes(str(buf.dtype))
+                except Exception:
+                    pass
+        return 2
+
+    def _total_elems(self, call: Call, region: _CopyRegion) -> int | None:
+        n = 1
+        for i in range(region.dnd):
+            e = _i64(call.args[region.dst_extent0 + 2 * i])
+            if e is None:
+                return None
+            n *= int(e)
+        return n
+
+    def _call_workers(self, call: Call) -> int | None:
+        anns = getattr(call, "annotations", {}) or {}
+        if "workers" not in anns:
+            return None
+        workers = _i64(anns["workers"])
+        return workers if workers is not None and workers > 0 else None
+
+    @staticmethod
+    def _choose_jobs(extent: int, gran: int, max_jobs: int) -> int | None:
+        for jobs in range(min(max_jobs, extent), 1, -1):
+            if extent % jobs == 0 and (extent // jobs) % gran == 0:
+                return jobs
+        return None
+
+
+def _has_blockidx_launch(stmt: Any) -> bool:
+    """Detect frozen-ABI launch geometry (non-degenerate blockIdx grids).
+
+    Kernels launched over a real ``blockIdx`` grid (legacy/user-tiled GEMM_NT
+    shells and elementwise bx shells) bake the launch geometry into their
+    attnops ABI and reference grid vars (``bx`` etc.) inside copy recipes.  A
+    synthetic pool loop there would flip the emitter to the generic shell,
+    which cannot bind those names, so auto-partition must stay out of such
+    kernels.  A degenerate extent-1 grid (e.g. ``T.Kernel(1, threads=1)``) is
+    launch plumbing only and does NOT freeze the ABI, so it is ignored.
+    """
+
+    if isinstance(stmt, (SBlockRealize, SBlock)):
+        return _has_blockidx_launch(stmt.block if isinstance(stmt, SBlockRealize) else stmt.body)
+    if isinstance(stmt, SeqStmt):
+        return any(_has_blockidx_launch(s) for s in stmt.seq)
+    if isinstance(stmt, For):
+        ttag = str(getattr(getattr(stmt, "thread_binding", None), "thread_tag", ""))
+        if "blockIdx" in ttag and _i64(stmt.extent) != 1:
+            return True
+        return _has_blockidx_launch(stmt.body)
+    if isinstance(stmt, AttrStmt):
+        if str(stmt.attr_key) == "thread_extent":
+            node = stmt.node
+            name = str(getattr(node, "thread_tag", "")) or str(node)
+            if "blockIdx" in name and _i64(stmt.value) != 1:
+                return True
+        return _has_blockidx_launch(stmt.body)
+    if isinstance(stmt, IfThenElse):
+        return _has_blockidx_launch(stmt.then_case) or (stmt.else_case is not None and _has_blockidx_launch(stmt.else_case))
+    return False
+
+
+def HexagonCopyPartition():
+    """Partition large unsliced Hexagon copy intrinsics into worker-pool jobs.
+
+    Copies already under ``T.parallel`` are user-partitioned and left untouched;
+    otherwise eligible ``hexagon.copy_*`` extern calls are wrapped in a parallel
+    ``hexagon.pool`` loop with per-job source/destination region bounds.
+
+    Functions with ``blockIdx`` launch geometry (frozen-ABI legacy/user-tiled
+    GEMM_NT and elementwise bx shells) are skipped entirely: their copy recipes
+    reference grid variables that worker-pool jobs cannot bind.
+    """
+
+    enabled = os.environ.get("TL_HEXAGON_COPY_PARTITION", "1") != "0"
+    min_bytes = int(os.environ.get("TL_HEXAGON_COPY_MIN_BYTES", "32768"))
+    max_jobs = int(os.environ.get("TL_HEXAGON_COPY_JOBS", "6"))
+
+    def pass_fn(func: PrimFunc, mod, ctx):
+        if not enabled or _has_blockidx_launch(func.body):
+            return func
+        mut = _HexagonCopyPartitionMutator(min_bytes, max_jobs)
+        return func.with_body(mut.visit_stmt(func.body), span=func.span)
+
+    return prim_func_pass(pass_fn, opt_level=0, name="tl.hexagon.CopyPartition")
 
 
 def HexagonWriteSet():
@@ -846,6 +1063,7 @@ WScratchPlan = HexagonWScratchPlan
 
 __all__ = [
     "HexagonProductReduceFusion",
+    "HexagonCopyPartition",
     "HexagonWriteSet",
     "HexagonStoragePlan",
     "HexagonWScratchPlan",
