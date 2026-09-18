@@ -2,13 +2,29 @@
 
 from __future__ import annotations
 
+from tvm.ir import CallingConv
 from tvm import IRModule, tirx
 from tvm.target import Target
+from tvm.tirx import PrimFunc
 
 import tilelang
 from tilelang.transform import PassConfigKey, PassContext
 
 from .passes import HexagonCopyPartition, ProductReduceFusion, StoragePlan, WScratchPlan, HexagonProfileConfig, HexagonVerify, WriteSet
+
+
+def _mark_device_kernel(mod: IRModule) -> IRModule:
+    """Mark Hexagon lowered PrimFuncs as device kernels for standard codegen split."""
+
+    funcs = {}
+    for gv, func in mod.functions.items():
+        if isinstance(func, PrimFunc):
+            func = func.with_attr("calling_conv", CallingConv.DEVICE_KERNEL_LAUNCH)
+        funcs[gv] = func
+    new_mod = IRModule(funcs)
+    if mod.attrs:
+        new_mod = new_mod.with_attrs(mod.attrs)
+    return new_mod
 
 
 def HexagonPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
@@ -46,5 +62,9 @@ def HexagonPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
     mod = WScratchPlan()(mod)
     mod = HexagonProfileConfig(hexagon_prof)(mod)
     mod = HexagonVerify()(mod)
+    mod = _mark_device_kernel(mod)
+    from .codegen import remember_lowered_mod
+
+    mod = remember_lowered_mod(mod)
 
     return mod

@@ -18,13 +18,47 @@ from tvm.target import Target
 from .emitter import emit_hexagon_c
 
 
+_LOWERED_MOD: IRModule | None = None
+
+
+def remember_lowered_mod(mod: IRModule) -> IRModule:
+    """Keep the Hexagon pipeline output for the source emitter.
+
+    The shared engine runs generic device-codegen preparation passes after
+    host/device splitting.  Hexagon's Python emitter is intentionally placed in
+    codegen, but it still consumes the Hexagon pipeline IR before those generic
+    source-level cleanup passes rewrite expressions.  The codegen entry below
+    selects the matching functions from this cached module.
+    """
+
+    global _LOWERED_MOD
+    _LOWERED_MOD = mod
+    return mod
+
+
+def _emit_mod_for_codegen(mod: IRModule) -> IRModule:
+    cached = _LOWERED_MOD
+    if cached is None or not mod.functions:
+        return mod
+
+    funcs = {}
+    for gv in mod.functions:
+        if gv not in cached.functions:
+            return mod
+        funcs[gv] = cached.functions[gv]
+    selected = IRModule(funcs)
+    if cached.attrs:
+        selected = selected.with_attrs(cached.attrs)
+    return selected
+
+
 def _source_module(source: str):
     create = tvm.ffi.get_global_func("runtime.CSourceModuleCreate")
     return create(source, "c", ["attnops_gemm_nt"], [])
 
 
 def build_hexagon_without_compile(mod: IRModule, target: Target):
-    source = emit_hexagon_c(mod, target)
+    source = emit_hexagon_c(_emit_mod_for_codegen(mod), target)
     if out := os.environ.get("TILELANG_HEXAGON_EMIT_C"):
         path = Path(out)
         path.parent.mkdir(parents=True, exist_ok=True)
