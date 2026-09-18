@@ -89,8 +89,13 @@ OpenCL legacy codegen 只认 `shared`。`tilelang/opencl/pipeline.py` 在末尾�
 | 其它 TileOp | 未注册即报错 | 按需扩展 `src/opencl/op/` |
 
 `T.gemm` 当前是功能优先的朴素 SIMT 路线。L2 GEMM NT 512³ fp16 已真机对拍
-PASS,但性能只有 36ms,原因是无向量化、无 tile autotune、无 Adreno 私有矩阵扩展。
-这不是性能上限声明,只是 v0.1 生成链可用性的锚点。
+PASS,但默认 `T.copy+T.gemm` 生成物性能仍只有 36ms,原因是每 work-item 只算 1 个
+输出、global/shared 访问未形成 `halfN/floatN` 向量内链。2026-09-18 的探索性
+`examples/opencl/gemm/gemm_nt.py --impl local64x128` 可生成手写结构同款的 SIMT
+OpenCL kernel(64×128 work tile、128 work-items、8×8 thread tile、BK=32、fp32
+FMA 内链),512³ 真机 PASS 8.9-12.8ms,生产形状 1024×2560×2560 真机 PASS
+34.5ms(0.389 TFLOPS)。这证明标准 OpenCL SIMT 路径能靠近 Adreno ~0.5T 结构墙,
+但该路径目前是示例侧模板,尚未并入通用 `T.gemm` lowering。
 
 ## 4. pass / codegen 结构
 
@@ -138,7 +143,9 @@ OpenCL 后端结构(已实现于 commit `31d3a80`):
 |---|---|---|---|
 | L0 | elementwise 128×128 fp32 | 基础 OpenCL kernel 生成、global buffer、SIMT loop | PASS, `max_rel=5.8e-8` |
 | L1 | 行归约 128×256 fp32 | `T.alloc_shared` + barrier 树归约 | PASS, `max_rel=3.0e-6` |
-| L2 | GEMM NT 512³ fp16 | `T.copy` + `T.gemm` 高层写法,`opencl.fma` lowering | PASS, `max_rel=4.8e-4`,36ms |
+| L2 | GEMM NT 512³ fp16 | `T.copy` + `T.gemm` 高层写法,`opencl.fma` lowering | PASS, `max_rel=4.8e-4`,36.1ms |
+| L2-opt | GEMM NT 512³ fp16 | `--impl local64x128`:64×128 WG / 8×8 thread tile / fp32 FMA 内链 | PASS, `max_rel=4.8e-4`,best 8.9ms,rerun 12.8ms |
+| L2-prod | GEMM NT 1024×2560×2560 fp16 | `--impl local64x128`,sampled 8192-output fp64 check | PASS, `max_rel=4.7e-4`,34.5ms(0.389 TFLOPS) |
 
 对照性能:手写 Adreno OpenCL GEMM kernel 级 fp32 累加可达 1.66 TFLOPS;GPU
 结构墙在 wall 口径约 0.5 TFLOPS(宿主/搬运主导)。TileLang OpenCL L2 的 36ms
@@ -166,8 +173,10 @@ OnePlus 13 手机侧 OpenCL 驱动。不要假设编译机具备 OpenCL runtime,
 
 ## 8. 路线图
 
-1. **GEMM 向量化与 autotune**:引入 `half8` / `float4` 等向量化,搜索 tile 空间,
-   对齐手写 Adreno OpenCL kernel 的 fp32 累加经验。
+1. **GEMM 向量化与 autotune**:把 `local64x128` 示例模板的 64×128 work tile、
+   `half4/half8` local staging、`float8` accumulator、8×8 thread tile正式并入
+   OpenCL `T.gemm` lowering,再搜索 tile 空间。当前默认 lowering 的主要差距是
+   每 work-item 只产 1 个 C 元素,没有连续向量 load/store 与多输出寄存器复用。
 2. **Adreno 830 target attr 校准**:实测并设置 `max_num_threads`、local memory
    上限等 target attr,替换 TVM OpenCL 默认保守桌面值。
 3. **补齐 TileOp 注册**:按需实现 `reduce`、`atomic_add` 等 OpenCL lowering,
