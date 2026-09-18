@@ -55,21 +55,6 @@ def dcfetch_hint(addr, dist: int = 8192):
     return call_pure_extern("handle", "hexagon.dcfetch_hint", addr, dist)
 
 
-def gdn_prefill(q, k, v, g, beta, s0, o, s1, T: int, hk_heads: int, hv_heads: int):
-    """Deprecated GDN prefill escape-hatch intrinsic.
-
-    The operands are standard TileLang tensors in the documented slab order:
-    Q/K [Hk,T,128] fp16, V/O [Hv,T,128] fp16, G/B [Hv,T] fp32,
-    S0/S1 [Hv,128,128] fp32.  The Hexagon emitter lowers this to the real
-    HVX GDN chunk recipe in hexagon_rt.h; it is intentionally not an opaque C
-    template so the enclosing T.Kernel/thread structure still comes from TIR.
-    """
-
-    return call_pure_extern(
-        "handle", "hexagon.gdn_prefill", q, k, v, g, beta, s0, o, s1, T, hk_heads, hv_heads
-    )
-
-
 def _leaf(name: str, *args: Any):
     return call_pure_extern("handle", f"hexagon.{name}", *args)
 
@@ -171,7 +156,7 @@ def reduce_max128(src, dst):
 
 
 __all__ = (
-    "exp_fp16", "exp_fp32", "silu_fp16", "h2f", "f2h", "dcfetch_hint", "gdn_prefill",
+    "exp_fp16", "exp_fp32", "silu_fp16", "h2f", "f2h", "dcfetch_hint",
     "load_state128", "store_state128", "load_h2f_rows128", "scan_exp32", "dot128x2_store",
     "state_x2_matvec128", "affine_rows128", "forward_solve32", "output_rows128",
     "state_decay_rows128", "state_update32", "reduce_sum32", "reduce_sum128", "reduce_max32", "reduce_max128",

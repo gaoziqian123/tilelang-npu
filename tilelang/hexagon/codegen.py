@@ -18,7 +18,8 @@ from tvm.target import Target
 from .emitter import emit_hexagon_c
 
 
-_LOWERED_MOD: IRModule | None = None
+_LOWERED_FUNCS: dict[str, object] = {}
+_LOWERED_ATTRS = None
 
 
 def remember_lowered_mod(mod: IRModule) -> IRModule:
@@ -31,39 +32,53 @@ def remember_lowered_mod(mod: IRModule) -> IRModule:
     selects the matching functions from this cached module.
     """
 
-    global _LOWERED_MOD
-    _LOWERED_MOD = mod
+    global _LOWERED_ATTRS
+    _LOWERED_FUNCS.clear()
+    for gv, func in mod.functions.items():
+        _LOWERED_FUNCS[getattr(gv, "name_hint", str(gv))] = func
+    _LOWERED_ATTRS = mod.attrs
     return mod
 
 
 def _emit_mod_for_codegen(mod: IRModule) -> IRModule:
-    cached = _LOWERED_MOD
-    if cached is None or not mod.functions:
+    if not _LOWERED_FUNCS or not mod.functions:
         return mod
 
     funcs = {}
     for gv in mod.functions:
-        if gv not in cached.functions:
+        key = getattr(gv, "name_hint", str(gv))
+        if key not in _LOWERED_FUNCS:
             return mod
-        funcs[gv] = cached.functions[gv]
+        funcs[gv] = _LOWERED_FUNCS[key]
     selected = IRModule(funcs)
-    if cached.attrs:
-        selected = selected.with_attrs(cached.attrs)
+    if _LOWERED_ATTRS:
+        selected = selected.with_attrs(_LOWERED_ATTRS)
     return selected
 
 
-def _source_module(source: str):
+def _kernel_symbols(mod: IRModule) -> list[str]:
+    symbols: list[str] = []
+    for gv, func in mod.functions.items():
+        sym = None
+        if hasattr(func, "attrs") and func.attrs:
+            sym = func.attrs.get("global_symbol")
+        symbols.append(str(sym or getattr(gv, "name_hint", str(gv))))
+    return symbols
+
+
+def _source_module(source: str, symbols: list[str]):
     create = tvm.ffi.get_global_func("runtime.CSourceModuleCreate")
-    return create(source, "c", ["attnops_gemm_nt"], [])
+    return create(source, "c", symbols, [])
 
 
 def build_hexagon_without_compile(mod: IRModule, target: Target):
-    source = emit_hexagon_c(_emit_mod_for_codegen(mod), target)
+    emit_mod = _emit_mod_for_codegen(mod)
+    source = emit_hexagon_c(emit_mod, target)
     if out := os.environ.get("TILELANG_HEXAGON_EMIT_C"):
         path = Path(out)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(source, encoding="utf-8")
-    return _source_module(source)
+    return _source_module(source, _kernel_symbols(emit_mod))
 
 
 def build_hexagon(mod: IRModule, target: Target):

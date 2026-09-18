@@ -73,7 +73,6 @@ layout 常量:`"rm"`(row-major,默认)、`"ah"`(HMX 激活 tile 布局)、`"wh"`
 | `T.hexagon.silu_fp16(v)` | fp16 exp + rcp16 位魔术 + Newton,末乘 fp32 | FFN 激活 |
 | `T.hexagon.h2f(v)` / `T.hexagon.f2h(v)` | `vunpack` 零扩展 + 指数位修正 / `vcvt`+`vdeal` | fp16↔fp32 向量转换 |
 | `T.hexagon.dcfetch_hint(addr, dist=8192)` | `Q6_dcfetch_A(src+j+8192)`,每 128B 一次 | 预取;pooled copy 默认带,无需手写 |
-| `T.hexagon.gdn_prefill(Q,K,V,G,B,S0,O,S1,T,Hk,Hv)` | `attnops_gdn.c` 的 chunk=32 HVX fp32 recipe,抽到 `hexagon_rt.h::hrt_gdn_prefill_hvx` | **deprecated 整算子逃生舱**,仅作内部结构/精度参照;新代码不得使用 |
 | `T.hexagon.load_state128(src,dst,hv)` / `store_state128(src,dst,hv)` | `memcpy` state [128,128] fp32,对应 `attnops_gdn.c:143`/`:256` | 显式 state tile 初末搬运;参数必须是用户代码中的 S0/state/S1 buffer |
 | `T.hexagon.load_h2f_rows128(q,k,v,qf,kf,vf,T,hk,hv,t0)` | `gdn_cvt_row`: `Q6_Wuw_vunpack_Vuh` + 指数位修正,对应 `attnops_gdn.c:146-151`/`:77-84` | chunk 内 Q/K/V fp16 行转 fp32 scratch;所有 GDN scratch 由 `T.alloc_wscratch` 显式声明,名称可任意 |
 | `T.hexagon.scan_exp32(g,beta_src,eG,eGinv,beta,eGC,T,hv,t0)` | 前缀和 + fp32 `expf`,对应 `attnops_gdn.c:152-162` | **deprecated**:已被用户层 `T.alloc_var` + `T.serial` 标量递推 + `T.hexagon.exp_fp32` 替代;仅保留兼容旧生成物 |
@@ -307,8 +306,8 @@ emitter 只做机械 lowering:看到 `hexagon.copy_*` / `hexagon.gemm_hmx` 就�
 recipe 选择、全局写集分析、VTCM 静态 offset 规划或 product-reduce 模式识别。
 当前保留的特殊分流也必须来自 TIR/attr 结构事实:weight staging 由
 `hexagon.gemm_hmx` 的 B 操作数决定,不是 buffer 名前缀；GDN ABI shell 由
-`hexagon.wscratch_slots` 或显式 `hexagon.gdn_prefill` escape hatch 决定,不是
-"检测到 GDN 叶片"开关；显式 `T.hexagon.silu_fp16` 仍机械 lowering,但 emitter
+`hexagon.wscratch_slots` 决定,不是 "检测到 GDN 叶片" 开关；显式
+`T.hexagon.silu_fp16` 仍机械 lowering,但 emitter
 不再自动把普通 SiLU 表达式 peephole 成该 intrinsic。
 
 ## 5. v1 验证算子:GEMM(对照手写 attnops_gemm_nt)

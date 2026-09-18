@@ -279,6 +279,9 @@ class HexagonEmitter(PyStmtExprVisitor):
         super().__init__()
         self.mod = mod
         self.target = target
+        self._reset_func_state()
+
+    def _reset_func_state(self) -> None:
         self.allocs: list[_Alloc] = []
         self.buffers: dict[str, Buffer] = {}
         self.has_copy = False
@@ -321,16 +324,19 @@ class HexagonEmitter(PyStmtExprVisitor):
 
     def emit(self, output_path: str | os.PathLike[str] | None = None) -> str:
         funcs = [self.mod] if isinstance(self.mod, PrimFunc) else [f for _, f in self.mod.functions.items()]
+        sources: list[str] = []
         for func in funcs:
             if isinstance(func, PrimFunc):
+                self._reset_func_state()
                 self._record_params(func)
                 self._pre_has_gemm = self._stmt_contains_gemm_intrin(func.body)
                 self._pre_has_vector = self._contains_vector_for(func.body)
                 self._pre_has_parallel = self._contains_parallel_for(func.body)
                 self._shape_params = self._derive_shape_params(func)
                 self.body_lines = self._lower_stmt(func.body, _Ctx(), indent=1)
-        self._finalize_allocs()
-        source = self._render_c()
+                self._finalize_allocs()
+                sources.append(self._render_c())
+        source = "\n\n".join(sources)
         if output_path is not None:
             path = Path(output_path)
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -353,7 +359,7 @@ class HexagonEmitter(PyStmtExprVisitor):
         opname = _call_op_name(op)
         if opname == "tirx.call_pure_extern" and len(op.args) >= 1:
             callee = _ann_str(op.args[0])
-            if callee in ("hexagon.gdn_prefill", "hexagon.silu_fp16", "hexagon.exp_fp16", "hexagon.exp_fp32", "hexagon.h2f", "hexagon.f2h", "hexagon.reduce_sum32", "hexagon.reduce_sum128", "hexagon.reduce_max32", "hexagon.reduce_max128", "hexagon.reduce_prod128", "hexagon.reduce_prod2_128") or (callee and callee.startswith("hexagon.") and callee.split(".", 1)[1] in self._gdn_leaf_names()):
+            if callee in ("hexagon.silu_fp16", "hexagon.exp_fp16", "hexagon.exp_fp32", "hexagon.h2f", "hexagon.f2h", "hexagon.reduce_sum32", "hexagon.reduce_sum128", "hexagon.reduce_max32", "hexagon.reduce_max128", "hexagon.reduce_prod128", "hexagon.reduce_prod2_128") or (callee and callee.startswith("hexagon.") and callee.split(".", 1)[1] in self._gdn_leaf_names()):
                 return
             if callee and callee.startswith("hexagon."):
                 raise HexagonEmitError(f"白名单: 未支持的 Hexagon 原语 {callee}{_loc(op)}")
@@ -535,9 +541,7 @@ class HexagonEmitter(PyStmtExprVisitor):
                 wv = ctx.worker_var or "job"
                 return [self._ind(indent, f"// TIR launch_thread(blockIdx.x, extent={extent}) -> worker-pooled heads"),
                         self._ind(indent, f"const int {var} = {wv};")] + body
-            if self.gdn_mode == "escape":
-                bound = "1"
-            elif self._generic_gemm_recipe_mode():
+            if self._generic_gemm_recipe_mode():
                 bound = str(extent)
             elif (self.has_vector_kernel and not self._pre_has_gemm) or not self._pre_has_gemm:
                 bound = "(total + PANEL - 1) / PANEL"
@@ -819,9 +823,7 @@ class HexagonEmitter(PyStmtExprVisitor):
                     wv = ctx.worker_var or "job"
                     return [self._ind(indent, f"// TIR launch_thread(blockIdx.x, extent={extent}) -> worker-pooled heads"),
                             self._ind(indent, f"const int {vname} = {wv};")] + body
-                if self.gdn_mode == "escape":
-                    bound = "1"
-                elif self._generic_gemm_recipe_mode():
+                if self._generic_gemm_recipe_mode():
                     bound = str(extent)
                 elif (self.has_vector_kernel and not self._pre_has_gemm) or not self._pre_has_gemm:
                     bound = "(total + PANEL - 1) / PANEL"
@@ -864,8 +866,6 @@ class HexagonEmitter(PyStmtExprVisitor):
             return [self._ind(indent, f"attnops_pool_wait_le_w({n});")]
         ann = getattr(call, "annotations", {}) or {}
         hex_ann = _ann_str(ann.get("hexagon_intrin"))
-        if opname in ("tir.call_pure_extern", "tirx.call_pure_extern") and len(call.args) >= 1 and _ann_str(call.args[0]) == "hexagon.gdn_prefill":
-            return self._emit_gdn_prefill(call, ctx, indent)
         if opname in ("tir.call_pure_extern", "tirx.call_pure_extern") and len(call.args) >= 1:
             callee = _ann_str(call.args[0])
             if callee in ("hexagon.reduce_sum32", "hexagon.reduce_sum128"):
@@ -1151,22 +1151,6 @@ class HexagonEmitter(PyStmtExprVisitor):
         if callee in ("hexagon.copy_ah_rm", "hexagon.copy_acc_rm"):
             raise HexagonEmitError("白名单: acc/ah -> rm copy 必须由 hexagon.gemm_hmx + hexagon.copy_acc_rm 融合处理")
         raise HexagonEmitError(f"白名单: 未支持的 Hexagon copy intrinsic {callee}{_loc(call)}")
-
-    def _emit_gdn_prefill(self, call: Call, ctx: _Ctx, indent: int) -> list[str]:
-        self.gdn_mode = "escape"
-        if len(call.args) < 12:
-            raise HexagonEmitError("GDN: hexagon.gdn_prefill 参数数量不足")
-        T = _i64(call.args[9])
-        hk = _i64(call.args[10])
-        hv = _i64(call.args[11])
-        if (T, hk, hv) != (1024, 16, 32):
-            raise HexagonEmitError(f"GDN: 当前只验证 Qwen3.5 anchor T=1024,Hk=16,Hv=32, 实际 T={T},Hk={hk},Hv={hv}")
-        return [
-            self._ind(indent, "uint64_t tt = HAP_perf_get_qtimer_count();"),
-            self._ind(indent, f"int e = hrt_gdn_prefill_hvx(slab, slabLen, {T}, {hk}, {hv});"),
-            self._ind(indent, "if (e) return e;"),
-            self._ind(indent, "prof[0] = (int32_t)(HAP_perf_get_qtimer_count() - tt);")
-        ]
 
     @staticmethod
     def _gdn_leaf_names() -> set[str]:
@@ -1605,7 +1589,7 @@ class HexagonEmitter(PyStmtExprVisitor):
                 return f"{s}f"
             return str(imm)
         if isinstance(e, BufferLoad):
-            if _is_vtcm(_buffer_scope(e.buffer)) and _buffer_name(e.buffer) != "ScoreB":
+            if _is_vtcm(_buffer_scope(e.buffer)):
                 raise HexagonEmitError(f"R2: 禁止对 VTCM buffer {_buffer_name(e.buffer)} 做标量 load/store{_loc(e)}")
             if _buffer_scope(e.buffer) == "local.var":
                 return _buffer_name(e.buffer)
@@ -1652,7 +1636,7 @@ class HexagonEmitter(PyStmtExprVisitor):
 
     def _emit_scalar_store(self, op: BufferStore, ctx: _Ctx, indent: int) -> list[str]:
         self.has_scalar_kernel = True
-        if _is_vtcm(_buffer_scope(op.buffer)) and _buffer_name(op.buffer) != "ScoreB":
+        if _is_vtcm(_buffer_scope(op.buffer)):
             raise HexagonEmitError(f"R2: 禁止对 VTCM buffer {_buffer_name(op.buffer)} 做标量 load/store{_loc(op)}")
         if _buffer_scope(op.buffer) == "local.var":
             val = self._expr_scalar(op.value, str(op.buffer.dtype))
@@ -2867,7 +2851,7 @@ class HexagonEmitter(PyStmtExprVisitor):
                 or _buffer_name(buf) in self._gemm_b_buffers)
 
     def _uses_gdn_shell(self) -> bool:
-        return bool(self._wscratch_slots) or self.gdn_mode == "escape"
+        return bool(self._wscratch_slots)
 
     def _visit_copy_intrin(self, call: Call) -> None:
         self.has_copy = True
@@ -2945,8 +2929,6 @@ class HexagonEmitter(PyStmtExprVisitor):
                 return int(a[0]), int(c[1]), k
         if self.gemm_mnk is not None:
             return self.gemm_mnk
-        if self._uses_gdn_shell():
-            return (1024, 0, 0)
         raise HexagonEmitError("R5: v2 emitter 目前只支持包含 T.gemm 的 GEMM_NT kernel")
 
     def _render_c(self) -> str:
@@ -3326,34 +3308,7 @@ int {func_name}(remote_handle64 h, unsigned char *slab, int slabLen, int T, int 
     return 0;
 }}
 '''
-        return f'''// Generated by tilelang.hexagon.emitter: GDN prefill v0.
-// TileLang lowers the T.Kernel/head structure; chunk HVX lowering lives in hexagon_rt.h.
-#include <stdint.h>
-#include <stddef.h>
-#include <string.h>
-#include "attnops.h"
-#include "HAP_perf.h"
-#include "hexagon_rt.h"
-
-typedef hrt_f16 f16;
-typedef hrt_f32 f32;
-
-int {func_name}(remote_handle64 h, unsigned char *slab, int slabLen, int T, int hk_heads, int hv_heads) {{
-    (void)h;
-    if (T != 1024 || hk_heads != 16 || hv_heads != 32) return -2;
-    size_t qk = (size_t)hk_heads * T * 128;
-    size_t vv = (size_t)hv_heads * T * 128;
-    size_t gb = (size_t)hv_heads * T;
-    size_t st = (size_t)hv_heads * 128 * 128;
-    size_t off = qk * 2 + qk * 2 + vv * 2 + gb * 4 + gb * 4 + st * 4 + vv * 2 + st * 4;
-    size_t prof_off = HRT_ALIGN128(off);
-    if ((size_t)slabLen < prof_off + 4) return -1;
-    HRT_PROF_DECL(prof, slab, prof_off);
-    HRT_PROF_CLEAR(prof, 4);
-{body}
-    return 0;
-}}
-'''
+        raise HexagonEmitError("GDN: wscratch shell requires leaf GDN intrinsics; deprecated whole-op escape was removed")
 
     def _render_vector_c(self) -> str:
         body = "\n".join(self.body_lines)

@@ -132,5 +132,4 @@ maint/host_checks/logs/*
 uv.lock
 
 # Hexagon backend generated artifacts
-tilelang/hexagon/hexagon_kernel.c
 tilelang/hexagon/_ffi_api.py

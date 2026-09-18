@@ -178,7 +178,6 @@ hexagon = SimpleNamespace(
     reduce_sum128=reduce_sum128,
     reduce_max32=reduce_max32,
     reduce_max128=reduce_max128,
-    gdn_prefill=gdn_prefill,
     load_state128=load_state128,
     store_state128=store_state128,
     load_h2f_rows128=load_h2f_rows128,
