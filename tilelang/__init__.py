@@ -217,8 +217,9 @@ if not env.is_light_import():
     from . import cpu as cpu  # noqa: F401
     from . import cuda as cuda  # noqa: F401
     from . import hexagon as hexagon  # noqa: F401
-    from . import rocm as rocm  # noqa: F401
     from . import metal as metal  # noqa: F401
+    from . import opencl as opencl  # noqa: F401
+    from . import rocm as rocm  # noqa: F401
     from . import webgpu as webgpu  # noqa: F401
 
     if env.get_lower_trace_mode() is not None:
