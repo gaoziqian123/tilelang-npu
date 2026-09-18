@@ -70,7 +70,7 @@ VTCM 预算(R3):state 2MB + 影子 1MB + 中间张量,总量 <6MB;装不下就�
 
 ## 流程
 
-1. 写 examples/hexagon/gdn_std.py(骨架参照 gdn_prefill.py)。
+1. 写 examples/hexagon/gdn_std/gdn_std.py(骨架参照 examples/hexagon/gdn/gdn_prefill.py)。
    生成 → 审查 C 结构 → hexagon-clang 语法过。
 2. skel 集成走 /root/project/backend/npu/attn/collect_tilelang.sh 通道(只追加;
    attnops.idl 加 tl_gdn_std 入口,重建 stub/skel)。注意:build.sh 的 host 阶段在服务器缺

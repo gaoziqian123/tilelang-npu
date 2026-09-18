@@ -2,32 +2,43 @@
 
 本目录展示 TileLang 的实验性 `target="hexagon"` 后端：用户仍在 Python 里描述张量、循环、shared/fragment buffer 和硬件叶片，lower 后拿到 **Hexagon intrinsic C 文本**。生成的 C 不是直接在本机运行，而是放进 OnePlus 13 / SM8750 的 FastRPC skel 工程里编译、部署、对拍。语法、布局约定和 Hexagon 红线见 [`docs/hexagon/00_syntax_and_rules.md`](../../docs/hexagon/00_syntax_and_rules.md)。当前脚本使用 `engine.lower(...).kernel_source` 取生成源码，并在本机有 Hexagon SDK 时额外跑 `hexagon-clang -fsyntax-only`。
 
-## 环境与运行方法
+## 目录结构、环境与运行方法
+
+本目录现在按"每算子一个文件夹"组织。每个文件夹自包含该算子的
+TileLang kernel 脚本、OnePlus 13 设备侧对拍 harness，以及 `out/` 下的生成
+C 文件；顶层仅保留公共说明、`copy_auto.py` 实验脚本和它对应的
+`out/copy_auto.c`。
+
+| 文件夹 | kernel 脚本 | 设备对拍 harness | 生成物 | 一键命令 |
+|---|---|---|---|---|
+| `fa/` | `fa_std.py` | `fa_std_test.c` | `fa/out/fa_std.c`, `fa/out/fa_std_s4096.c` | `tl_pack.sh fa` |
+| `ffn/` | `ffn_std.py` | `ffn_std_test.c` | `ffn/out/ffn_std.c` | `tl_pack.sh ffn` |
+| `gdn_std/` | `gdn_std.py` | `gdn_std_test.c` | `gdn_std/out/gdn_std.c` | `tl_pack.sh gdn_std` |
+| `gdn/` | `gdn_prefill.py`, `gdn_prefill_renamed.py` | `gdn_prefill_test.c` | `gdn/out/gdn_prefill.c`, `gdn/out/gdn_prefill_renamed.c` | `tl_pack.sh gdn` |
+| `gemm/` | `gemm_nt.py`, `gemm_small.py` | `gemm_nt_test.c` | `gemm/out/gemm_nt.c`, `gemm/out/gemm_small_bn128.c`, `gemm/out/gemm_small_bn32.c` | `tl_pack.sh gemm` |
+| `silu/` | `silu_mul.py` | `silu_mul_test.c` | `silu/out/silu_mul.c`, `silu/out/silu_mul_vtcm.c`, `silu/out/silu_mul_pipe.c` | `tl_pack.sh silu` |
 
 从仓库根目录运行，显式设置 `PYTHONPATH` 并使用仓库内虚拟环境：
 
 ```bash
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gemm_nt.py
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gdn_prefill.py
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gdn_prefill_renamed.py
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/silu_mul.py --impl direct
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/silu_mul.py --impl vtcm
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gemm/gemm_nt.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gdn/gdn_prefill.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gdn/gdn_prefill_renamed.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/silu/silu_mul.py --impl direct
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/silu/silu_mul.py --impl vtcm
 ```
 
-默认输出在 `examples/hexagon/out/*.c`。所有脚本都有 `--out` 和 `--skip-clang`；形状参数也可在命令行覆盖。成功时关键输出应包含 `EMIT_OK ...` 和 `HEXAGON_CLANG_PASS`（如果本机缺少工具链则会打印 `HEXAGON_CLANG_SKIP`）。
+默认输出在各算子自己的 `out/` 子目录。所有脚本都有 `--out`（或
+`--out-dir`）和 `--skip-clang`；形状参数也可在命令行覆盖。成功时关键
+输出应包含 `EMIT_OK ...` 和 `HEXAGON_CLANG_PASS`（如果本机缺少工具链则会打印
+`HEXAGON_CLANG_SKIP`）。
 
 ## kernel + 设备对拍 harness 两件套
 
-本目录按官方 examples 惯例把每个 Hexagon TileLang 算子的两件套放在同一目录：`<op>.py` 负责生成 kernel，`<op>_test.c` 是 OnePlus 13 设备侧对拍 harness，内含 fp64 参考和 `max_rel` / `cos` 判据。编译、部署和运行仍由主仓库 `/root/project/backend/npu/attn/build.sh` 统一完成；单算子一键流程可用 `/root/project/backend/npu/attn/tl_pack.sh <op>`。
-
-| op | kernel 脚本 | 设备对拍 harness | 一键命令 |
-|---|---|---|---|
-| fa | `fa_std.py` | `fa_std_test.c` | `tl_pack.sh fa` |
-| ffn | `ffn_std.py` | `ffn_std_test.c` | `tl_pack.sh ffn` |
-| gdn_std | `gdn_std.py` | `gdn_std_test.c` | `tl_pack.sh gdn_std` |
-| gdn_prefill | `gdn_prefill.py` | `gdn_prefill_test.c` | `tl_pack.sh gdn` |
-| gemm_nt | `gemm_nt.py` | `gemm_nt_test.c` | `tl_pack.sh gemm` |
-| silu_mul | `silu_mul.py` | `silu_mul_test.c` | `tl_pack.sh silu` |
+每个 Hexagon TileLang 算子目录内的 `<op>.py` 负责生成 kernel，`<op>_test.c`
+是 OnePlus 13 设备侧对拍 harness，内含 fp64 参考和 `max_rel` / `cos` 判据。
+编译、部署和运行仍由主仓库 `/root/project/backend/npu/attn/build.sh` 统一完成；
+单算子一键流程可用 `/root/project/backend/npu/attn/tl_pack.sh <op>`。
 
 ## 可选 per-phase profiling
 

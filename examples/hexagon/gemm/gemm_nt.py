@@ -3,7 +3,7 @@
 
 The default shape is the Qwen prefill projection slice used on OnePlus 13:
 M=960, N=8192, K=2560.  The generated C is written under
-examples/hexagon/out/ by default and can be compiled into the FastRPC skel
+examples/hexagon/gemm/out/ by default and can be compiled into the FastRPC skel
 project for device execution.
 """
 
@@ -16,7 +16,7 @@ import subprocess
 import sys
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUT = Path(__file__).resolve().parent / "out" / "gemm_nt.c"
 HEXAGON_CLANG = Path("/root/hexagon-deps/HEXAGON_TOOLS/Tools/bin/hexagon-clang")
 HEXAGON_CLANG_FLAGS = [

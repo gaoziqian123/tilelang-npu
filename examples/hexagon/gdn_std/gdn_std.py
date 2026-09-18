@@ -23,7 +23,7 @@ import subprocess
 import sys
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUT = Path(__file__).resolve().parent / "out" / "gdn_std.c"
 HEXAGON_CLANG = Path("/root/hexagon-deps/HEXAGON_TOOLS/Tools/bin/hexagon-clang")
 HEXAGON_CLANG_FLAGS = [

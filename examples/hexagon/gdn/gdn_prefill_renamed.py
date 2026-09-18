@@ -15,7 +15,7 @@ from pathlib import Path
 import sys
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUT = Path(__file__).resolve().parent / "out" / "gdn_prefill_renamed.c"
 
 os.environ["PYTHONPATH"] = str(ROOT)
@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT))
 import tilelang  # noqa: E402
 import tilelang.hexagon  # noqa: F401,E402 - registers backend/target
 import tilelang.hexagon.language as T  # noqa: E402
-from examples.hexagon.gdn_prefill import run_syntax_check  # noqa: E402
+from examples.hexagon.gdn.gdn_prefill import run_syntax_check  # noqa: E402
 
 
 @tilelang.jit(out_idx=[6, 7], target="hexagon", execution_backend="aot")

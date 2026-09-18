@@ -17,7 +17,7 @@ import subprocess
 import sys
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_DIRECT_OUT = Path(__file__).resolve().parent / "out" / "silu_mul.c"
 DEFAULT_VTCM_OUT = Path(__file__).resolve().parent / "out" / "silu_mul_vtcm.c"
 HEXAGON_CLANG = Path("/root/hexagon-deps/HEXAGON_TOOLS/Tools/bin/hexagon-clang")

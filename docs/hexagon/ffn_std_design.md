@@ -1,7 +1,7 @@
 # Standard TileLang fused SwiGLU FFN design (`ffn_std`)
 
 Goal: emit a Hexagon C example for the fixed Qwen FFN anchor using only
-standard TileLang constructs, mirroring `examples/hexagon/gdn_std.py` in style:
+standard TileLang constructs, mirroring `examples/hexagon/gdn_std/gdn_std.py` in style:
 `T.copy`, `T.gemm`, `T.parallel`, `T.serial`, `T.vectorized`, standard scalar /
 elementwise arithmetic, and `T.exp`.  The example is a code-generation and
 structure anchor; it does not embed handwritten C strings and does not call

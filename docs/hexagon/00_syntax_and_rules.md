@@ -116,7 +116,7 @@ Hexagon emitter 目前保留两条 GEMM lowering 路径：
 
 - **legacy GEMM 壳路径**：入口 ABI 为 `slab,w,M,N,K,abl` 的 GEMM_NT kernel 继续使用
   原有 `GM_ACT/GM_WA/GM_OUT/NP/nct/kt` 宏和运行时 panel 选择逻辑。该路径用于
-  `examples/hexagon/gemm_nt.py` / `gemm_small.py`，要求逐字节回归稳定。
+  `examples/hexagon/gemm/gemm_nt.py` / `gemm/gemm_small.py`，要求逐字节回归稳定。
 - **通用 recipe**：当 `hexagon.gemm_hmx + hexagon.copy_acc_rm` 出现在非 legacy GEMM
   壳的 kernel 内(例如 GDN/elementwise 壳内有多个异形 `T.gemm`)时，emitter 不再读取
   `GM_*` 运行时量，而是从当前 gemm extern 的静态 `(A_data,B_data,C_data,M,N,K)`
