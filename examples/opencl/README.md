@@ -20,6 +20,7 @@ OpenCL、编译 `.cl`、运行 kernel，并用 fp64 reference + rms-scaled
 | `kernels/` | `silu.py` | `tests/run_oneplus13.sh` (`silu`) | `out/silu.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
 | `kernels/` | `rmsnorm.py` | `tests/run_oneplus13.sh` (`rmsnorm`) | `out/rmsnorm.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
 | `kernels/` | `gemm_nt.py` | `tests/run_oneplus13.sh` (`gemm`) | `out/gemm_nt.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
+| `kernels/` | `texture_copy.py` | `tests/run_oneplus13.sh` (`texcopy`) | `out/texture_copy.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
 
 从仓库根目录运行，显式设置 `PYTHONPATH` 并使用仓库内虚拟环境：
 
@@ -27,6 +28,7 @@ OpenCL、编译 `.cl`、运行 kernel，并用 fp64 reference + rms-scaled
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/silu.py
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/rmsnorm.py
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/gemm_nt.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/texture_copy.py
 ```
 
 成功时关键输出包含 `EMIT_OK ...`、`SOURCE_PATH ...` 和 `CLANG_SYNTAX_RC 0`
@@ -104,6 +106,24 @@ with T.Kernel(T.ceildiv(N, bn), T.ceildiv(M, bm), threads=threads) as (bx, by):
 默认 launch：`local=(256,1)`，`global=(32*256,32)`，对应 `M=N=K=512`、
 `BM=BN=BK=16`。
 
+## Texture copy (`kernels/texture_copy.py`)
+
+输入 `B` 使用 `T.Tensor((H, W, 4), "float16", scope="global.texture")`，
+OpenCL lowering 会在 `LowerTileOp` 后、`LowerAccessPtr` 前对 texture scope
+buffer 运行 TVM Adreno `TextureFlatten`，最终生成 `image2d_array_t` 参数和
+`read_imageh` 读取。形状约定为 height、width、channel，其中 fp16 texture
+末维必须为 4（RGBA/64bit）。kernel 逐元素执行：
+
+```python
+with T.Kernel(width, height, threads=4) as (w, h):
+    c = T.get_thread_binding(0)
+    O[h, w * 4 + c] = B[h, w, c] * T.float16(2.0)
+```
+
+默认 launch：`local=(4,1)`，`global=(128*4,64)`，手机 runner 用
+`clCreateImage` 创建 `CL_MEM_OBJECT_IMAGE2D_ARRAY`、`CL_RGBA/CL_HALF_FLOAT`、
+`depth=1` 后上传并对拍 `out = B * 2`。
+
 ## 已知边界
 
 - `execution_backend="aot"` 的 cache dispatch 尚未作为示例入口；当前脚本直接
@@ -111,3 +131,5 @@ with T.Kernel(T.ceildiv(N, bn), T.ceildiv(M, bm), threads=threads) as (bx, by):
 - 当前生成代码无 bounds guard，设备验证只覆盖整除形状。
 - GEMM 是功能优先的朴素 SIMT FMA 路线，尚未做 Adreno 向量化、autotune 或
   私有矩阵扩展。
+- texture 参数只覆盖 fp16 `(H, W, 4)` image2d array 读取示例；写 texture、其它
+  channel 数/数据类型暂未作为示例验证。

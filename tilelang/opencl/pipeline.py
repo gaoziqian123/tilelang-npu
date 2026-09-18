@@ -135,6 +135,25 @@ def _OpenCLSharedDynToShared():
     return _pass
 
 
+def _has_texture_scope_buffer(mod: IRModule) -> bool:
+    def _is_texture_scope(scope: str | None) -> bool:
+        return bool(scope and scope.startswith("global.texture"))
+
+    for func in mod.functions.values():
+        if not isinstance(func, tirx.PrimFunc):
+            continue
+        buffer_map = getattr(func, "buffer_map", None)
+        if buffer_map:
+            for buf in buffer_map.values():
+                if _is_texture_scope(buf.scope()):
+                    return True
+        for param in func.params:
+            type_annotation = getattr(param, "type_annotation", None)
+            if isinstance(type_annotation, ir.PointerType) and _is_texture_scope(type_annotation.storage_scope):
+                return True
+    return False
+
+
 def OpenCLPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
     mod = tirx.transform.BindTarget(target)(mod)
     # OpenCL uses the same SIMT lowering shape as WebGPU for this minimal
@@ -167,6 +186,8 @@ def OpenCLPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
     mod = tilelang.transform.ReducerPlanAndMaterialize()(mod)
     LayoutVisual(mod)
     mod = tilelang.transform.LowerTileOp()(mod)
+    if _has_texture_scope_buffer(mod):
+        mod = s_tir.backend.adreno.transform.TextureFlatten()(mod)
     mod = tilelang.transform.VerifyReducerConsumed()(mod)
 
     mod = tilelang.transform.DecoupleTypeCast()(mod)

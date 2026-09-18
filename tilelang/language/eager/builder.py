@@ -544,7 +544,9 @@ class Builder(BaseBuilder):
         # Handle type annotation
         if value is self.empty:
             orig_value = locals.get(name, value)
-            if isinstance(annot, Buffer) and annot.scope() == "global":
+            if isinstance(annot, Buffer) and (
+                annot.scope() == "global" or annot.scope().startswith("global.texture")
+            ):
                 from tilelang.language import match_buffer
 
                 return self.with_buffer_span(
@@ -555,6 +557,7 @@ class Builder(BaseBuilder):
                             annot.shape,
                             annot.dtype,
                             strides=annot.strides,
+                            scope=annot.scope(),
                         ),
                     )
                 )
