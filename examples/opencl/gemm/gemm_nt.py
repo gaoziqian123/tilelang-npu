@@ -141,6 +141,60 @@ __kernel void gemm_nt_kernel_kernel(__global const half *restrict A,
 """
 
 
+def make_image8x8_source(M: int, N: int, K: int) -> str:
+    return f"""// Function: hgemm_8x8
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+
+#define TL_M {M}
+#define TL_N {N}
+#define TL_K {K}
+
+__constant sampler_t smp = CLK_NORMALIZED_COORDS_FALSE |
+                           CLK_ADDRESS_NONE | CLK_FILTER_NEAREST;
+
+__kernel void hgemm_8x8(__global const half *A, int lda,
+                        __global half *C, int ldc,
+                        int m, int n, int k, read_only image2d_t Bi) {{
+    const int gx = get_global_id(0);
+    const int gy = get_global_id(1);
+    if (((gx << 3) < n) && ((gy << 3) < m)) {{
+        float4 a[8];
+        float8 b[4];
+        float8 c[8];
+        #pragma unroll
+        for (int i = 0; i < 8; ++i) c[i] = (float8)(0.0f);
+        const int a_y_off = (gy << 3) * lda;
+        for (int pos = 0; pos < k; pos += 4) {{
+            #pragma unroll
+            for (int i = 0; i < 4; ++i) {{
+                const half4 b_lo = read_imageh(Bi, smp, (int2)(gx << 1, pos + i));
+                const half4 b_hi = read_imageh(Bi, smp, (int2)((gx << 1) + 1, pos + i));
+                b[i] = convert_float8((half8)(b_lo, b_hi));
+            }}
+            int a_off = a_y_off + pos;
+            #pragma unroll
+            for (int i = 0; i < 8; ++i) {{
+                a[i] = convert_float4(vload4(0, A + a_off));
+                a_off += lda;
+            }}
+            #pragma unroll
+            for (int i = 0; i < 8; ++i) {{
+                c[i] += (float8)(a[i].x) * b[0];
+                c[i] += (float8)(a[i].y) * b[1];
+                c[i] += (float8)(a[i].z) * b[2];
+                c[i] += (float8)(a[i].w) * b[3];
+            }}
+        }}
+        #pragma unroll
+        for (int i = 0; i < 8; ++i) {{
+            const int c_off = ((gy << 3) + i) * ldc + (gx << 3);
+            vstore8(convert_half8(c[i]), 0, C + c_off);
+        }}
+    }}
+}}
+"""
+
+
 def make_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, threads: int):
     @T.prim_func
     def gemm_nt_kernel(
@@ -196,7 +250,7 @@ def main() -> int:
     ap.add_argument("--bn", type=int, default=128)
     ap.add_argument("--bk", type=int, default=64)
     ap.add_argument("--threads", type=int, default=128)
-    ap.add_argument("--impl", choices=("tilelang", "local64x128", "local_tiled", "direct8x8"), default="local64x128")
+    ap.add_argument("--impl", choices=("tilelang", "local64x128", "local_tiled", "direct8x8", "image8x8"), default="local64x128")
     ap.add_argument("--out", type=Path, default=Path(__file__).with_name("out") / "gemm_nt.cl")
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
@@ -222,6 +276,12 @@ def main() -> int:
         if args.bm != 8 or args.bn != 8 or args.threads != 1:
             raise SystemExit("direct8x8 requires --bm 8 --bn 8 --threads 1")
         kernel_source = make_direct8x8_source(args.m, args.n, args.k)
+    elif args.impl == "image8x8":
+        if args.bm != 8 or args.bn != 8 or args.threads != 1:
+            raise SystemExit("image8x8 requires --bm 8 --bn 8 --threads 1")
+        if args.k % 4 != 0:
+            raise SystemExit("image8x8 requires --k divisible by 4")
+        kernel_source = make_image8x8_source(args.m, args.n, args.k)
     else:
         with tvm.target.Target("opencl"):
             artifact = tilelang.lower(
