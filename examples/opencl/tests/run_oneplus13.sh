@@ -3,7 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-TILELANG_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
+OPENCL_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
+TILELANG_ROOT=$(cd "$OPENCL_DIR/../.." && pwd)
 PROJECT_ROOT=$(cd "$TILELANG_ROOT/.." && pwd)
 PROBE_DIR="$PROJECT_ROOT/backend/gpu/tl_probe"
 PY=${PYTHON:-"$TILELANG_ROOT/.venv/bin/python"}
@@ -21,24 +22,24 @@ if ! ssh "${SSH_OPT[@]}" -o ConnectTimeout=8 "$PHONE_HOST" true 2>/dev/null; the
   done
 fi
 
-"$PY" "$SCRIPT_DIR/silu/silu.py"
-"$PY" "$SCRIPT_DIR/rmsnorm/rmsnorm.py"
-"$PY" "$SCRIPT_DIR/gemm/gemm_nt.py"
+"$PY" "$OPENCL_DIR/kernels/silu.py"
+"$PY" "$OPENCL_DIR/kernels/rmsnorm.py"
+"$PY" "$OPENCL_DIR/kernels/gemm_nt.py"
 
 ANDROID_NDK_ROOT=${ANDROID_NDK_ROOT:-/root/autodl-tmp/android-ndk-r28b} "$PROBE_DIR/build_android.sh"
 
 ssh "${SSH_OPT[@]}" "$PHONE_HOST" "mkdir -p $REMOTE_DIR"
 scp "${SSH_OPT[@]}" \
   "$PROBE_DIR/build/tl_probe" \
-  "$SCRIPT_DIR/silu/out/silu.cl" \
-  "$SCRIPT_DIR/rmsnorm/out/rmsnorm.cl" \
-  "$SCRIPT_DIR/gemm/out/gemm_nt.cl" \
+  "$OPENCL_DIR/out/silu.cl" \
+  "$OPENCL_DIR/out/rmsnorm.cl" \
+  "$OPENCL_DIR/out/gemm_nt.cl" \
   "$PHONE_HOST:$REMOTE_DIR/"
 
 local_md5=$(
   tmp=$(mktemp -d)
-  cp "$PROBE_DIR/build/tl_probe" "$SCRIPT_DIR/silu/out/silu.cl" \
-     "$SCRIPT_DIR/rmsnorm/out/rmsnorm.cl" "$SCRIPT_DIR/gemm/out/gemm_nt.cl" "$tmp/"
+  cp "$PROBE_DIR/build/tl_probe" "$OPENCL_DIR/out/silu.cl" \
+     "$OPENCL_DIR/out/rmsnorm.cl" "$OPENCL_DIR/out/gemm_nt.cl" "$tmp/"
   (cd "$tmp" && md5sum tl_probe silu.cl rmsnorm.cl gemm_nt.cl)
   rm -rf "$tmp"
 )

@@ -8,24 +8,25 @@ OnePlus 13 / SM8750 的 Adreno OpenCL 驱动上编译、执行和对拍。语法
 
 ## 目录结构、环境与运行方法
 
-本目录按“每算子一个文件夹”组织。每个文件夹内的 Python 脚本生成
-`out/<op>.cl`；设备侧验证使用主仓库通用 runner
+本目录现在按职责拆分：`kernels/` 放 TileLang kernel 生成脚本，顶层
+`out/` 放生成的 OpenCL C golden 文件，`tests/` 放 OnePlus 13 设备侧
+部署与对拍脚本。设备侧验证使用主仓库通用 runner
 `/root/project/backend/gpu/tl_probe/tl_probe.c`，runner 在手机上 dlopen
 OpenCL、编译 `.cl`、运行 kernel，并用 fp64 reference + rms-scaled
 `max_rel < 0.1` 判据对拍。
 
-| 文件夹 | kernel 脚本 | 生成物 | 默认形状 | 设备对拍类型 |
+| 文件夹 | kernel 脚本 | 设备对拍 runner | 生成物 | 一键命令 |
 |---|---|---|---|---|
-| `silu/` | `silu.py` | `silu/out/silu.cl` | fp32 `8192×960` | `silu` |
-| `rmsnorm/` | `rmsnorm.py` | `rmsnorm/out/rmsnorm.cl` | fp32 `960×2560` | `rmsnorm` |
-| `gemm/` | `gemm_nt.py` | `gemm/out/gemm_nt.cl` | fp16 NT `512³` | `gemm` |
+| `kernels/` | `silu.py` | `tests/run_oneplus13.sh` (`silu`) | `out/silu.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
+| `kernels/` | `rmsnorm.py` | `tests/run_oneplus13.sh` (`rmsnorm`) | `out/rmsnorm.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
+| `kernels/` | `gemm_nt.py` | `tests/run_oneplus13.sh` (`gemm`) | `out/gemm_nt.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
 
 从仓库根目录运行，显式设置 `PYTHONPATH` 并使用仓库内虚拟环境：
 
 ```bash
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/silu/silu.py
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/rmsnorm/rmsnorm.py
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/gemm/gemm_nt.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/silu.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/rmsnorm.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/gemm_nt.py
 ```
 
 成功时关键输出包含 `EMIT_OK ...`、`SOURCE_PATH ...` 和 `CLANG_SYNTAX_RC 0`
@@ -37,13 +38,13 @@ OpenCL 生成代码没有边界保护，launch 尺寸必须整除数据规模：
 一键生成、部署、md5 校验并在 OnePlus 13 后台运行：
 
 ```bash
-bash examples/opencl/run_oneplus13.sh
+bash examples/opencl/tests/run_oneplus13.sh
 ```
 
 手机侧默认目录为 `~/tl_opencl/`，运行环境为
 `LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64`。
 
-## SiLU (`silu/silu.py`)
+## SiLU (`kernels/silu.py`)
 
 用户写法关键代码段如下：每个 work-item 处理一个 fp32 元素，签名为
 `(__global float* in, __global float* out)`。
@@ -58,7 +59,7 @@ with T.Kernel(T.ceildiv(nelem, threads), threads=threads) as bx:
 
 默认 launch：`local=256`，`global=8192*960`。
 
-## RMSNorm (`rmsnorm/rmsnorm.py`)
+## RMSNorm (`kernels/rmsnorm.py`)
 
 一行一个 work-group，`T.alloc_shared((threads,), "float32")` 保存局部平方和，
 经 barrier 树归约得到 `scale=rsqrt(mean(x^2)+eps)`，再回写整行。签名为
@@ -79,7 +80,7 @@ with T.Kernel(rows, threads=threads) as row:
 
 默认 launch：`local=256`，`global=960*256`。
 
-## GEMM_NT (`gemm/gemm_nt.py`)
+## GEMM_NT (`kernels/gemm_nt.py`)
 
 A 是 row-major `(M,K)`，B 是 NT 权重 `(N,K)`；脚本使用 `T.copy` 搬运
 shared tile，并调用 `T.gemm(..., transpose_B=True)`。签名为

@@ -51,7 +51,7 @@ def main() -> int:
     ap.add_argument("--rows", type=int, default=8192)
     ap.add_argument("--cols", type=int, default=960)
     ap.add_argument("--threads", type=int, default=256)
-    ap.add_argument("--out", type=Path, default=Path(__file__).with_name("out") / "silu.cl")
+    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent.parent / "out" / "silu.cl")
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
 

@@ -251,7 +251,7 @@ def main() -> int:
     ap.add_argument("--bk", type=int, default=64)
     ap.add_argument("--threads", type=int, default=128)
     ap.add_argument("--impl", choices=("tilelang", "local64x128", "local_tiled", "direct8x8", "image8x8"), default="local64x128")
-    ap.add_argument("--out", type=Path, default=Path(__file__).with_name("out") / "gemm_nt.cl")
+    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent.parent / "out" / "gemm_nt.cl")
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
 
