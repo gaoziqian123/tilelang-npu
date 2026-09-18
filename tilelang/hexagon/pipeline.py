@@ -2,21 +2,13 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 from tvm import IRModule, tirx
 from tvm.target import Target
 
 import tilelang
 from tilelang.transform import PassConfigKey, PassContext
 
-from .emitter import emit_hexagon_c
 from .passes import HexagonCopyPartition, ProductReduceFusion, StoragePlan, WScratchPlan, HexagonProfileConfig, HexagonVerify, WriteSet
-
-
-def default_emit_path() -> str:
-    return str(Path(__file__).with_name("hexagon_kernel.c"))
 
 
 def HexagonPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
@@ -55,6 +47,4 @@ def HexagonPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
     mod = HexagonProfileConfig(hexagon_prof)(mod)
     mod = HexagonVerify()(mod)
 
-    out = os.environ.get("TILELANG_HEXAGON_EMIT_C", default_emit_path())
-    emit_hexagon_c(mod, target, out)
     return mod

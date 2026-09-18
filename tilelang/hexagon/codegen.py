@@ -8,13 +8,14 @@ generated source.  It intentionally does not invoke TVM target codegen.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from tvm import IRModule
 import tvm
+import tvm_ffi
 from tvm.target import Target
 
 from .emitter import emit_hexagon_c
-from .pipeline import default_emit_path
 
 
 def _source_module(source: str):
@@ -23,11 +24,11 @@ def _source_module(source: str):
 
 
 def build_hexagon_without_compile(mod: IRModule, target: Target):
-    out = os.environ.get("TILELANG_HEXAGON_EMIT_C", default_emit_path())
-    if len(mod.functions) == 0 and out and os.path.exists(out):
-        source = open(out, encoding="utf-8").read()
-    else:
-        source = emit_hexagon_c(mod, target, out)
+    source = emit_hexagon_c(mod, target)
+    if out := os.environ.get("TILELANG_HEXAGON_EMIT_C"):
+        path = Path(out)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
     return _source_module(source)
 
 
@@ -35,3 +36,11 @@ def build_hexagon(mod: IRModule, target: Target):
     # Compilation into a FastRPC skel is an external AOT step; keep both paths
     # source-producing so callers can run hexagon-clang -fsyntax-only directly.
     return build_hexagon_without_compile(mod, target)
+
+
+tvm_ffi.register_global_func("target.build.tilelang_hexagon", f=build_hexagon, override=True)
+tvm_ffi.register_global_func(
+    "target.build.tilelang_hexagon_without_compile",
+    f=build_hexagon_without_compile,
+    override=True,
+)

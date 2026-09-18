@@ -14,6 +14,7 @@ def test_builtin_backend_modules_are_explicit():
         "cutedsl": (("cuda",), ["cutedsl"]),
         "rocm": (("hip",), ["tvm_ffi", "cython"]),
         "cpu": (("c", "llvm"), ["cython", "tvm_ffi"]),
+        "hexagon": (("hexagon",), ["aot"]),
         "metal": (("metal",), ["torch", "tvm_ffi"]),
         "webgpu": (("webgpu",), ["tvm_ffi"]),
     }
@@ -65,6 +66,7 @@ def test_backend_variants_require_target_predicates():
         ("llvm", "cpu", "llvm"),
         ("cuda", "cuda", "cuda"),
         ("hip", "rocm", "hip"),
+        ("hexagon", "hexagon", "hexagon"),
         ("metal", "metal", "metal"),
         ("webgpu", "webgpu", "webgpu"),
     ],

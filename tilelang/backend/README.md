@@ -289,6 +289,7 @@ and the selected execution backend decides whether and when it is invoked.
 | `tilelang/cuda/cutedsl_backend.py` | `cuda` | CuTeDSL variant explicitly reusing the CUDA pipeline. |
 | `tilelang/rocm` | `hip` | ROCm/HIP pipeline, codegen, compiler callback, and MFMA/WMMA extensions. |
 | `tilelang/cpu` | `c`, `llvm` | CPU pipeline, codegen, and scalar CPU tile-op implementations. |
+| `tilelang/hexagon/backend.py` | `hexagon` | AOT-only Python CSourceModule codegen that emits Hexagon intrinsic C. |
 | `tilelang/metal` | `metal` | Metal pipeline, codegen, host hook, and Metal language extensions. |
 | `tilelang/webgpu/backend.py` | `webgpu` | WebGPU compiler component registration. |
 

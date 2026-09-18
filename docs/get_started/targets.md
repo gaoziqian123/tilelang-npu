@@ -16,6 +16,7 @@ dictionary when you need options such as GPU architecture or CPU model. The most
 | `cuda` | NVIDIA GPUs. Use a config dict for options such as `{"kind": "cuda", "arch": "sm_80"}`. |
 | `cutedsl` | NVIDIA CUTLASS/CuTe DSL backend. Requires `nvidia-cutlass-dsl`. |
 | `hip` | AMD GPUs via ROCm. Use a config dict for options such as `{"kind": "hip", "mcpu": "gfx90a"}`. |
+| `hexagon` | Qualcomm Hexagon NPU AOT-only backend. Emits intrinsic C for external FastRPC/skel builds. |
 | `metal` | Apple Silicon GPUs (arm64 Macs). |
 | `llvm` | CPU execution. Use a config dict for options such as `{"kind": "llvm", "mtriple": "x86_64-linux-gnu"}`. |
 | `webgpu` | Browser / WebGPU runtimes. |
