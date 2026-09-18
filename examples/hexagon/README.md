@@ -16,6 +16,19 @@ PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python exampl
 
 默认输出在 `examples/hexagon/out/*.c`。所有脚本都有 `--out` 和 `--skip-clang`；形状参数也可在命令行覆盖。成功时关键输出应包含 `EMIT_OK ...` 和 `HEXAGON_CLANG_PASS`（如果本机缺少工具链则会打印 `HEXAGON_CLANG_SKIP`）。
 
+## kernel + 设备对拍 harness 两件套
+
+本目录按官方 examples 惯例把每个 Hexagon TileLang 算子的两件套放在同一目录：`<op>.py` 负责生成 kernel，`<op>_test.c` 是 OnePlus 13 设备侧对拍 harness，内含 fp64 参考和 `max_rel` / `cos` 判据。编译、部署和运行仍由主仓库 `/root/project/backend/npu/attn/build.sh` 统一完成；单算子一键流程可用 `/root/project/backend/npu/attn/tl_pack.sh <op>`。
+
+| op | kernel 脚本 | 设备对拍 harness | 一键命令 |
+|---|---|---|---|
+| fa | `fa_std.py` | `fa_std_test.c` | `tl_pack.sh fa` |
+| ffn | `ffn_std.py` | `ffn_std_test.c` | `tl_pack.sh ffn` |
+| gdn_std | `gdn_std.py` | `gdn_std_test.c` | `tl_pack.sh gdn_std` |
+| gdn_prefill | `gdn_prefill.py` | `gdn_prefill_test.c` | `tl_pack.sh gdn` |
+| gemm_nt | `gemm_nt.py` | `gemm_nt_test.c` | `tl_pack.sh gemm` |
+| silu_mul | `silu_mul.py` | `silu_mul_test.c` | `tl_pack.sh silu` |
+
 ## 可选 per-phase profiling
 
 通用 mixed pool/HMX shell 支持 opt-in pass config / kernel attr `tl.hexagon_prof=True`。开启后生成 C 会在 slab 尾部的 `prof[]` 区写入 int32 qtimer tick 累加计数，并在文件头注释记录 slot 布局；默认关闭，因此 legacy anchors 保持字节稳定。当前仅 `gdn_std.py` 用 `PassContext(config={PassConfigKey.TL_HEXAGON_PROF.value: True})` 开启该模式，用于定位各 worker-pool 阶段和既有 staging/GEMM/unperm 聚合阶段。
