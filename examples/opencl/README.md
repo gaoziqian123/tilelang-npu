@@ -68,12 +68,11 @@ with T.Kernel(T.ceildiv(nelem, threads), threads=threads) as bx:
 with T.Kernel(rows, threads=threads) as row:
     tx = T.get_thread_binding(0)
     smem = T.alloc_shared((threads,), "float32")
-    acc = T.float32(0.0)
+    smem[tx] = T.float32(0.0)
     for i in T.serial(cols // threads):
         col = i * threads + tx
         x = A[row, col]
-        acc = acc + x * x
-    smem[tx] = acc
+        smem[tx] = smem[tx] + x * x
     T.sync_threads()
     # tree reduce in smem, then write O[row, col] = A[row, col] * scale
 ```
