@@ -21,6 +21,7 @@ OpenCL、编译 `.cl`、运行 kernel，并用 fp64 reference + rms-scaled
 | `kernels/` | `rmsnorm.py` | `tests/run_oneplus13.sh` (`rmsnorm`) | `out/rmsnorm.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
 | `kernels/` | `gemm_nt.py` | `tests/run_oneplus13.sh` (`gemm`) | `out/gemm_nt.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
 | `kernels/` | `texture_copy.py` | `tests/run_oneplus13.sh` (`texcopy`) | `out/texture_copy.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
+| `kernels/` | `texture_staging.py` | `tl_probe` (`texstage`) | `out/texture_staging.cl` | 手机:`./tl_probe texture_staging.cl texture_staging_kernel_kernel texstage` |
 
 从仓库根目录运行，显式设置 `PYTHONPATH` 并使用仓库内虚拟环境：
 
@@ -123,6 +124,18 @@ with T.Kernel(width, height, threads=4) as (w, h):
 默认 launch：`local=(4,1)`，`global=(128*4,64)`，手机 runner 用
 `clCreateImage` 创建 `CL_MEM_OBJECT_IMAGE2D_ARRAY`、`CL_RGBA/CL_HALF_FLOAT`、
 `depth=1` 后上传并对拍 `out = B * 2`。
+
+## Texture staging (`kernels/texture_staging.py`)
+
+`T.copy(X[row, :, :], staged)` 把一整行 RGBA texel 从 texture 搬进
+`__local`，barrier 后再做行归约。OpenCL copy lowering 对 texture 源有特判
+（`src/opencl/op/copy.cc` `LowerTextureCopy`）：一个 work-item 对一个
+texel，channel 维标量内循环经 `TextureFlatten` + `VectorizeLoop` 合并成
+**每线程一次 `READ_IMAGEH`(half4)+ 一次 `vstore4` 写 `__local`**；通用
+SIMT copy 会把线程映射到元素，相邻 4 lane 重复 READ_IMAGEH 同一 texel。
+真机 OnePlus 13 PASS：`max_rel=2.1e-07`（64×128 fp16，tl_probe
+`texstage` runner）。注意 kernel 脚本不能设 `tirx.disable_vectorize`，
+否则 texel 特判发出的 channel 内循环不会被合并。
 
 ## 已知边界
 

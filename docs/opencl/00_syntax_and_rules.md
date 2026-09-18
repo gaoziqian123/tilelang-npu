@@ -64,7 +64,7 @@ OpenCL legacy codegen 只认 `shared`。`tilelang/opencl/pipeline.py` 在末尾�
 | `T.alloc_shared(shape, dtype)` | 生成 OpenCL `__local` storage;前端可出现 `shared.dyn`,最终由 remap pass 改成 legacy codegen 认识的 `shared` |
 | `T.alloc_fragment(shape, dtype)` | work-item 私有 accumulator/private array;`T.gemm` 的输出累加落在这里 |
 | `T.alloc_local(shape, dtype)` | work-item 私有寄存器/私有数组;fresh `DeclBuffer` 需要显式物化,见 R2 |
-| `T.copy(src, dst)` | 走 SIMT `LowerNormalCopy`:每个 work-item 搬一个或多个元素;向量化由 `VectorizeLoop` 与 legacy codegen 的向量类型发射负责 |
+| `T.copy(src, dst)` | 走 SIMT `LowerNormalCopy`:每个 work-item 搬一个或多个元素;向量化由 `VectorizeLoop` 与 legacy codegen 的向量类型发射负责;texture 源(src scope 为 `global.texture*`)走 texel 特判,见 §3 recipe 表 |
 | `T.fill(dst, value)` | 走 SIMT lowering,由 work-item 并行写入;向量化同上 |
 | `T.transpose(src, dst)` | 走 SIMT lowering,照 WebGPU 样板注册到 OpenCL target |
 | `T.gemm(A, B, C)` | lowering 为 `opencl.fma`:标量 FMA 循环,accumulator 为线程私有;实现位于 `tilelang/opencl/op/gemm_fma.py` |
@@ -82,7 +82,8 @@ OpenCL legacy codegen 只认 `shared`。`tilelang/opencl/pipeline.py` 在末尾�
 
 | TileOp | lowering | 当前实现落点 / 依据 |
 |---|---|---|
-| `T.copy` | **SIMT `LowerNormalCopy`**:每个 work-item 搬一个或多个元素;由通用 vectorize + legacy OpenCL codegen 打印 OpenCL vector 类型 | `src/opencl/op/copy.cc`,照 WebGPU 样板并 `match opencl` |
+| `T.copy` | **SIMT `LowerNormalCopy`**:每个 work-item 搬一个或多个元素;由通用 vectorize + legacy OpenCL codegen 打印 OpenCL vector 类型;**texture 源例外**(见下条) | `src/opencl/op/copy.cc`,照 WebGPU 样板并 `match opencl` |
+| `T.copy`(texture 源) | **texture 特判**:一个 work-item 对一个 texel(末维 channel 必须 extent 4),发出 channel 维标量 `kVectorized` 内循环;`TextureFlatten` 改写为 `texture2d_load` 后由 `VectorizeLoop` 的 texture 特判合并成**每线程一次 `READ_IMAGEH`(half4/float4)+ 一次 `vstore4` 写 `__local`**。通用 SIMT 链会把线程映射到元素、相邻 4 lane 重复读同一 texel(实测 `texture_staging`) | `src/opencl/op/copy.cc` `LowerTextureCopy`;真机 PASS `max_rel=2.1e-07`(texture_staging,64×128 fp16) |
 | `T.fill` | SIMT 写入,每个 work-item 覆盖一段元素 | `src/opencl/op/fill.cc` |
 | `T.transpose` | SIMT 转置搬运 | `src/opencl/op/transpose.cc` |
 | `T.gemm` | 指令选择恒返回 `opencl.fma`;Python 侧 `GemmFMA` 生成标量 FMA 循环,accumulator 线程私有 | `src/opencl/op/gemm.cc`, `tilelang/opencl/op/gemm_fma.py` |
