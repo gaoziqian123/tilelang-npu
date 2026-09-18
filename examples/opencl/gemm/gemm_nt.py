@@ -10,15 +10,21 @@ from tilelang import tvm
 import tilelang.language as T
 
 
-def make_local64x128_source(M: int, N: int, K: int) -> str:
+def make_local_tiled_source(M: int, N: int, K: int, bm: int, bn: int, bk: int) -> str:
+    row_tiles = bm // 8
+    col_tiles = bn // 8
+    threads = row_tiles * col_tiles
     return f"""// Function: gemm_nt_kernel_kernel
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
 #define TL_M {M}
 #define TL_N {N}
 #define TL_K {K}
-#define TL_WG 128
-#define TL_BK 32
+#define TL_BM {bm}
+#define TL_BN {bn}
+#define TL_BK {bk}
+#define TL_WG {threads}
+#define TL_NT {col_tiles}
 
 #define TL_BLOCK_F32(ACC, AS, BS, TM, TN)                                    \\
     _Pragma(\"unroll 2\")                                                     \\
@@ -37,19 +43,19 @@ __kernel void gemm_nt_kernel_kernel(__global const half *restrict A,
     const int bm = get_group_id(1);
     const int bn = get_group_id(0);
     const int lid = get_local_id(0);
-    const int tm = lid / 16;
-    const int tn = lid & 15;
-    const int rbase = bm * 64;
-    const int cbase = bn * 128;
+    const int tm = lid / TL_NT;
+    const int tn = lid - tm * TL_NT;
+    const int rbase = bm * TL_BM;
+    const int cbase = bn * TL_BN;
 
-    __local half As[TL_BK][64 + 4];
-    __local half Bs[TL_BK][128 + 4];
+    __local half As[TL_BK][TL_BM + 4];
+    __local half Bs[TL_BK][TL_BN + 4];
     float8 acc[8];
     #pragma unroll
     for (int i = 0; i < 8; ++i) acc[i] = (float8)(0.0f);
 
     for (int kb = 0; kb < TL_K; kb += TL_BK) {{
-        for (int v = lid; v < 64 * TL_BK / 4; v += TL_WG) {{
+        for (int v = lid; v < TL_BM * TL_BK / 4; v += TL_WG) {{
             const int r = v / (TL_BK / 4);
             const int c4 = v - r * (TL_BK / 4);
             const int rr = rbase + r;
@@ -60,7 +66,7 @@ __kernel void gemm_nt_kernel_kernel(__global const half *restrict A,
             As[c4 * 4 + 2][r] = val.z;
             As[c4 * 4 + 3][r] = val.w;
         }}
-        for (int v = lid; v < 128 * TL_BK / 4; v += TL_WG) {{
+        for (int v = lid; v < TL_BN * TL_BK / 4; v += TL_WG) {{
             const int c = v / (TL_BK / 4);
             const int k4 = v - c * (TL_BK / 4);
             const int cc = cbase + c;
@@ -85,6 +91,10 @@ __kernel void gemm_nt_kernel_kernel(__global const half *restrict A,
     }}
 }}
 """
+
+
+def make_local64x128_source(M: int, N: int, K: int, bk: int = 64) -> str:
+    return make_local_tiled_source(M, N, K, 64, 128, bk)
 
 
 def make_direct8x8_source(M: int, N: int, K: int) -> str:
@@ -182,11 +192,11 @@ def main() -> int:
     ap.add_argument("--m", type=int, default=512)
     ap.add_argument("--n", type=int, default=512)
     ap.add_argument("--k", type=int, default=512)
-    ap.add_argument("--bm", type=int, default=16)
-    ap.add_argument("--bn", type=int, default=16)
-    ap.add_argument("--bk", type=int, default=16)
-    ap.add_argument("--threads", type=int, default=256)
-    ap.add_argument("--impl", choices=("tilelang", "local64x128", "direct8x8"), default="tilelang")
+    ap.add_argument("--bm", type=int, default=64)
+    ap.add_argument("--bn", type=int, default=128)
+    ap.add_argument("--bk", type=int, default=64)
+    ap.add_argument("--threads", type=int, default=128)
+    ap.add_argument("--impl", choices=("tilelang", "local64x128", "local_tiled", "direct8x8"), default="local64x128")
     ap.add_argument("--out", type=Path, default=Path(__file__).with_name("out") / "gemm_nt.cl")
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
@@ -196,9 +206,18 @@ def main() -> int:
             raise SystemExit(f"{name}={value} must be divisible by tile={tile}")
 
     if args.impl == "local64x128":
-        if args.bm != 64 or args.bn != 128 or args.bk != 32 or args.threads != 128:
-            raise SystemExit("local64x128 requires --bm 64 --bn 128 --bk 32 --threads 128")
-        kernel_source = make_local64x128_source(args.m, args.n, args.k)
+        if args.bm != 64 or args.bn != 128 or args.threads != 128:
+            raise SystemExit("local64x128 requires --bm 64 --bn 128 --threads 128")
+        if args.bk % 4 != 0:
+            raise SystemExit("local64x128 requires --bk divisible by 4")
+        kernel_source = make_local64x128_source(args.m, args.n, args.k, args.bk)
+    elif args.impl == "local_tiled":
+        if args.bm % 8 or args.bn % 8 or args.bk % 4:
+            raise SystemExit("local_tiled requires --bm/--bn divisible by 8 and --bk divisible by 4")
+        expected_threads = (args.bm // 8) * (args.bn // 8)
+        if args.threads != expected_threads:
+            raise SystemExit(f"local_tiled requires --threads {expected_threads} for BM={args.bm} BN={args.bn}")
+        kernel_source = make_local_tiled_source(args.m, args.n, args.k, args.bm, args.bn, args.bk)
     elif args.impl == "direct8x8":
         if args.bm != 8 or args.bn != 8 or args.threads != 1:
             raise SystemExit("direct8x8 requires --bm 8 --bn 8 --threads 1")
