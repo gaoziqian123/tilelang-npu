@@ -1,69 +1,87 @@
 // Function: gemm_nt_kernel_kernel
+#ifdef cl_khr_fp16
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
+#elif defined(cl_amd_fp16)
+#pragma OPENCL EXTENSION cl_amd_fp16 : enable
+#else
+#error "Half precision floating point not supported by OpenCL implementation on your device." 
+#endif
 
-#define TL_N 512
-#define TL_K 512
-#define TL_BM 64
-#define TL_BN 128
-#define TL_BK 64
-#define TL_WG 128
-#define TL_NT 16
-
-#define TL_BLOCK_F32(ACC, AS, BS, TM, TN)                                    \
-    _Pragma("unroll 2")                                                     \
-    for (int kk = 0; kk < TL_BK; kk++) {                                      \
-        float8 a8 = convert_float8(*(const half8 *)&AS[kk][(TM) * 8]);        \
-        float8 b8 = convert_float8(*(const half8 *)&BS[kk][(TN) * 8]);        \
-        ACC[0] += (float8)a8.s0 * b8; ACC[1] += (float8)a8.s1 * b8;           \
-        ACC[2] += (float8)a8.s2 * b8; ACC[3] += (float8)a8.s3 * b8;           \
-        ACC[4] += (float8)a8.s4 * b8; ACC[5] += (float8)a8.s5 * b8;           \
-        ACC[6] += (float8)a8.s6 * b8; ACC[7] += (float8)a8.s7 * b8;           \
+__kernel void gemm_nt_kernel_kernel(__global half* restrict A_1, __global half* restrict B_1, __global half* restrict C_1);
+__kernel void gemm_nt_kernel_kernel(__global half* restrict A_1, __global half* restrict B_1, __global half* restrict C_1) {
+  __local half As[4096];
+  __local half Bs[8192];
+  float8 acc_0;
+  float8 acc_1;
+  float8 acc_2;
+  float8 acc_3;
+  float8 acc_4;
+  float8 acc_5;
+  float8 acc_6;
+  float8 acc_7;
+  int tm = ((convert_int(get_local_id(0))) >> 4);
+  int tn = ((convert_int(get_local_id(0))) - (((convert_int(get_local_id(0))) >> 4) * 16));
+  int rbase = ((convert_int(get_group_id(1))) * 64);
+  int cbase = ((convert_int(get_group_id(0))) * 128);
+  float broadcast_var = 0.000000e+00f;
+  acc_0 = ((float8)(broadcast_var, broadcast_var, broadcast_var, broadcast_var, broadcast_var, broadcast_var, broadcast_var, broadcast_var));
+  float broadcast_var_1 = 0.000000e+00f;
+  acc_1 = ((float8)(broadcast_var_1, broadcast_var_1, broadcast_var_1, broadcast_var_1, broadcast_var_1, broadcast_var_1, broadcast_var_1, broadcast_var_1));
+  float broadcast_var_2 = 0.000000e+00f;
+  acc_2 = ((float8)(broadcast_var_2, broadcast_var_2, broadcast_var_2, broadcast_var_2, broadcast_var_2, broadcast_var_2, broadcast_var_2, broadcast_var_2));
+  float broadcast_var_3 = 0.000000e+00f;
+  acc_3 = ((float8)(broadcast_var_3, broadcast_var_3, broadcast_var_3, broadcast_var_3, broadcast_var_3, broadcast_var_3, broadcast_var_3, broadcast_var_3));
+  float broadcast_var_4 = 0.000000e+00f;
+  acc_4 = ((float8)(broadcast_var_4, broadcast_var_4, broadcast_var_4, broadcast_var_4, broadcast_var_4, broadcast_var_4, broadcast_var_4, broadcast_var_4));
+  float broadcast_var_5 = 0.000000e+00f;
+  acc_5 = ((float8)(broadcast_var_5, broadcast_var_5, broadcast_var_5, broadcast_var_5, broadcast_var_5, broadcast_var_5, broadcast_var_5, broadcast_var_5));
+  float broadcast_var_6 = 0.000000e+00f;
+  acc_6 = ((float8)(broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6));
+  float broadcast_var_7 = 0.000000e+00f;
+  acc_7 = ((float8)(broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7));
+  for (int kb = 0; kb < 512; kb += 64) {
+    for (int v = (convert_int(get_local_id(0))); v < 1024; v += 128) {
+      int r = (v >> 4);
+      int c4 = (v - ((v >> 4) * 16));
+      half4 aval = vload4(0, ((__global half *)A_1 + (((((convert_int(get_group_id(1))) * 32768) + ((v >> 4) * 448)) + (v * 4)) + kb)));
+      As[((v * 256) - ((v >> 4) * 4095))] = (aval).s0;
+      As[(((v * 256) + 64) - ((v >> 4) * 4095))] = (aval).s1;
+      As[(((v * 256) + 128) - ((v >> 4) * 4095))] = (aval).s2;
+      As[(((v * 256) + 192) - ((v >> 4) * 4095))] = (aval).s3;
     }
-
-__kernel void gemm_nt_kernel_kernel(__global half *restrict A,
-                                    __global half *restrict B,
-                                    __global half *restrict C) {
-    const int bm = get_group_id(1);
-    const int bn = get_group_id(0);
-    const int lid = get_local_id(0);
-    const int tm = lid / TL_NT;
-    const int tn = lid - tm * TL_NT;
-    const int rbase = bm * TL_BM;
-    const int cbase = bn * TL_BN;
-
-    __local half As[TL_BK][TL_BM + 4];
-    __local half Bs[TL_BK][TL_BN + 4];
-    float8 acc[8];
-    #pragma unroll
-    for (int i = 0; i < 8; ++i) acc[i] = (float8)(0.0f);
-
-    for (int kb = 0; kb < TL_K; kb += TL_BK) {
-        for (int v = lid; v < TL_BM * TL_BK / 4; v += TL_WG) {
-            const int r = v / (TL_BK / 4);
-            const int c4 = v - r * (TL_BK / 4);
-            const half4 val = vload4(0, A + (size_t)(rbase + r) * TL_K + kb + c4 * 4);
-            As[c4 * 4 + 0][r] = val.x;
-            As[c4 * 4 + 1][r] = val.y;
-            As[c4 * 4 + 2][r] = val.z;
-            As[c4 * 4 + 3][r] = val.w;
-        }
-        for (int v = lid; v < TL_BN * TL_BK / 4; v += TL_WG) {
-            const int c = v / (TL_BK / 4);
-            const int k4 = v - c * (TL_BK / 4);
-            const half4 val = vload4(0, B + (size_t)(cbase + c) * TL_K + kb + k4 * 4);
-            Bs[k4 * 4 + 0][c] = val.x;
-            Bs[k4 * 4 + 1][c] = val.y;
-            Bs[k4 * 4 + 2][c] = val.z;
-            Bs[k4 * 4 + 3][c] = val.w;
-        }
-        barrier(CLK_LOCAL_MEM_FENCE);
-        TL_BLOCK_F32(acc, As, Bs, tm, tn);
-        barrier(CLK_LOCAL_MEM_FENCE);
+    for (int v_1 = (convert_int(get_local_id(0))); v_1 < 2048; v_1 += 128) {
+      int c = (v_1 >> 4);
+      int k4 = (v_1 - ((v_1 >> 4) * 16));
+      half4 bval = vload4(0, ((__global half *)B_1 + (((((convert_int(get_group_id(0))) * 65536) + ((v_1 >> 4) * 448)) + (v_1 * 4)) + kb)));
+      Bs[((v_1 * 512) - ((v_1 >> 4) * 8191))] = (bval).s0;
+      Bs[(((v_1 * 512) + 128) - ((v_1 >> 4) * 8191))] = (bval).s1;
+      Bs[(((v_1 * 512) + 256) - ((v_1 >> 4) * 8191))] = (bval).s2;
+      Bs[(((v_1 * 512) + 384) - ((v_1 >> 4) * 8191))] = (bval).s3;
     }
-
-    const int r0 = rbase + tm * 8;
-    const int c0 = cbase + tn * 8;
-    #pragma unroll
-    for (int i = 0; i < 8; ++i)
-        vstore8(convert_half8(acc[i]), 0, C + (size_t)(r0 + i) * TL_N + c0);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int kk = 0; kk < 64; ++kk) {
+      float8 a8 = (convert_float8(vload8(0, As + ((kk * 64) + (((convert_int(get_local_id(0))) >> 4) * 8)))));
+      float8 b8 = (convert_float8(vload8(0, Bs + (((kk * 128) + ((convert_int(get_local_id(0))) * 8)) - (((convert_int(get_local_id(0))) >> 4) * 128)))));
+      acc_0 = (acc_0 + (((float8)((a8).s0, (a8).s0, (a8).s0, (a8).s0, (a8).s0, (a8).s0, (a8).s0, (a8).s0)) * b8));
+      acc_1 = (acc_1 + (((float8)((a8).s1, (a8).s1, (a8).s1, (a8).s1, (a8).s1, (a8).s1, (a8).s1, (a8).s1)) * b8));
+      acc_2 = (acc_2 + (((float8)((a8).s2, (a8).s2, (a8).s2, (a8).s2, (a8).s2, (a8).s2, (a8).s2, (a8).s2)) * b8));
+      acc_3 = (acc_3 + (((float8)((a8).s3, (a8).s3, (a8).s3, (a8).s3, (a8).s3, (a8).s3, (a8).s3, (a8).s3)) * b8));
+      acc_4 = (acc_4 + (((float8)((a8).s4, (a8).s4, (a8).s4, (a8).s4, (a8).s4, (a8).s4, (a8).s4, (a8).s4)) * b8));
+      acc_5 = (acc_5 + (((float8)((a8).s5, (a8).s5, (a8).s5, (a8).s5, (a8).s5, (a8).s5, (a8).s5, (a8).s5)) * b8));
+      acc_6 = (acc_6 + (((float8)((a8).s6, (a8).s6, (a8).s6, (a8).s6, (a8).s6, (a8).s6, (a8).s6, (a8).s6)) * b8));
+      acc_7 = (acc_7 + (((float8)((a8).s7, (a8).s7, (a8).s7, (a8).s7, (a8).s7, (a8).s7, (a8).s7, (a8).s7)) * b8));
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+  }
+  int r0 = (((convert_int(get_group_id(1))) * 64) + (((convert_int(get_local_id(0))) >> 4) * 8));
+  int c0 = ((((convert_int(get_group_id(0))) * 128) + ((convert_int(get_local_id(0))) * 8)) - (((convert_int(get_local_id(0))) >> 4) * 128));
+  vstore8((convert_half8(acc_0)), 0, C_1 + (((((convert_int(get_group_id(1))) * 32768) + (((convert_int(get_local_id(0))) >> 4) * 3968)) + ((convert_int(get_group_id(0))) * 128)) + ((convert_int(get_local_id(0))) * 8)));
+  vstore8((convert_half8(acc_1)), 0, C_1 + ((((((convert_int(get_group_id(1))) * 32768) + (((convert_int(get_local_id(0))) >> 4) * 3968)) + ((convert_int(get_group_id(0))) * 128)) + ((convert_int(get_local_id(0))) * 8)) + 512));
+  vstore8((convert_half8(acc_2)), 0, C_1 + ((((((convert_int(get_group_id(1))) * 32768) + (((convert_int(get_local_id(0))) >> 4) * 3968)) + ((convert_int(get_group_id(0))) * 128)) + ((convert_int(get_local_id(0))) * 8)) + 1024));
+  vstore8((convert_half8(acc_3)), 0, C_1 + ((((((convert_int(get_group_id(1))) * 32768) + (((convert_int(get_local_id(0))) >> 4) * 3968)) + ((convert_int(get_group_id(0))) * 128)) + ((convert_int(get_local_id(0))) * 8)) + 1536));
+  vstore8((convert_half8(acc_4)), 0, C_1 + ((((((convert_int(get_group_id(1))) * 32768) + (((convert_int(get_local_id(0))) >> 4) * 3968)) + ((convert_int(get_group_id(0))) * 128)) + ((convert_int(get_local_id(0))) * 8)) + 2048));
+  vstore8((convert_half8(acc_5)), 0, C_1 + ((((((convert_int(get_group_id(1))) * 32768) + (((convert_int(get_local_id(0))) >> 4) * 3968)) + ((convert_int(get_group_id(0))) * 128)) + ((convert_int(get_local_id(0))) * 8)) + 2560));
+  vstore8((convert_half8(acc_6)), 0, C_1 + ((((((convert_int(get_group_id(1))) * 32768) + (((convert_int(get_local_id(0))) >> 4) * 3968)) + ((convert_int(get_group_id(0))) * 128)) + ((convert_int(get_local_id(0))) * 8)) + 3072));
+  vstore8((convert_half8(acc_7)), 0, C_1 + ((((((convert_int(get_group_id(1))) * 32768) + (((convert_int(get_local_id(0))) >> 4) * 3968)) + ((convert_int(get_group_id(0))) * 128)) + ((convert_int(get_local_id(0))) * 8)) + 3584));
 }
+
