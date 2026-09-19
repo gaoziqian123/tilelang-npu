@@ -95,11 +95,15 @@ PASS,但默认 `T.copy+T.gemm` 生成物性能仍只有 36ms,原因是每 work-i
 `examples/opencl/gemm/gemm_nt.py --impl local_tiled` 可生成手写 local-memory 结构
 同款的 SIMT OpenCL kernel(64×128 work tile、128 work-items、8×8 thread tile、BK
 可调、fp32 FMA 内链);在修正 `tl_probe` kernel-only 多次事件计时后,生产形状
-1024×2560×2560 真机 best 为 BK=16 的 17.9ms(0.75 TFLOPS)。`--impl image8x8`
+1024×2560×2560 真机 best 为 BK=16 的 17.9ms(0.75 TFLOPS)。`--impl fragment --b-layout kn`
+是当前纯 TileLang IR buffer 路径新纪录:host 预转 B 为 `Bt[K,N]`,每 work-item
+direct-global 计算 8×8 输出 tile,32×128/BK64 在 512³ 达 0.225ms(1.191 TFLOPS),
+生产形状达 9.784ms(1.372 TFLOPS)。`--impl image8x8`
 是针对 Adreno 的 escape hatch,生成 B 走 `image2d_t/read_imageh`、无 local/barrier、
 8×8 寄存器 tile 的 kernel;需 `gemm_gpu` 同款 host 预转 B 到 RGBA fp16 image,生产形状
 真机 7.80ms(1.72 TFLOPS)。这证明标准 buffer/local 路径主要卡在 B 读取与
-local/barrier 开销,而纹理+寄存器路径能接近手写上限;该 image 路径目前仍是示例侧
+local/barrier 开销;`Bt[K,N]` 让 buffer 直读路径吃到连续 `half8`,而纹理+寄存器路径
+能接近手写上限;该 image 路径目前仍是示例侧
 模板,尚未并入通用 `T.gemm` lowering。
 
 ## 4. pass / codegen 结构
@@ -151,6 +155,12 @@ OpenCL 后端结构(已实现于 commit `31d3a80`):
 | L2 | GEMM NT 512³ fp16 | `T.copy` + `T.gemm` 高层写法,`opencl.fma` lowering | PASS, `max_rel=4.8e-4`,36.1ms |
 | L2-opt | GEMM NT 512³ fp16 | `--impl local_tiled --bm 64 --bn 128 --bk 16`:64×128 WG / 8×8 thread tile / fp32 FMA 内链;kernel-only event timing | PASS, `max_rel=4.7e-4`,0.421ms(0.638 TFLOPS) |
 | L2-prod-local | GEMM NT 1024×2560×2560 fp16 | `--impl local_tiled --bm 64 --bn 128 --bk 16`,sampled fp64 check | PASS, `max_rel=4.7e-4`,17.9ms(0.750 TFLOPS) |
+| L2-fragment | GEMM NT 512³ fp16 | `--impl fragment --b-layout nk`,B[N,K] 旧 ABI direct-global,128×64/BK64 | PASS, `max_rel=4.7e-4`,0.507 TFLOPS |
+| L2-prod-fragment | GEMM NT 1024×2560×2560 fp16 | `--impl fragment --b-layout nk`,B[N,K] 旧 ABI direct-global,64×64/BK64 | PASS, `max_rel=4.7e-4`,0.545 TFLOPS |
+| L2-fragment-Bt | GEMM NT 512³ fp16 | `--impl fragment --b-layout kn`,host 预转 `Bt[K,N]`,32×128/BK64 | PASS, `max_rel=4.7e-4`,0.225ms(1.191 TFLOPS) |
+| L2-prod-fragment-Bt | GEMM NT 1024×2560×2560 fp16 | `--impl fragment --b-layout kn`,host 预转 `Bt[K,N]`,32×128/BK64 | PASS, `max_rel=4.6e-4`,9.784ms(1.372 TFLOPS) |
+| L2-tiled-fragment | GEMM NT 512³ fp16 | `--impl tiled_fragment`,纯 IR shared staging + fragment accumulator,128×64/BK16(6189ee0) | PASS, `max_rel=4.7e-4`,0.680 TFLOPS |
+| L2-prod-tiled-fragment | GEMM NT 1024×2560×2560 fp16 | `--impl tiled_fragment`,纯 IR shared staging + fragment accumulator,128×64/BK16(6189ee0) | PASS, `max_rel=4.7e-4`,0.797 TFLOPS |
 | L2-prod-texstage | GEMM NT 1024×2560×2560 fp16 | 手写参考:`READ_IMAGEH(half4)`→`vstore4` into `__local`,128×64/BK16 | PASS, `max_rel=4.7e-4`,16.0ms(0.839 TFLOPS) |
 | L2-prod-texstaged-IR | GEMM NT 1024×2560×2560 fp16 | TileLang IR `global.texture` + `T.copy` staging,64×128/BK16,source escape-hatch float8 MAC | PASS, `max_rel=4.7e-4`,38.6ms(0.348 TFLOPS) |
 | L2-prod-image | GEMM NT 1024×2560×2560 fp16 | `--impl image8x8`,B as RGBA fp16 `image2d_t`,no local/barrier,`gemm_gpu` host | PASS, `max_rel=5.0e-4`,7.80ms(1.72 TFLOPS) |
@@ -165,6 +175,13 @@ IR 版还受 generated shared alias / launch 结构影响。TileLang local_tiled
 L2-opt 已使用 `half4` global staging、`half8/float8` local load/FMA 与每 work-item
 8×8 输出复用。尚未并入通用 `T.gemm` lowering、未做完整 autotune 或 target attr
 校准,不能代表优化后上限。
+
+fragment direct-global 的新结论是:`Bt[K,N]` 布局是 buffer 路径的关键。旧
+`B[N,K]` 形态每个 K lane 需要多次 `vload4` 加 shuffle/gather 才能喂满 8 列,
+而 host 预转后的 `Bt[K,N]` 可对 B 做连续 `half8` 读取,因此 512³ / 生产形状分别
+达到 1.191T / 1.372T,超过手写 `hgemm_buf_8x8` 1.025T 约 34%。与 `image8x8`
+的 1.72T 相比仍差约 20%,剩余差距主要来自纹理缓存可免费吸收跨 work-item 的
+冗余 B 读取;代价是 host/runtime 必须维护 B 的预转置 buffer ABI。
 
 对拍工具: `/root/project/backend/gpu/tl_probe/tl_probe.c`。用法由 argv 传入
 `.cl` 路径、kernel 名与算子类型;host 侧完成 dlopen OpenCL、program build、kernel
