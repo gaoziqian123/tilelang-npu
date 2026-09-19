@@ -168,6 +168,13 @@ L2-opt 已使用 `half4` global staging、`half8/float8` local load/FMA 与每 w
 
 对拍工具: `/root/project/backend/gpu/tl_probe/tl_probe.c`。用法由 argv 传入
 `.cl` 路径、kernel 名与算子类型;host 侧完成 dlopen OpenCL、program build、kernel
+
+**已证伪的假设(2026-09-19,别再试)**:纯 IR 纹理 GEMM(`gemm_nt_tex.py`,0.015T)
+的瓶颈**不是** accumulator 私有数组无法寄存器化——`tilelang/opencl/codegen.py` 的
+source 级修复(`float acc[64]` → `float8 acc_0..7`、`((half*)&v_)[lane]` → `v_.sN`,
+带动态索引回退保护)让生成物变成寄存器友好形态,但真机实测 **0 收益**(512³ 0.015T、
+生产形状 0.013T,修复前后持平)。瓶颈在 TileLang direct texture 路径的标量 A/循环
+结构本身,要救这条路得动 lowering 结构,不是 acc 形态。
 launch 与 fp64 reference 对拍。正式 runtime 接入时应迁移到 `backend/gpu/` 各算子
 工程同款宿主,但 kernel 文本仍由手机驱动编译。
 
