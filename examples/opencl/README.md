@@ -20,6 +20,8 @@ OpenCL、编译 `.cl`、运行 kernel，并用 fp64 reference + rms-scaled
 | `kernels/` | `silu.py` | `tests/run_oneplus13.sh` (`silu`) | `out/silu.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
 | `kernels/` | `rmsnorm.py` | `tests/run_oneplus13.sh` (`rmsnorm`) | `out/rmsnorm.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
 | `kernels/` | `gemm_nt.py` | `tests/run_oneplus13.sh` (`gemm`) | `out/gemm_nt.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
+| `kernels/` | `gemm_nt_texstage.py` | `tl_probe` (`gemm_texstage`) | `out/gemm_nt_texstage_*.cl` | 手机:`./tl_probe gemm_nt_texstage_512_bk16.cl gemm_nt_texstage_kernel gemm_texstage` |
+| `kernels/` | `gemm_nt_texstaged.py` | `tl_probe` (`gemm_texstage`) | `out/gemm_nt_texstaged_*.cl` | 手机:`./tl_probe gemm_nt_texstaged_512_512_512_64x128_bk16.cl gemm_nt_texstaged_kernel_kernel gemm_texstage` |
 | `kernels/` | `texture_copy.py` | `tests/run_oneplus13.sh` (`texcopy`) | `out/texture_copy.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
 | `kernels/` | `texture_staging.py` | `tl_probe` (`texstage`) | `out/texture_staging.cl` | 手机:`./tl_probe texture_staging.cl texture_staging_kernel_kernel texstage` |
 
@@ -136,6 +138,45 @@ SIMT copy 会把线程映射到元素，相邻 4 lane 重复 READ_IMAGEH 同一 
 真机 OnePlus 13 PASS：`max_rel=2.1e-07`（64×128 fp16，tl_probe
 `texstage` runner）。注意 kernel 脚本不能设 `tirx.disable_vectorize`，
 否则 texel 特判发出的 channel 内循环不会被合并。
+
+## GEMM_NT B texture staging (`kernels/gemm_nt_texstage.py` / `gemm_nt_texstaged.py`)
+
+这是 GEMM 的 texture→`__local` staging 探针：A 保持 row-major `__global`
+buffer，B 按 `Btex[k, n//4, n%4] = B_nt[n, k]` 存入 RGBA fp16
+`image2d_t`，每个 K 分块把 B tile 从 texture 搬进 `__local half Bs` 后，
+用 `float8` 寄存器内链计算 8×8 输出。
+
+- `gemm_nt_texstage.py` 是手写参考源码生成器，用来扫 tile/BK 并标定上限。
+- `gemm_nt_texstaged.py` 是 TileLang IR 版：B 声明为 `scope="global.texture"`，
+  K 分块内用 `T.copy` 触发 texture-source lowering，再在生成源码层把标量 MAC
+  nest 替换成与手写参考相同的 `float8` block；默认结构对齐 local GEMM
+  `BM=64, BN=128, BK=16/32, threads=128`。
+
+staging 段形态（生成物可 grep `READ_IMAGEH` / `vstore4`）：
+
+```c
+for (int v = lid; v < TL_BN * TL_BK / 4; v += TL_WG) {
+    ...
+    half4 val = READ_IMAGEH(Bi, smp, (int2)(cc4, kb + kk));
+    vstore4(val, 0, &Bs[kk][c4 * 4]);
+}
+```
+
+OnePlus 13 真机 kernel-only event 口径（`tl_probe gemm_texstage`，fp64
+reference，rms-scaled `max_rel<0.1`）：
+
+| 形状 | 最优 tile | ms | TFLOPS | max_rel |
+|---|---:|---:|---:|---:|
+| 512³ 手写 | 128×64/BK16 | 0.373 | 0.720 | 0.000471 |
+| 1024×2560×2560 手写 | 128×64/BK16 | 15.989 | 0.839 | 0.000474 |
+| 512³ IR | 64×128/BK16 | 0.868 | 0.309 | 0.000471 |
+| 1024×2560×2560 IR | 64×128/BK16 | 38.554 | 0.348 | 0.000474 |
+
+结论：手写 texture staging 比手写 local64×128 的 0.598T 快约 1.4×，但仍只有
+image 直读 8×8 的 1.721T 的 49%。IR 版正确触发每线程一次 `READ_IMAGEH` +
+`vstore4`，但当前仅 0.35T；瓶颈来自每 K tile 的 `__local` 填充、双 barrier 与
+generated shared alias/launch 结构，不如直接在寄存器内从 image 复用 B。该路径
+适合作为 texture-copy lowering 的验证和 local 路线对照，不建议作为生产 GEMM 默认路径。
 
 ## 已知边界
 

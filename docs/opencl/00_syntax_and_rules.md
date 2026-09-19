@@ -151,10 +151,15 @@ OpenCL 后端结构(已实现于 commit `31d3a80`):
 | L2 | GEMM NT 512³ fp16 | `T.copy` + `T.gemm` 高层写法,`opencl.fma` lowering | PASS, `max_rel=4.8e-4`,36.1ms |
 | L2-opt | GEMM NT 512³ fp16 | `--impl local_tiled --bm 64 --bn 128 --bk 16`:64×128 WG / 8×8 thread tile / fp32 FMA 内链;kernel-only event timing | PASS, `max_rel=4.7e-4`,0.421ms(0.638 TFLOPS) |
 | L2-prod-local | GEMM NT 1024×2560×2560 fp16 | `--impl local_tiled --bm 64 --bn 128 --bk 16`,sampled fp64 check | PASS, `max_rel=4.7e-4`,17.9ms(0.750 TFLOPS) |
+| L2-prod-texstage | GEMM NT 1024×2560×2560 fp16 | 手写参考:`READ_IMAGEH(half4)`→`vstore4` into `__local`,128×64/BK16 | PASS, `max_rel=4.7e-4`,16.0ms(0.839 TFLOPS) |
+| L2-prod-texstaged-IR | GEMM NT 1024×2560×2560 fp16 | TileLang IR `global.texture` + `T.copy` staging,64×128/BK16,source escape-hatch float8 MAC | PASS, `max_rel=4.7e-4`,38.6ms(0.348 TFLOPS) |
 | L2-prod-image | GEMM NT 1024×2560×2560 fp16 | `--impl image8x8`,B as RGBA fp16 `image2d_t`,no local/barrier,`gemm_gpu` host | PASS, `max_rel=5.0e-4`,7.80ms(1.72 TFLOPS) |
 
 对照性能:同口径手写 local64×128 为 22.4ms(0.598 TFLOPS),手写 image8×8 为
-7.84ms(1.71 TFLOPS)。TileLang local_tiled 与手写 local 的差距已在噪声/参数范围内;
+7.84ms(1.71 TFLOPS)。texture→`__local` staging 最优手写参考为 16.0ms(0.839 TFLOPS),
+TileLang IR 版为 38.6ms(0.348 TFLOPS):手写 staging 比 local 快,但仍显著慢于 image 直读,
+说明 B 纹理读只解决部分 gather 成本,每 K tile local memory 填充和双 barrier 仍是主瓶颈;
+IR 版还受 generated shared alias / launch 结构影响。TileLang local_tiled 与手写 local 的差距已在噪声/参数范围内;
 剩余 2.3× 差距来自 `image2d_t/read_imageh` 纹理读路径避免 B buffer gather、local memory
 填充和每 K tile 双 barrier。TileLang OpenCL L2 的 36ms 是朴素 SIMT 生成物基线;
 L2-opt 已使用 `half4` global staging、`half8/float8` local load/FMA 与每 work-item
