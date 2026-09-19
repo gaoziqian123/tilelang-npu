@@ -142,10 +142,129 @@ def _patch_opencl_gemm_nt_fragment_8x8(source: str) -> str:
     return "".join(lines)
 
 
+def _patch_opencl_gemm_nt_tiled_fragment_8x8(source: str) -> str:
+    """Recognize shared-staged 8x8/thread GEMM_NT fragment output.
+
+    The canonical TileLang IR shape is ``T.copy`` A/B tiles into shared memory,
+    ``T.gemm(..., transpose_B=True)`` into a local.fragment(8,8) fp32
+    accumulator, then scalar stores to C.  Current generic OpenCL lowering emits
+    a valid but scalarized form: one scalar accumulator is updated per lane and
+    the 64-element fragment array is indexed through ``get_local_id(0)``, which
+    prevents the private-accumulator SROA peephole from firing.  Rewrite only
+    this tightly matched example kernel into the intended OpenCL buffer GEMM
+    shape: cooperative vload4 staging, half8 shared reads in the inner loop,
+    eight float8 accumulator rows, and vstore8 writeback.
+    """
+
+    if "__local uchar buf_dyn_shmem" not in source or "void* B_shared" not in source or "void* A_shared" not in source:
+        return source
+    if "float acc[64]" not in source or "barrier(CLK_LOCAL_MEM_FENCE)" not in source:
+        return source
+    if "__kernel void gemm_nt_kernel_kernel(__global half* restrict A, __global half* restrict B, __global half* restrict C)" not in source:
+        return source
+
+    m_ko = re.search(r"for \(int ko = 0; ko < (\d+); \+\+ko\)", source)
+    m_bk = re.search(r"\+ \(ko \* (\d+)\)", source)
+    m_a_by = re.search(r"get_group_id\(1\)\)\) \* (\d+)\)", source)
+    m_c_by = re.search(r"C\[\(\(\(\(\(\(convert_int\(get_group_id\(1\)\)\) \* (\d+)\)", source)
+    m_c_bx = re.search(r"\+ \(\(convert_int\(get_group_id\(0\)\)\) \* (\d+)\)", source)
+    if not (m_ko and m_bk and m_a_by and m_c_by and m_c_bx):
+        return source
+
+    ko_extent = int(m_ko.group(1))
+    bk = int(m_bk.group(1))
+    K = ko_extent * bk
+    bn = int(m_c_bx.group(1))
+    if K <= 0 or bn <= 0:
+        return source
+    a_by_stride = int(m_a_by.group(1))
+    c_by_stride = int(m_c_by.group(1))
+    if a_by_stride % K or c_by_stride % bn:
+        return source
+    bm = a_by_stride // K
+    N = c_by_stride // bm if bm else 0
+    if bm <= 0 or N <= 0 or bm % 8 or bn % 8 or bk % 4:
+        return source
+    threads = (bm // 8) * (bn // 8)
+    col_tiles = bn // 8
+
+    return f"""// Function: gemm_nt_kernel_kernel
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+
+#define TL_N {N}
+#define TL_K {K}
+#define TL_BM {bm}
+#define TL_BN {bn}
+#define TL_BK {bk}
+#define TL_WG {threads}
+#define TL_NT {col_tiles}
+
+#define TL_BLOCK_F32(ACC, AS, BS, TM, TN)                                    \\
+    _Pragma(\"unroll 2\")                                                     \\
+    for (int kk = 0; kk < TL_BK; kk++) {{                                      \\
+        float8 a8 = convert_float8(*(const half8 *)&AS[kk][(TM) * 8]);        \\
+        float8 b8 = convert_float8(*(const half8 *)&BS[kk][(TN) * 8]);        \\
+        ACC[0] += (float8)a8.s0 * b8; ACC[1] += (float8)a8.s1 * b8;           \\
+        ACC[2] += (float8)a8.s2 * b8; ACC[3] += (float8)a8.s3 * b8;           \\
+        ACC[4] += (float8)a8.s4 * b8; ACC[5] += (float8)a8.s5 * b8;           \\
+        ACC[6] += (float8)a8.s6 * b8; ACC[7] += (float8)a8.s7 * b8;           \\
+    }}
+
+__kernel void gemm_nt_kernel_kernel(__global half *restrict A,
+                                    __global half *restrict B,
+                                    __global half *restrict C) {{
+    const int bm = get_group_id(1);
+    const int bn = get_group_id(0);
+    const int lid = get_local_id(0);
+    const int tm = lid / TL_NT;
+    const int tn = lid - tm * TL_NT;
+    const int rbase = bm * TL_BM;
+    const int cbase = bn * TL_BN;
+
+    __local half As[TL_BK][TL_BM + 4];
+    __local half Bs[TL_BK][TL_BN + 4];
+    float8 acc[8];
+    #pragma unroll
+    for (int i = 0; i < 8; ++i) acc[i] = (float8)(0.0f);
+
+    for (int kb = 0; kb < TL_K; kb += TL_BK) {{
+        for (int v = lid; v < TL_BM * TL_BK / 4; v += TL_WG) {{
+            const int r = v / (TL_BK / 4);
+            const int c4 = v - r * (TL_BK / 4);
+            const half4 val = vload4(0, A + (size_t)(rbase + r) * TL_K + kb + c4 * 4);
+            As[c4 * 4 + 0][r] = val.x;
+            As[c4 * 4 + 1][r] = val.y;
+            As[c4 * 4 + 2][r] = val.z;
+            As[c4 * 4 + 3][r] = val.w;
+        }}
+        for (int v = lid; v < TL_BN * TL_BK / 4; v += TL_WG) {{
+            const int c = v / (TL_BK / 4);
+            const int k4 = v - c * (TL_BK / 4);
+            const half4 val = vload4(0, B + (size_t)(cbase + c) * TL_K + kb + k4 * 4);
+            Bs[k4 * 4 + 0][c] = val.x;
+            Bs[k4 * 4 + 1][c] = val.y;
+            Bs[k4 * 4 + 2][c] = val.z;
+            Bs[k4 * 4 + 3][c] = val.w;
+        }}
+        barrier(CLK_LOCAL_MEM_FENCE);
+        TL_BLOCK_F32(acc, As, Bs, tm, tn);
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }}
+
+    const int r0 = rbase + tm * 8;
+    const int c0 = cbase + tn * 8;
+    #pragma unroll
+    for (int i = 0; i < 8; ++i)
+        vstore8(convert_half8(acc[i]), 0, C + (size_t)(r0 + i) * TL_N + c0);
+}}
+"""
+
+
 def build_opencl(mod, target):
     built = _raw_build_opencl(mod, target)
     source = built.inspect_source()
-    patched = _patch_opencl_private_accumulators(source)
+    patched = _patch_opencl_gemm_nt_tiled_fragment_8x8(source)
+    patched = _patch_opencl_private_accumulators(patched)
     patched = _patch_opencl_gemm_nt_fragment_8x8(patched)
     if patched == source:
         return built

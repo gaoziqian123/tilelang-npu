@@ -145,6 +145,54 @@ rms-scaled `max_rel < 0.1`：
 带宽/访存重放限制；prod 形状最优 0.533T，仍慢于 local_tiled 0.750T（-29%）和手写
 buffer 8×8 1.025T（-48%）。
 
+### GEMM_NT tiled fragment buffer variant
+
+`gemm_nt.py --impl tiled_fragment` 是 buffer 路线的纯 TileLang IR 版本：`T.copy`
+把 A/B K tile 搬进 `T.alloc_shared`，`T.sync_threads()` 后用
+`T.gemm(..., transpose_B=True)` 累加到 `T.alloc_fragment((8, 8), "float32")`，每个
+work-item 负责一个 8×8 输出 tile。OpenCL codegen 对这个形态做受限 peephole：保留
+IR 的 shared staging 结构，但把 generic lowering 生成的 scalar fragment body 改写成
+手写 buffer 8×8 同构的 `float8 acc[8]`、shared `half8` 读和 `vstore8` 写回。
+
+生成物形态：A/B global→shared staging 为每 work-item 多次 `vload4` + scalar shared
+store；inner K loop 每步各一次 shared `half8` load（A/B），8 个 `float8` fp32 累加器，
+每 BK tile 2 个 `barrier(CLK_LOCAL_MEM_FENCE)`。
+
+OnePlus 13 / Adreno 830 真机 `tl_probe gemm` kernel-only event 口径，fp64 reference，
+rms-scaled `max_rel < 0.1`；全部 case `bad 0/4096`：
+
+| 形状 | tile/BK | ms | TFLOPS | max_rel |
+|---|---:|---:|---:|---:|
+| 512³ | 64×64/BK16 | 0.463 | 0.580 | 0.000470 |
+| 512³ | 64×64/BK32 | 0.658 | 0.408 | 0.000470 |
+| 512³ | 64×64/BK64 | 1.399 | 0.192 | 0.000470 |
+| 512³ | 64×128/BK16 | 0.414 | 0.649 | 0.000470 |
+| 512³ | 64×128/BK32 | 0.605 | 0.443 | 0.000470 |
+| 512³ | 64×128/BK64 | 0.675 | 0.398 | 0.000470 |
+| 512³ | 128×64/BK16 | **0.410** | **0.655** | 0.000470 |
+| 512³ | 128×64/BK32 | 0.608 | 0.441 | 0.000470 |
+| 512³ | 128×64/BK64 | 0.680 | 0.395 | 0.000470 |
+| 512³ | 32×128/BK16 | 0.658 | 0.408 | 0.000470 |
+| 512³ | 32×128/BK32 | 0.881 | 0.305 | 0.000470 |
+| 512³ | 32×128/BK64 | 1.567 | 0.171 | 0.000470 |
+| 1024×2560×2560 | 64×64/BK16 | 20.461 | 0.656 | 0.000473 |
+| 1024×2560×2560 | 64×64/BK32 | 32.195 | 0.417 | 0.000473 |
+| 1024×2560×2560 | 64×64/BK64 | 73.999 | 0.181 | 0.000473 |
+| 1024×2560×2560 | 64×128/BK16 | 17.765 | 0.756 | 0.000473 |
+| 1024×2560×2560 | 64×128/BK32 | 24.697 | 0.543 | 0.000473 |
+| 1024×2560×2560 | 64×128/BK64 | 32.085 | 0.418 | 0.000473 |
+| 1024×2560×2560 | 128×64/BK16 | **17.700** | **0.758** | 0.000473 |
+| 1024×2560×2560 | 128×64/BK32 | 24.798 | 0.541 | 0.000473 |
+| 1024×2560×2560 | 128×64/BK64 | 32.490 | 0.413 | 0.000473 |
+| 1024×2560×2560 | 32×128/BK16 | 25.551 | 0.525 | 0.000473 |
+| 1024×2560×2560 | 32×128/BK32 | 45.551 | 0.295 | 0.000473 |
+| 1024×2560×2560 | 32×128/BK64 | 82.904 | 0.162 | 0.000473 |
+
+相对锚点：prod 形状 0.758T，比 fragment direct-global 0.533T 快 42%，与
+local_tiled escape 0.750T 持平，但仍低于手写 buffer 8×8 1.025T 约 26%。BK16 明显最优；
+BK32/64 退化来自 local footprint 变大、每 work-group occupancy/issue 下降，shared staging
+的 scalar store 形态仍不如手写 buffer 源码紧凑。
+
 ## Texture copy (`kernels/texture_copy.py`)
 
 输入 `B` 使用 `T.Tensor((H, W, 4), "float16", scope="global.texture")`，

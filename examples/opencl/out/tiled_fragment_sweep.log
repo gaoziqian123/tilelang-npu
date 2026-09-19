@@ -1,0 +1,168 @@
+RUN gemm_nt_tiled_fragment_512_512_512_64x64_bk16.cl M=512 N=512 K=512 BM=64 BN=64 BK=16 TH=64
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=512 N=512 K=512 BM=64 BN=64 TH=64 iters=30 ms_iter 0.463 tflops 0.580 timing=event wall_ms_iter 0.820
+GEMM max_rel 0.000469839 rms 1.85806 bad 0/4096 sample[419] got 4.0390625 ref 4.04097857 PASS
+RC 0 gemm_nt_tiled_fragment_512_512_512_64x64_bk16.cl
+RUN gemm_nt_tiled_fragment_512_512_512_64x64_bk32.cl M=512 N=512 K=512 BM=64 BN=64 BK=32 TH=64
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=512 N=512 K=512 BM=64 BN=64 TH=64 iters=30 ms_iter 0.658 tflops 0.408 timing=event wall_ms_iter 0.977
+GEMM max_rel 0.000469839 rms 1.85806 bad 0/4096 sample[419] got 4.0390625 ref 4.04097857 PASS
+RC 0 gemm_nt_tiled_fragment_512_512_512_64x64_bk32.cl
+RUN gemm_nt_tiled_fragment_512_512_512_64x64_bk64.cl M=512 N=512 K=512 BM=64 BN=64 BK=64 TH=64
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=512 N=512 K=512 BM=64 BN=64 TH=64 iters=30 ms_iter 1.399 tflops 0.192 timing=event wall_ms_iter 1.829
+GEMM max_rel 0.000469839 rms 1.85806 bad 0/4096 sample[419] got 4.0390625 ref 4.04097857 PASS
+RC 0 gemm_nt_tiled_fragment_512_512_512_64x64_bk64.cl
+RUN gemm_nt_tiled_fragment_512_512_512_64x128_bk16.cl M=512 N=512 K=512 BM=64 BN=128 BK=16 TH=128
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=512 N=512 K=512 BM=64 BN=128 TH=128 iters=30 ms_iter 0.414 tflops 0.649 timing=event wall_ms_iter 0.764
+GEMM max_rel 0.000469839 rms 1.85806 bad 0/4096 sample[419] got 4.0390625 ref 4.04097857 PASS
+RC 0 gemm_nt_tiled_fragment_512_512_512_64x128_bk16.cl
+RUN gemm_nt_tiled_fragment_512_512_512_64x128_bk32.cl M=512 N=512 K=512 BM=64 BN=128 BK=32 TH=128
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=512 N=512 K=512 BM=64 BN=128 TH=128 iters=30 ms_iter 0.605 tflops 0.443 timing=event wall_ms_iter 1.015
+GEMM max_rel 0.000469839 rms 1.85806 bad 0/4096 sample[419] got 4.0390625 ref 4.04097857 PASS
+RC 0 gemm_nt_tiled_fragment_512_512_512_64x128_bk32.cl
+RUN gemm_nt_tiled_fragment_512_512_512_64x128_bk64.cl M=512 N=512 K=512 BM=64 BN=128 BK=64 TH=128
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=512 N=512 K=512 BM=64 BN=128 TH=128 iters=30 ms_iter 0.675 tflops 0.398 timing=event wall_ms_iter 1.095
+GEMM max_rel 0.000469839 rms 1.85806 bad 0/4096 sample[419] got 4.0390625 ref 4.04097857 PASS
+RC 0 gemm_nt_tiled_fragment_512_512_512_64x128_bk64.cl
+RUN gemm_nt_tiled_fragment_512_512_512_128x64_bk16.cl M=512 N=512 K=512 BM=128 BN=64 BK=16 TH=128
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=512 N=512 K=512 BM=128 BN=64 TH=128 iters=30 ms_iter 0.410 tflops 0.655 timing=event wall_ms_iter 0.658
+GEMM max_rel 0.000469839 rms 1.85806 bad 0/4096 sample[419] got 4.0390625 ref 4.04097857 PASS
+RC 0 gemm_nt_tiled_fragment_512_512_512_128x64_bk16.cl
+RUN gemm_nt_tiled_fragment_512_512_512_128x64_bk32.cl M=512 N=512 K=512 BM=128 BN=64 BK=32 TH=128
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=512 N=512 K=512 BM=128 BN=64 TH=128 iters=30 ms_iter 0.608 tflops 0.441 timing=event wall_ms_iter 1.029
+GEMM max_rel 0.000469839 rms 1.85806 bad 0/4096 sample[419] got 4.0390625 ref 4.04097857 PASS
+RC 0 gemm_nt_tiled_fragment_512_512_512_128x64_bk32.cl
+RUN gemm_nt_tiled_fragment_512_512_512_128x64_bk64.cl M=512 N=512 K=512 BM=128 BN=64 BK=64 TH=128
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=512 N=512 K=512 BM=128 BN=64 TH=128 iters=30 ms_iter 0.680 tflops 0.395 timing=event wall_ms_iter 1.018
+GEMM max_rel 0.000469839 rms 1.85806 bad 0/4096 sample[419] got 4.0390625 ref 4.04097857 PASS
+RC 0 gemm_nt_tiled_fragment_512_512_512_128x64_bk64.cl
+RUN gemm_nt_tiled_fragment_512_512_512_32x128_bk16.cl M=512 N=512 K=512 BM=32 BN=128 BK=16 TH=64
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=512 N=512 K=512 BM=32 BN=128 TH=64 iters=30 ms_iter 0.658 tflops 0.408 timing=event wall_ms_iter 1.039
+GEMM max_rel 0.000469839 rms 1.85806 bad 0/4096 sample[419] got 4.0390625 ref 4.04097857 PASS
+RC 0 gemm_nt_tiled_fragment_512_512_512_32x128_bk16.cl
+RUN gemm_nt_tiled_fragment_512_512_512_32x128_bk32.cl M=512 N=512 K=512 BM=32 BN=128 BK=32 TH=64
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=512 N=512 K=512 BM=32 BN=128 TH=64 iters=30 ms_iter 0.881 tflops 0.305 timing=event wall_ms_iter 1.303
+GEMM max_rel 0.000469839 rms 1.85806 bad 0/4096 sample[419] got 4.0390625 ref 4.04097857 PASS
+RC 0 gemm_nt_tiled_fragment_512_512_512_32x128_bk32.cl
+RUN gemm_nt_tiled_fragment_512_512_512_32x128_bk64.cl M=512 N=512 K=512 BM=32 BN=128 BK=64 TH=64
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=512 N=512 K=512 BM=32 BN=128 TH=64 iters=30 ms_iter 1.567 tflops 0.171 timing=event wall_ms_iter 1.926
+GEMM max_rel 0.000469839 rms 1.85806 bad 0/4096 sample[419] got 4.0390625 ref 4.04097857 PASS
+RC 0 gemm_nt_tiled_fragment_512_512_512_32x128_bk64.cl
+RUN gemm_nt_tiled_fragment_1024_2560_2560_64x64_bk16.cl M=1024 N=2560 K=2560 BM=64 BN=64 BK=16 TH=64
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=1024 N=2560 K=2560 BM=64 BN=64 TH=64 iters=10 ms_iter 20.461 tflops 0.656 timing=event wall_ms_iter 21.221
+GEMM max_rel 0.000472767 rms 4.20171 bad 0/4096 sample[2134] got -8.09375 ref -8.08988564 PASS
+RC 0 gemm_nt_tiled_fragment_1024_2560_2560_64x64_bk16.cl
+RUN gemm_nt_tiled_fragment_1024_2560_2560_64x64_bk32.cl M=1024 N=2560 K=2560 BM=64 BN=64 BK=32 TH=64
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=1024 N=2560 K=2560 BM=64 BN=64 TH=64 iters=10 ms_iter 32.195 tflops 0.417 timing=event wall_ms_iter 33.363
+GEMM max_rel 0.000472767 rms 4.20171 bad 0/4096 sample[2134] got -8.09375 ref -8.08988564 PASS
+RC 0 gemm_nt_tiled_fragment_1024_2560_2560_64x64_bk32.cl
+RUN gemm_nt_tiled_fragment_1024_2560_2560_64x64_bk64.cl M=1024 N=2560 K=2560 BM=64 BN=64 BK=64 TH=64
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=1024 N=2560 K=2560 BM=64 BN=64 TH=64 iters=10 ms_iter 73.999 tflops 0.181 timing=event wall_ms_iter 74.831
+GEMM max_rel 0.000472767 rms 4.20171 bad 0/4096 sample[2134] got -8.09375 ref -8.08988564 PASS
+RC 0 gemm_nt_tiled_fragment_1024_2560_2560_64x64_bk64.cl
+RUN gemm_nt_tiled_fragment_1024_2560_2560_64x128_bk16.cl M=1024 N=2560 K=2560 BM=64 BN=128 BK=16 TH=128
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=1024 N=2560 K=2560 BM=64 BN=128 TH=128 iters=10 ms_iter 17.765 tflops 0.756 timing=event wall_ms_iter 18.517
+GEMM max_rel 0.000472767 rms 4.20171 bad 0/4096 sample[2134] got -8.09375 ref -8.08988564 PASS
+RC 0 gemm_nt_tiled_fragment_1024_2560_2560_64x128_bk16.cl
+RUN gemm_nt_tiled_fragment_1024_2560_2560_64x128_bk32.cl M=1024 N=2560 K=2560 BM=64 BN=128 BK=32 TH=128
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=1024 N=2560 K=2560 BM=64 BN=128 TH=128 iters=10 ms_iter 24.697 tflops 0.543 timing=event wall_ms_iter 25.537
+GEMM max_rel 0.000472767 rms 4.20171 bad 0/4096 sample[2134] got -8.09375 ref -8.08988564 PASS
+RC 0 gemm_nt_tiled_fragment_1024_2560_2560_64x128_bk32.cl
+RUN gemm_nt_tiled_fragment_1024_2560_2560_64x128_bk64.cl M=1024 N=2560 K=2560 BM=64 BN=128 BK=64 TH=128
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=1024 N=2560 K=2560 BM=64 BN=128 TH=128 iters=10 ms_iter 32.085 tflops 0.418 timing=event wall_ms_iter 32.874
+GEMM max_rel 0.000472767 rms 4.20171 bad 0/4096 sample[2134] got -8.09375 ref -8.08988564 PASS
+RC 0 gemm_nt_tiled_fragment_1024_2560_2560_64x128_bk64.cl
+RUN gemm_nt_tiled_fragment_1024_2560_2560_128x64_bk16.cl M=1024 N=2560 K=2560 BM=128 BN=64 BK=16 TH=128
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=1024 N=2560 K=2560 BM=128 BN=64 TH=128 iters=10 ms_iter 17.700 tflops 0.758 timing=event wall_ms_iter 18.814
+GEMM max_rel 0.000472767 rms 4.20171 bad 0/4096 sample[2134] got -8.09375 ref -8.08988564 PASS
+RC 0 gemm_nt_tiled_fragment_1024_2560_2560_128x64_bk16.cl
+RUN gemm_nt_tiled_fragment_1024_2560_2560_128x64_bk32.cl M=1024 N=2560 K=2560 BM=128 BN=64 BK=32 TH=128
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=1024 N=2560 K=2560 BM=128 BN=64 TH=128 iters=10 ms_iter 24.798 tflops 0.541 timing=event wall_ms_iter 25.863
+GEMM max_rel 0.000472767 rms 4.20171 bad 0/4096 sample[2134] got -8.09375 ref -8.08988564 PASS
+RC 0 gemm_nt_tiled_fragment_1024_2560_2560_128x64_bk32.cl
+RUN gemm_nt_tiled_fragment_1024_2560_2560_128x64_bk64.cl M=1024 N=2560 K=2560 BM=128 BN=64 BK=64 TH=128
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=1024 N=2560 K=2560 BM=128 BN=64 TH=128 iters=10 ms_iter 32.490 tflops 0.413 timing=event wall_ms_iter 33.181
+GEMM max_rel 0.000472767 rms 4.20171 bad 0/4096 sample[2134] got -8.09375 ref -8.08988564 PASS
+RC 0 gemm_nt_tiled_fragment_1024_2560_2560_128x64_bk64.cl
+RUN gemm_nt_tiled_fragment_1024_2560_2560_32x128_bk16.cl M=1024 N=2560 K=2560 BM=32 BN=128 BK=16 TH=64
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=1024 N=2560 K=2560 BM=32 BN=128 TH=64 iters=10 ms_iter 25.551 tflops 0.525 timing=event wall_ms_iter 26.590
+GEMM max_rel 0.000472767 rms 4.20171 bad 0/4096 sample[2134] got -8.09375 ref -8.08988564 PASS
+RC 0 gemm_nt_tiled_fragment_1024_2560_2560_32x128_bk16.cl
+RUN gemm_nt_tiled_fragment_1024_2560_2560_32x128_bk32.cl M=1024 N=2560 K=2560 BM=32 BN=128 BK=32 TH=64
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=1024 N=2560 K=2560 BM=32 BN=128 TH=64 iters=10 ms_iter 45.551 tflops 0.295 timing=event wall_ms_iter 46.575
+GEMM max_rel 0.000472767 rms 4.20171 bad 0/4096 sample[2134] got -8.09375 ref -8.08988564 PASS
+RC 0 gemm_nt_tiled_fragment_1024_2560_2560_32x128_bk32.cl
+RUN gemm_nt_tiled_fragment_1024_2560_2560_32x128_bk64.cl M=1024 N=2560 K=2560 BM=32 BN=128 BK=64 TH=64
+BUILD_OK build_log_begin
+Pass
+BUILD_OK build_log_end
+GEMM M=1024 N=2560 K=2560 BM=32 BN=128 TH=64 iters=10 ms_iter 82.904 tflops 0.162 timing=event wall_ms_iter 83.693
+GEMM max_rel 0.000472767 rms 4.20171 bad 0/4096 sample[2134] got -8.09375 ref -8.08988564 PASS
+RC 0 gemm_nt_tiled_fragment_1024_2560_2560_32x128_bk64.cl
