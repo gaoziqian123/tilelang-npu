@@ -1,14 +1,13 @@
 // Function: gemm_nt_kernel_kernel
-#ifdef cl_khr_fp16
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
-#elif defined(cl_amd_fp16)
-#pragma OPENCL EXTENSION cl_amd_fp16 : enable
-#else
-#error "Half precision floating point not supported by OpenCL implementation on your device." 
-#endif
 
-__kernel void gemm_nt_kernel_kernel(__global half* restrict A, __global half* restrict B, __global half* restrict C);
-__kernel void gemm_nt_kernel_kernel(__global half* restrict A, __global half* restrict B, __global half* restrict C) {
+#define TL_M 512
+#define TL_N 512
+#define TL_K 512
+
+__kernel void gemm_nt_kernel_kernel(__global half *restrict A,
+                                    __global half *restrict B,
+                                    __global half *restrict C) {
   const int lid = convert_int(get_local_id(0));
   const int bx = convert_int(get_group_id(0));
   const int by = convert_int(get_group_id(1));

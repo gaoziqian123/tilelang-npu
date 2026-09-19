@@ -34,6 +34,16 @@ PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python exampl
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/texture_copy.py
 ```
 
+最小管线冒烟回归（不依赖手机，只验证 OpenCL source emission 形态）：
+
+```bash
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/tests/probe_l0.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/tests/probe_l1.py
+```
+
+`probe_l0.py` 覆盖 fp32 128×128 elementwise (`B[i]=A[i]+1`，每 work-item 一个元素)；
+`probe_l1.py` 覆盖 fp32 128×256→128 行归约（`T.alloc_shared` + barrier 树归约）。
+
 成功时关键输出包含 `EMIT_OK ...`、`SOURCE_PATH ...` 和 `CLANG_SYNTAX_RC 0`
 （如果本机无 clang 可加 `--skip-clang`）。形状参数可用命令行覆盖，但当前
 OpenCL 生成代码没有边界保护，launch 尺寸必须整除数据规模：例如 SiLU 的
@@ -113,10 +123,11 @@ with T.Kernel(T.ceildiv(N, bn), T.ceildiv(M, bm), threads=threads) as (bx, by):
 
 `gemm_nt.py --impl fragment` 是纯 TileLang IR 的 direct-global 路线：A/B 直接从
 `__global` 读取，不使用 `T.alloc_shared`、`T.copy` 或 barrier；每个 work-item 负责
-一个 8×8 输出 tile，累加器为 `T.alloc_fragment((8, 8), "float32")`。OpenCL codegen
-对这个形态做一个受限 peephole：把 printer 生成的 fragment 私有数组标量 MAC 改写为
-8 个 `float8 acc_*`，A/B 按 K 维 `vload4`，C 用 `vstore8`，避免 Adreno 编译器把
-`float acc[64]` 当作可寻址私有数组而 spill。
+一个 8×8 输出 tile，累加器为 `T.alloc_fragment((8, 8), "float32")`。OpenCL lowering
+在 `UnrollLoop` 之后运行 `VectorizePrivateFragment`，识别所有 fragment 访问均为
+编译期常量的形态，并在 codegen 前选择寄存器/向量 lowering：8 个 `float8 acc_*`，
+A/B 按 K 维 `vload4`，C 用 `vstore8`，避免 Adreno 编译器把 `float acc[64]` 当作
+可寻址私有数组而 spill。
 
 生成命令示例：
 
@@ -150,9 +161,9 @@ buffer 8×8 1.025T（-48%）。
 `gemm_nt.py --impl tiled_fragment` 是 buffer 路线的纯 TileLang IR 版本：`T.copy`
 把 A/B K tile 搬进 `T.alloc_shared`，`T.sync_threads()` 后用
 `T.gemm(..., transpose_B=True)` 累加到 `T.alloc_fragment((8, 8), "float32")`，每个
-work-item 负责一个 8×8 输出 tile。OpenCL codegen 对这个形态做受限 peephole：保留
-IR 的 shared staging 结构，但把 generic lowering 生成的 scalar fragment body 改写成
-手写 buffer 8×8 同构的 `float8 acc[8]`、shared `half8` 读和 `vstore8` 写回。
+work-item 负责一个 8×8 输出 tile。`VectorizePrivateFragment` 在 TIR 管线中识别
+该形态，codegen 前选择与手写 buffer 8×8 同构的向量 lowering：保留 shared staging，
+inner K loop 用 shared `half8` 读、`float8 acc[8]` 累加和 `vstore8` 写回。
 
 生成物形态：A/B global→shared staging 为每 work-item 多次 `vload4` + scalar shared
 store；inner K loop 每步各一次 shared `half8` load（A/B），8 个 `float8` fp32 累加器，
@@ -232,9 +243,10 @@ buffer，B 按 `Btex[k, n//4, n%4] = B_nt[n, k]` 存入 RGBA fp16
 
 - `gemm_nt_texstage.py` 是手写参考源码生成器，用来扫 tile/BK 并标定上限。
 - `gemm_nt_texstaged.py` 是 TileLang IR 版：B 声明为 `scope="global.texture"`，
-  K 分块内用 `T.copy` 触发 texture-source lowering，再在生成源码层把标量 MAC
-  nest 替换成与手写参考相同的 `float8` block；默认结构对齐 local GEMM
-  `BM=64, BN=128, BK=16/32, threads=128`。
+  K 分块内用 `T.copy` 触发 texture-source lowering；当前 texture GEMM 路线只要求
+  对拍正确，fragment pass 不匹配 texture scope。`gemm_nt_tex.py` 的 direct texture
+  探针仍保留 codegen 里的 acc-only fallback（`float acc[64]` → `float8 acc_0..7`）避免
+  Adreno 私有数组 spill；它没有替换 GEMM body/staging/load-store 结构。
 
 staging 段形态（生成物可 grep `READ_IMAGEH` / `vstore4`）：
 

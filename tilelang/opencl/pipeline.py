@@ -8,6 +8,7 @@ from tvm.tirx.stmt import AllocBuffer, DeclBuffer
 from tvm.tirx.transform import prim_func_pass
 
 import tilelang
+from tilelang.opencl.vectorize_private_fragment import VectorizePrivateFragment
 from tilelang.backend.pass_pipeline.pipeline_utils import (
     LayoutVisual,
     allow_vectorize,
@@ -238,4 +239,9 @@ def OpenCLPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
     mod = tilelang.transform.MakePackedAPI()(mod)
     mod = tilelang.transform.Simplify()(mod)
     mod = tilelang.transform.LowerDeviceKernelLaunch()(mod)
+    # OpenCL fragment SROA/vectorization must run after unrolling: only here are
+    # local.fragment indices compile-time constants and safe to replace with
+    # register vectors / vector load-store lowering.  Run last so later lowering
+    # passes cannot drop the device PrimFunc metadata consumed by codegen.
+    mod = VectorizePrivateFragment()(mod)
     return mod
