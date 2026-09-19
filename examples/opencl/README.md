@@ -109,6 +109,42 @@ with T.Kernel(T.ceildiv(N, bn), T.ceildiv(M, bm), threads=threads) as (bx, by):
 默认 launch：`local=(256,1)`，`global=(32*256,32)`，对应 `M=N=K=512`、
 `BM=BN=BK=16`。
 
+### GEMM_NT fragment direct-global variant
+
+`gemm_nt.py --impl fragment` 是纯 TileLang IR 的 direct-global 路线：A/B 直接从
+`__global` 读取，不使用 `T.alloc_shared`、`T.copy` 或 barrier；每个 work-item 负责
+一个 8×8 输出 tile，累加器为 `T.alloc_fragment((8, 8), "float32")`。OpenCL codegen
+对这个形态做一个受限 peephole：把 printer 生成的 fragment 私有数组标量 MAC 改写为
+8 个 `float8 acc_*`，A/B 按 K 维 `vload4`，C 用 `vstore8`，避免 Adreno 编译器把
+`float acc[64]` 当作可寻址私有数组而 spill。
+
+生成命令示例：
+
+```bash
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python \
+  examples/opencl/kernels/gemm_nt.py --impl fragment \
+  --m 512 --n 512 --k 512 --bm 64 --bn 128 --bk 64 --threads 128 \
+  --out examples/opencl/out/gemm_nt_fragment_512_512_512_64x128_bk64.cl
+```
+
+OnePlus 13 / Adreno 830 真机 `tl_probe gemm` kernel-only event 口径，fp64 reference，
+rms-scaled `max_rel < 0.1`：
+
+| 形状 | tile | ms | TFLOPS | max_rel |
+|---|---:|---:|---:|---:|
+| 512³ | 64×64 / 64 threads | 0.608 | 0.441 | 0.000470 |
+| 512³ | 64×128 / 128 threads | 0.546 | 0.492 | 0.000470 |
+| 512³ | 32×128 / 64 threads | 0.628 | 0.428 | 0.000470 |
+| 512³ | 128×64 / 128 threads | **0.542** | **0.495** | 0.000470 |
+| 1024×2560×2560 | 64×64 / 64 threads | **25.204** | **0.533** | 0.000473 |
+| 1024×2560×2560 | 64×128 / 128 threads | 28.312 | 0.474 | 0.000473 |
+| 1024×2560×2560 | 32×128 / 64 threads | 59.630 | 0.225 | 0.000473 |
+| 1024×2560×2560 | 128×64 / 128 threads | 27.346 | 0.491 | 0.000473 |
+
+结论：fragment direct-global 路线正确且寄存器形态达标，但没有 B 复用，主要受全局
+带宽/访存重放限制；prod 形状最优 0.533T，仍慢于 local_tiled 0.750T（-29%）和手写
+buffer 8×8 1.025T（-48%）。
+
 ## Texture copy (`kernels/texture_copy.py`)
 
 输入 `B` 使用 `T.Tensor((H, W, 4), "float16", scope="global.texture")`，

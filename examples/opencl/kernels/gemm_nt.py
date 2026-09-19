@@ -220,6 +220,46 @@ def make_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, threads: int)
     return gemm_nt_kernel
 
 
+def make_fragment_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, threads: int):
+    tile_m = 8
+    tile_n = 8
+
+    @T.prim_func
+    def gemm_nt_kernel(
+        A: T.Tensor((M, K), "float16"),
+        B: T.Tensor((N, K), "float16"),
+        C: T.Tensor((M, N), "float16"),
+    ):
+        # Pure-IR direct-global GEMM_NT: each work-item owns one 8x8 C tile.
+        # There is intentionally no alloc_shared/T.copy/T.sync_threads here; the
+        # accumulator lives in local.fragment (OpenCL private/register scope).
+        with T.Kernel(T.ceildiv(N, bn), T.ceildiv(M, bm), threads=threads) as (bx, by):
+            tx = T.get_thread_binding(0)
+            tiles_n = bn // tile_n
+            tm = tx // tiles_n
+            tn = tx - tm * tiles_n
+            acc = T.alloc_fragment((tile_m, tile_n), "float32")
+
+            for ii in T.unroll(tile_m, explicit=True):
+                for jj in T.unroll(tile_n, explicit=True):
+                    acc[ii, jj] = T.float32(0.0)
+
+            for ko in T.serial(T.ceildiv(K, bk)):
+                for kk in T.serial(bk):
+                    kidx = ko * bk + kk
+                    for ii in T.unroll(tile_m, explicit=True):
+                        for jj in T.unroll(tile_n, explicit=True):
+                            acc[ii, jj] += T.cast(A[by * bm + tm * tile_m + ii, kidx], "float32") * T.cast(
+                                B[bx * bn + tn * tile_n + jj, kidx], "float32"
+                            )
+
+            for ii in T.unroll(tile_m, explicit=True):
+                for jj in T.unroll(tile_n, explicit=True):
+                    C[by * bm + tm * tile_m + ii, bx * bn + tn * tile_n + jj] = T.cast(acc[ii, jj], "float16")
+
+    return gemm_nt_kernel
+
+
 def syntax_check(path: Path) -> int | None:
     clang = subprocess.run(
         ["bash", "-lc", "command -v clang"],
@@ -250,7 +290,7 @@ def main() -> int:
     ap.add_argument("--bn", type=int, default=128)
     ap.add_argument("--bk", type=int, default=64)
     ap.add_argument("--threads", type=int, default=128)
-    ap.add_argument("--impl", choices=("tilelang", "local64x128", "local_tiled", "direct8x8", "image8x8"), default="local64x128")
+    ap.add_argument("--impl", choices=("tilelang", "fragment", "local64x128", "local_tiled", "direct8x8", "image8x8"), default="local64x128")
     ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent.parent / "out" / "gemm_nt.cl")
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
@@ -282,6 +322,19 @@ def main() -> int:
         if args.k % 4 != 0:
             raise SystemExit("image8x8 requires --k divisible by 4")
         kernel_source = make_image8x8_source(args.m, args.n, args.k)
+    elif args.impl == "fragment":
+        if args.bm % 8 or args.bn % 8 or args.bk <= 0:
+            raise SystemExit("fragment requires --bm/--bn divisible by 8 and positive --bk")
+        expected_threads = (args.bm // 8) * (args.bn // 8)
+        if args.threads != expected_threads:
+            raise SystemExit(f"fragment requires --threads {expected_threads} for 8x8/thread BM={args.bm} BN={args.bn}")
+        with tvm.target.Target("opencl"):
+            artifact = tilelang.lower(
+                make_fragment_kernel(args.m, args.n, args.k, args.bm, args.bn, args.bk, args.threads),
+                target="opencl",
+                enable_device_compile=False,
+            )
+        kernel_source = artifact.kernel_source
     else:
         with tvm.target.Target("opencl"):
             artifact = tilelang.lower(
