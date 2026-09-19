@@ -129,6 +129,10 @@ with T.Kernel(T.ceildiv(N, bn), T.ceildiv(M, bm), threads=threads) as (bx, by):
 A/B 按 K 维 `vload4`，C 用 `vstore8`，避免 Adreno 编译器把 `float acc[64]` 当作
 可寻址私有数组而 spill。
 
+`--b-layout kn` 表示 host 传入预转置的 `Bt[K,N]` buffer。该路径把 B 的 inner load
+改为每个 K lane 一次 contiguous `vload8`，内链与手写 `hgemm_buf_8x8` 对齐；默认
+`--b-layout nk` 保持旧 ABI(`B[N,K]`)和旧 gather 生成物。
+
 生成命令示例：
 
 ```bash
@@ -151,10 +155,17 @@ rms-scaled `max_rel < 0.1`：
 | 1024×2560×2560 | 64×128 / 128 threads | 28.312 | 0.474 | 0.000473 |
 | 1024×2560×2560 | 32×128 / 64 threads | 59.630 | 0.225 | 0.000473 |
 | 1024×2560×2560 | 128×64 / 128 threads | 27.346 | 0.491 | 0.000473 |
+| 1024×2560×2560 (`Bt[K,N]`) | 64×64 / 64 threads | 19.834 | 0.677 | 0.000473 |
+| 1024×2560×2560 (`Bt[K,N]`) | 128×64 / 128 threads | 16.432 | 0.817 | 0.000464 |
+| 1024×2560×2560 (`Bt[K,N]`) | 64×128 / 128 threads | 12.462 | 1.077 | 0.000464 |
+| 1024×2560×2560 (`Bt[K,N]`) | 32×128 / 64 threads | **9.784** | **1.372** | 0.000464 |
+| 512³ (`Bt[K,N]`) | 64×64 / 64 threads | 0.272 | 0.985 | 0.000470 |
+| 512³ (`Bt[K,N]`) | 64×128 / 128 threads | 0.234 | 1.146 | 0.000470 |
+| 512³ (`Bt[K,N]`) | 32×128 / 64 threads | **0.225** | **1.191** | 0.000470 |
 
-结论：fragment direct-global 路线正确且寄存器形态达标，但没有 B 复用，主要受全局
-带宽/访存重放限制；prod 形状最优 0.533T，仍慢于 local_tiled 0.750T（-29%）和手写
-buffer 8×8 1.025T（-48%）。
+结论：旧 `B[N,K]` fragment direct-global 路线正确且寄存器形态达标，但 B gather
+导致全局访存重放；切到 `Bt[K,N]` contiguous `half8` load 后，prod 形状达到 1.372T，
+高于手写 buffer 8×8 的 1.025T（同为 fp32 accumulate / buffer direct load）。
 
 ### GEMM_NT tiled fragment buffer variant
 

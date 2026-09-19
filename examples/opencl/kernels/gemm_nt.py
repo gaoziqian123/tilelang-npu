@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 from pathlib import Path
 
@@ -97,7 +98,25 @@ def make_local64x128_source(M: int, N: int, K: int, bk: int = 64) -> str:
     return make_local_tiled_source(M, N, K, 64, 128, bk)
 
 
-def make_direct8x8_source(M: int, N: int, K: int) -> str:
+def make_direct8x8_source(M: int, N: int, K: int, b_layout: str = "nk") -> str:
+    if b_layout == "kn":
+        b_decl = "float8 b[4];"
+        b_loads = """        #pragma unroll
+        for (int i = 0; i < 4; ++i)
+            b[i] = convert_float8(vload8(0, B + (size_t)(pos + i) * TL_N + c0));"""
+        macs = """            c[i] += (float8)(a[i].x) * b[0];
+            c[i] += (float8)(a[i].y) * b[1];
+            c[i] += (float8)(a[i].z) * b[2];
+            c[i] += (float8)(a[i].w) * b[3];"""
+    else:
+        b_decl = "float4 b4[8];"
+        b_loads = """        #pragma unroll
+        for (int j = 0; j < 8; ++j)
+            b4[j] = convert_float4(vload4(0, B + (size_t)(c0 + j) * TL_K + pos));"""
+        macs = """            c[i] += (float8)(a[i].x) * (float8)(b4[0].x, b4[1].x, b4[2].x, b4[3].x, b4[4].x, b4[5].x, b4[6].x, b4[7].x);
+            c[i] += (float8)(a[i].y) * (float8)(b4[0].y, b4[1].y, b4[2].y, b4[3].y, b4[4].y, b4[5].y, b4[6].y, b4[7].y);
+            c[i] += (float8)(a[i].z) * (float8)(b4[0].z, b4[1].z, b4[2].z, b4[3].z, b4[4].z, b4[5].z, b4[6].z, b4[7].z);
+            c[i] += (float8)(a[i].w) * (float8)(b4[0].w, b4[1].w, b4[2].w, b4[3].w, b4[4].w, b4[5].w, b4[6].w, b4[7].w);"""
     return f"""// Function: gemm_nt_kernel_kernel
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
@@ -118,19 +137,14 @@ __kernel void gemm_nt_kernel_kernel(__global const half *restrict A,
     for (int i = 0; i < 8; ++i) c[i] = (float8)(0.0f);
     for (int pos = 0; pos < TL_K; pos += 4) {{
         float4 a[8];
-        float4 b4[8];
+        {b_decl}
         #pragma unroll
         for (int i = 0; i < 8; ++i)
             a[i] = convert_float4(vload4(0, A + (size_t)(r0 + i) * TL_K + pos));
-        #pragma unroll
-        for (int j = 0; j < 8; ++j)
-            b4[j] = convert_float4(vload4(0, B + (size_t)(c0 + j) * TL_K + pos));
+{b_loads}
         #pragma unroll
         for (int i = 0; i < 8; ++i) {{
-            c[i] += (float8)(a[i].x) * (float8)(b4[0].x, b4[1].x, b4[2].x, b4[3].x, b4[4].x, b4[5].x, b4[6].x, b4[7].x);
-            c[i] += (float8)(a[i].y) * (float8)(b4[0].y, b4[1].y, b4[2].y, b4[3].y, b4[4].y, b4[5].y, b4[6].y, b4[7].y);
-            c[i] += (float8)(a[i].z) * (float8)(b4[0].z, b4[1].z, b4[2].z, b4[3].z, b4[4].z, b4[5].z, b4[6].z, b4[7].z);
-            c[i] += (float8)(a[i].w) * (float8)(b4[0].w, b4[1].w, b4[2].w, b4[3].w, b4[4].w, b4[5].w, b4[6].w, b4[7].w);
+{macs}
         }}
     }}
     #pragma unroll
@@ -220,16 +234,17 @@ def make_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, threads: int)
     return gemm_nt_kernel
 
 
-def make_fragment_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, threads: int):
+def make_fragment_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, threads: int, b_layout: str = "nk"):
     tile_m = 8
     tile_n = 8
 
     @T.prim_func
     def gemm_nt_kernel(
         A: T.Tensor((M, K), "float16"),
-        B: T.Tensor((N, K), "float16"),
+        B: T.Tensor((K, N) if b_layout == "kn" else (N, K), "float16"),
         C: T.Tensor((M, N), "float16"),
     ):
+        T.func_attr({"tl.opencl.b_layout": b_layout})
         # Pure-IR direct-global GEMM_NT: each work-item owns one 8x8 C tile.
         # There is intentionally no alloc_shared/T.copy/T.sync_threads here; the
         # accumulator lives in local.fragment (OpenCL private/register scope).
@@ -249,9 +264,14 @@ def make_fragment_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, thre
                     kidx = ko * bk + kk
                     for ii in T.unroll(tile_m, explicit=True):
                         for jj in T.unroll(tile_n, explicit=True):
-                            acc[ii, jj] += T.cast(A[by * bm + tm * tile_m + ii, kidx], "float32") * T.cast(
-                                B[bx * bn + tn * tile_n + jj, kidx], "float32"
-                            )
+                            if b_layout == "kn":
+                                acc[ii, jj] += T.cast(A[by * bm + tm * tile_m + ii, kidx], "float32") * T.cast(
+                                    B[kidx, bx * bn + tn * tile_n + jj], "float32"
+                                )
+                            else:
+                                acc[ii, jj] += T.cast(A[by * bm + tm * tile_m + ii, kidx], "float32") * T.cast(
+                                    B[bx * bn + tn * tile_n + jj, kidx], "float32"
+                                )
 
             for ii in T.unroll(tile_m, explicit=True):
                 for jj in T.unroll(tile_n, explicit=True):
@@ -331,6 +351,7 @@ def main() -> int:
     ap.add_argument("--bk", type=int, default=64)
     ap.add_argument("--threads", type=int, default=128)
     ap.add_argument("--impl", choices=("tilelang", "fragment", "tiled_fragment", "local64x128", "local_tiled", "direct8x8", "image8x8"), default="local64x128")
+    ap.add_argument("--b-layout", choices=("nk", "kn"), default="nk", help="B buffer layout for fragment/direct8x8: nk=B[N,K], kn=pretransposed Bt[K,N]")
     ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent.parent / "out" / "gemm_nt.cl")
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
@@ -355,7 +376,7 @@ def main() -> int:
     elif args.impl == "direct8x8":
         if args.bm != 8 or args.bn != 8 or args.threads != 1:
             raise SystemExit("direct8x8 requires --bm 8 --bn 8 --threads 1")
-        kernel_source = make_direct8x8_source(args.m, args.n, args.k)
+        kernel_source = make_direct8x8_source(args.m, args.n, args.k, args.b_layout)
     elif args.impl == "image8x8":
         if args.bm != 8 or args.bn != 8 or args.threads != 1:
             raise SystemExit("image8x8 requires --bm 8 --bn 8 --threads 1")
@@ -368,12 +389,20 @@ def main() -> int:
         expected_threads = (args.bm // 8) * (args.bn // 8)
         if args.threads != expected_threads:
             raise SystemExit(f"fragment requires --threads {expected_threads} for 8x8/thread BM={args.bm} BN={args.bn}")
-        with tvm.target.Target("opencl"):
-            artifact = tilelang.lower(
-                make_fragment_kernel(args.m, args.n, args.k, args.bm, args.bn, args.bk, args.threads),
-                target="opencl",
-                enable_device_compile=False,
-            )
+        old_b_layout = os.environ.get("TL_OPENCL_B_LAYOUT")
+        os.environ["TL_OPENCL_B_LAYOUT"] = args.b_layout
+        try:
+            with tvm.target.Target("opencl"):
+                artifact = tilelang.lower(
+                    make_fragment_kernel(args.m, args.n, args.k, args.bm, args.bn, args.bk, args.threads, args.b_layout),
+                    target="opencl",
+                    enable_device_compile=False,
+                )
+        finally:
+            if old_b_layout is None:
+                os.environ.pop("TL_OPENCL_B_LAYOUT", None)
+            else:
+                os.environ["TL_OPENCL_B_LAYOUT"] = old_b_layout
         kernel_source = artifact.kernel_source
     elif args.impl == "tiled_fragment":
         if args.bm % 8 or args.bn % 8 or args.bk <= 0:

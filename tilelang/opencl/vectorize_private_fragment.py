@@ -20,6 +20,7 @@ ops for this pattern, this file can be replaced by a general C++ SROA pass.
 """
 
 import re
+import os
 from dataclasses import dataclass
 
 from tvm import IRModule, tirx
@@ -30,6 +31,7 @@ from tvm.tirx.transform import prim_func_pass
 @dataclass(frozen=True)
 class FragmentPlan:
     kind: str
+    b_layout: str
     M: int
     N: int
     K: int
@@ -55,7 +57,12 @@ def _shape(buf) -> tuple[int, ...] | None:
     return tuple(vals)
 
 
-def _buffer_shapes(func: tirx.PrimFunc, src: str | None = None) -> tuple[int, int, int] | None:
+def _buffer_shapes(func: tirx.PrimFunc, src: str | None = None) -> tuple[int, int, int, str] | None:
+    attrs = getattr(func, "attrs", None)
+    attr_b_layout = None
+    if attrs and "tl.opencl.b_layout" in attrs:
+        attr_b_layout = str(attrs["tl.opencl.b_layout"]).strip('"')
+    attr_b_layout = attr_b_layout or os.environ.get("TL_OPENCL_B_LAYOUT")
     buffer_map = getattr(func, "buffer_map", None)
     if not buffer_map or len(buffer_map) < 3:
         if src is None:
@@ -83,14 +90,20 @@ def _buffer_shapes(func: tirx.PrimFunc, src: str | None = None) -> tuple[int, in
         M, N = AK // K, BK // K
         if M * N != CN:
             return None
-        return M, N, K
+        # Flattened packed-API recovery loses the 2-D B layout.  The canonical
+        # direct-Bt fragment indexes B as B[kidx, n] before this pass; recover
+        # that contract from the script text when the BufferMap is gone.
+        b_layout = attr_b_layout or ("kn" if re.search(r"B\[[^,\]]+kidx[^,\]]*,\s*[^\]]+tn", src) else "nk")
+        return M, N, K, b_layout
     shapes = [_shape(buf) for buf in buffer_map.values()]
     if any(s is None or len(s) != 2 for s in shapes[:3]):
         return None
     a, b, c = shapes[:3]
-    if a[1] != b[1] or c != (a[0], b[0]):
-        return None
-    return a[0], b[0], a[1]
+    if a[1] == b[1] and c == (a[0], b[0]):
+        return a[0], b[0], a[1], attr_b_layout or "nk"
+    if a[1] == b[0] and c == (a[0], b[1]):
+        return a[0], b[1], a[1], attr_b_layout or "kn"
+    return None
 
 
 def _thread_extents(func: tirx.PrimFunc) -> dict[str, int]:
@@ -136,7 +149,7 @@ def _detect_plan(func: tirx.PrimFunc) -> FragmentPlan | None:
     dims = _buffer_shapes(func, src)
     if dims is None:
         return None
-    M, N, K = dims
+    M, N, K, b_layout = dims
     te = _thread_extents(func)
     bx = te.get("blockIdx.x")
     by = te.get("blockIdx.y")
@@ -160,7 +173,7 @@ def _detect_plan(func: tirx.PrimFunc) -> FragmentPlan | None:
         kind = "fragment_8x8"
     if bk is None or bk <= 0 or bk % 4:
         return None
-    return FragmentPlan(kind, M, N, K, bm, bn, bk, threads)
+    return FragmentPlan(kind, b_layout, M, N, K, bm, bn, bk, threads)
 
 
 def _attrs(threads: int, bx: int, by: int) -> str:
@@ -208,14 +221,19 @@ def _direct_fragment_script(p: FragmentPlan) -> str:
     lines[-1:-1] = [f'        acc[{i}] = T.Broadcast(T.float32(0), 8)' for i in range(8)]
     for i in range(8):
         lines.append(f'            a{i}: T.float32x4 = T.call_extern("float32x4", "convert_float4", T.call_extern("float16x4", "vload4", 0, T.address_of(A_1[(r0 + {i}) * {p.K} + pos])))')
-    bnames = []
-    for j in range(8):
-        bnames.append(f"b{j}")
-        lines.append(f'            b{j}: T.float32x4 = T.call_extern("float32x4", "convert_float4", T.call_extern("float16x4", "vload4", 0, T.address_of(B_1[(c0 + {j}) * {p.K} + pos])))')
-    for i in range(8):
+    if p.b_layout == "kn":
         for comp in range(4):
-            args = ", ".join(f"T.Shuffle([b{j}], [{comp}])" for j in range(8))
-            lines.append(f'            acc[{i}] = acc[{i}] + T.Broadcast(T.Shuffle([a{i}], [{comp}]), 8) * T.call_extern("float32x8", "(float8)", {args})')
+            lines.append(f'            b{comp}: T.float32x8 = T.call_extern("float32x8", "convert_float8", T.call_extern("float16x8", "vload8", 0, T.address_of(B_1[(pos + {comp}) * {p.N} + c0])))')
+        for i in range(8):
+            for comp in range(4):
+                lines.append(f'            acc[{i}] = acc[{i}] + T.Broadcast(T.Shuffle([a{i}], [{comp}]), 8) * b{comp}')
+    else:
+        for j in range(8):
+            lines.append(f'            b{j}: T.float32x4 = T.call_extern("float32x4", "convert_float4", T.call_extern("float16x4", "vload4", 0, T.address_of(B_1[(c0 + {j}) * {p.K} + pos])))')
+        for i in range(8):
+            for comp in range(4):
+                args = ", ".join(f"T.Shuffle([b{j}], [{comp}])" for j in range(8))
+                lines.append(f'            acc[{i}] = acc[{i}] + T.Broadcast(T.Shuffle([a{i}], [{comp}]), 8) * T.call_extern("float32x8", "(float8)", {args})')
     for i in range(8):
         lines.append(f'        C_1[T.Ramp((r0 + {i}) * {p.N} + c0, 1, 8)] = T.Cast("float16x8", acc[{i}])')
     return "\n".join(lines) + "\n"
