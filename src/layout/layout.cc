@@ -828,8 +828,16 @@ Array<PrimExpr> LayoutNode::Forward(const Array<PrimExpr> &vars) const {
     vmap.Set(InputPlaceholder(i), transform_vars[i]);
   }
 
-  Array<PrimExpr> transformed = forward_index_.Map(
-      [&](const PrimExpr &e) { return Substitute(e, vmap); });
+  Array<PrimExpr> transformed = forward_index_.Map([&](const PrimExpr &e) {
+    return SubstituteWithDataTypeLegalization(
+        e, [&](const Var &v) -> ffi::Optional<PrimExpr> {
+          auto it = vmap.find(v);
+          if (it != vmap.end()) {
+            return (*it).second;
+          }
+          return std::nullopt;
+        });
+  });
   // Concatenate with the remaining elements from vars
   Array<PrimExpr> result;
   for (size_t i = 0; i < vars.size() - InputDim(); i++) {

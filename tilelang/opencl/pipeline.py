@@ -136,6 +136,21 @@ def _OpenCLSharedDynToShared():
     return _pass
 
 
+def _mod_assume_inbounds(mod: IRModule) -> bool:
+    """Kernels marked ``tl.opencl.assume_inbounds`` generate every access
+    in-bounds by construction (tile shapes divide problem shapes), so the
+    zero-fill boundary guards from LegalizeSafeMemoryAccess are dead weight
+    (and their conservative bound extraction is off by one for rolled K
+    loops).  Let such kernels opt out of the guard insertion."""
+    for func in mod.functions.values():
+        if not isinstance(func, tirx.PrimFunc):
+            continue
+        attrs = getattr(func, "attrs", None)
+        if attrs is not None and attrs.get("tl.opencl.assume_inbounds", None) is not None:
+            return True
+    return False
+
+
 def _has_texture_scope_buffer(mod: IRModule) -> bool:
     def _is_texture_scope(scope: str | None) -> bool:
         return bool(scope and scope.startswith("global.texture"))
@@ -193,7 +208,8 @@ def OpenCLPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
 
     mod = tilelang.transform.DecoupleTypeCast()(mod)
     mod = tilelang.transform.LegalizeVectorizedLoop()(mod)
-    mod = tilelang.transform.LegalizeSafeMemoryAccess()(mod)
+    if not _mod_assume_inbounds(mod):
+        mod = tilelang.transform.LegalizeSafeMemoryAccess()(mod)
     mod = tilelang.transform.LowerAccessPtr()(mod)
     mod = tilelang.transform.Simplify()(mod)
     mod = tilelang.transform.HoistNonRestrictParams()(mod)

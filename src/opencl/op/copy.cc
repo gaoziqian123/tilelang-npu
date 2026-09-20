@@ -89,6 +89,17 @@ static bool CanLowerWideContiguousCopy(const CopyNode &op,
   if (IsTextureBuffer(op.src) || IsTextureBuffer(op.dst)) {
     return false;
   }
+  // Fragment endpoints break the wide path's bijective thread<->block
+  // distribution: a fragment's physical slot is owned per-thread, so every
+  // owner thread must transfer its own physical replica (dst side) and may
+  // only read slots it owns (src side).  The flat "one work-item per
+  // 8-element block" scheme cannot express either; fall back to the normal
+  // SIMT copy, whose loop domain is fragment-aware (layout_cost_model
+  // fragment<->global rules).
+  if (std::string(op.dst.scope()).find("fragment") != std::string::npos ||
+      std::string(op.src.scope()).find("fragment") != std::string::npos) {
+    return false;
+  }
   if (op.src->dtype != DataType::Float(16) ||
       op.dst->dtype != DataType::Float(16)) {
     return false;
