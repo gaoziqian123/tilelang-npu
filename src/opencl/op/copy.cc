@@ -76,6 +76,98 @@ static Stmt LowerTextureCopy(const CopyNode &op, const LowerArgs &lower_args,
   return For(li, 0, iters, ForKind::kSerial, body);
 }
 
+static bool HasUnitInnerStride(const Buffer &buf, size_t dim,
+                               arith::Analyzer *analyzer) {
+  if (buf->strides.empty()) {
+    return true;
+  }
+  return analyzer->CanProveEqual(buf->strides[dim], 1);
+}
+
+static bool CanLowerWideContiguousCopy(const CopyNode &op,
+                                       arith::Analyzer *analyzer) {
+  if (IsTextureBuffer(op.src) || IsTextureBuffer(op.dst)) {
+    return false;
+  }
+  if (op.src->dtype != DataType::Float(16) ||
+      op.dst->dtype != DataType::Float(16)) {
+    return false;
+  }
+  size_t nd_s = op.src_range.size();
+  size_t nd_d = op.dst_range.size();
+  if (nd_s == 0 || nd_d == 0) {
+    return false;
+  }
+  if (!HasUnitInnerStride(op.src, nd_s - 1, analyzer) ||
+      !HasUnitInnerStride(op.dst, nd_d - 1, analyzer)) {
+    return false;
+  }
+
+  // Same-order rectangular regions: total element counts must match, and each
+  // side's innermost extent must be a multiple of 8 so that 8-wide vector
+  // groups never cross a row boundary.  src/dst ranks may differ (e.g. a row
+  // slice of a 2D tensor into a flat shared buffer); both are iterated in
+  // row-major linear order.
+  PrimExpr elems_s = make_const(DataType::Int(32), 1);
+  for (const auto &r : op.src_range) elems_s = elems_s * r->extent;
+  PrimExpr elems_d = make_const(DataType::Int(32), 1);
+  for (const auto &r : op.dst_range) elems_d = elems_d * r->extent;
+  if (!analyzer->CanProveEqual(elems_s, elems_d)) {
+    return false;
+  }
+  PrimExpr inner_s = op.src_range[nd_s - 1]->extent;
+  PrimExpr inner_d = op.dst_range[nd_d - 1]->extent;
+  return analyzer->CanProveEqual(floormod(inner_s, 8), 0) &&
+         analyzer->CanProveEqual(floormod(inner_d, 8), 0);
+}
+
+// Buffer/global/local contiguous fp16 copy: one work-item owns one 8-element
+// block.  The innermost scalar loop is explicitly marked vectorized so the
+// later VectorizeLoop pass emits a half8 load/store instead of 8 scalar ops.
+static Stmt LowerWideContiguousCopy(const CopyNode &op,
+                                    const LowerArgs &lower_args,
+                                    arith::Analyzer *analyzer) {
+  size_t nd_s = op.src_range.size();
+
+  PrimExpr elems = make_const(DataType::Int(32), 1);
+  for (const auto &r : op.src_range) {
+    elems = elems * r->extent;
+  }
+  PrimExpr blocks = analyzer->Simplify(floordiv(elems, 8));
+
+  PrimExpr tid = cast(DataType::Int(32), lower_args.thread_index);
+  PrimExpr textent = cast(DataType::Int(32), lower_args.thread_bounds->extent);
+
+  Var li("copy8_i", DataType::Int(32));
+  PrimExpr block = li * textent + tid;
+  PrimExpr elem = block * 8;
+
+  auto map_indices = [&](const Array<Range> &range, const Var &lane) {
+    size_t nr = range.size();
+    std::vector<PrimExpr> idx(nr);
+    PrimExpr rem = elem;
+    for (int k = static_cast<int>(nr) - 1; k >= 0; --k) {
+      PrimExpr e = cast(DataType::Int(32), range[k]->extent);
+      PrimExpr off = floormod(rem, e);
+      if (k == static_cast<int>(nr) - 1) {
+        off = off + lane;
+      }
+      idx[k] = range[k]->min + off;
+      rem = floordiv(rem, e);
+    }
+    return idx;
+  };
+
+  Var lane("copy8_lane", DataType::Int(32));
+  Stmt store = BufferStore(op.dst,
+                           BufferLoad(op.src, map_indices(op.src_range, lane)),
+                           map_indices(op.dst_range, lane));
+  Stmt inner = For(lane, 0, 8, ForKind::kVectorized, store);
+  Stmt body = IfThenElse(block < blocks, inner);
+  PrimExpr iters = analyzer->Simplify(floordiv(blocks + textent - 1, textent));
+  return For(li, 0, iters, ForKind::kSerial, body);
+}
+
 struct Copy {
   static LayoutMap InferLayout(const CopyNode &op,
                                const LayoutInferArgs &layout_args,
@@ -87,6 +179,9 @@ struct Copy {
                     arith::Analyzer *analyzer) {
     if (IsTextureBuffer(op.src)) {
       return LowerTextureCopy(op, lower_args, analyzer);
+    }
+    if (CanLowerWideContiguousCopy(op, analyzer)) {
+      return LowerWideContiguousCopy(op, lower_args, analyzer);
     }
     return LowerNormalCopy(op, lower_args, analyzer);
   }

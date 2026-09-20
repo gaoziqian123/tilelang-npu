@@ -84,6 +84,7 @@ OpenCL legacy codegen 只认 `shared`。`tilelang/opencl/pipeline.py` 在末尾�
 |---|---|---|
 | `T.copy` | **SIMT `LowerNormalCopy`**:每个 work-item 搬一个或多个元素;由通用 vectorize + legacy OpenCL codegen 打印 OpenCL vector 类型;**texture 源例外**(见下条) | `src/opencl/op/copy.cc`,照 WebGPU 样板并 `match opencl` |
 | `T.copy`(texture 源) | **texture 特判**:一个 work-item 对一个 texel(末维 channel 必须 extent 4),发出 channel 维标量 `kVectorized` 内循环;`TextureFlatten` 改写为 `texture2d_load` 后由 `VectorizeLoop` 的 texture 特判合并成**每线程一次 `READ_IMAGEH`(half4/float4)+ 一次 `vstore4` 写 `__local`**。通用 SIMT 链会把线程映射到元素、相邻 4 lane 重复读同一 texel(实测 `texture_staging`) | `src/opencl/op/copy.cc` `LowerTextureCopy`;真机 PASS `max_rel=2.1e-07`(texture_staging,64×128 fp16) |
+| `T.copy`(连续 fp16 宽拷贝) | **宽向量特判**:src/dst 均非 texture、末维 extent %8==0、元素总数相等、内存序一致时,一个 work-item 对一个 8 元素块,末维发 extent=8 的 `kVectorized` 标量内循环,`VectorizeLoop` 合并成**每线程一次 `vload8` + 一次 `vstore8`**;src/dst rank 可不同(如二维张量的行切片进扁平 shared)。转置/不连续拷贝回退 SIMT 路径 | `src/opencl/op/copy.cc` `LowerWideContiguousCopy`;真机 PASS `max_rel=2.1e-07`(buffer_staging,64×512 fp16) |
 | `T.fill` | SIMT 写入,每个 work-item 覆盖一段元素 | `src/opencl/op/fill.cc` |
 | `T.transpose` | SIMT 转置搬运 | `src/opencl/op/transpose.cc` |
 | `T.gemm` | 指令选择恒返回 `opencl.fma`;Python 侧 `GemmFMA` 生成标量 FMA 循环,accumulator 线程私有 | `src/opencl/op/gemm.cc`, `tilelang/opencl/op/gemm_fma.py` |
