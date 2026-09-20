@@ -162,6 +162,8 @@ OpenCL 后端结构(已实现于 commit `31d3a80`):
 | L2-prod-fragment-Bt | GEMM NT 1024×2560×2560 fp16 | `--impl fragment --b-layout kn`,host 预转 `Bt[K,N]`,32×128/BK64 | PASS, `max_rel=4.6e-4`,9.784ms(1.372 TFLOPS) |
 | L2-tiled-fragment | GEMM NT 512³ fp16 | `--impl tiled_fragment`,纯 IR shared staging + fragment accumulator,128×64/BK16(6189ee0) | PASS, `max_rel=4.7e-4`,0.680 TFLOPS |
 | L2-prod-tiled-fragment | GEMM NT 1024×2560×2560 fp16 | `--impl tiled_fragment`,纯 IR shared staging + fragment accumulator,128×64/BK16(6189ee0) | PASS, `max_rel=4.7e-4`,0.797 TFLOPS |
+| L2-tiled-fragment-kn | GEMM NT 512³ fp16 | `--impl tiled_fragment --b-layout kn`,B staging 走宽 copy(vload8/vstore8),64×128/BK16 | PASS, `max_rel=4.7e-4`,0.863 TFLOPS |
+| L2-prod-tiled-fragment-kn | GEMM NT 1024×2560×2560 fp16 | 同上,64×128/BK16 | PASS, `max_rel=4.7e-4`,0.997 TFLOPS |
 | L2-prod-texstage | GEMM NT 1024×2560×2560 fp16 | 手写参考:`READ_IMAGEH(half4)`→`vstore4` into `__local`,128×64/BK16 | PASS, `max_rel=4.7e-4`,16.0ms(0.839 TFLOPS) |
 | L2-prod-texstaged-IR | GEMM NT 1024×2560×2560 fp16 | TileLang IR `global.texture` + `T.copy` staging,64×128/BK16,source escape-hatch float8 MAC | PASS, `max_rel=4.7e-4`,38.6ms(0.348 TFLOPS) |
 | L2-prod-image | GEMM NT 1024×2560×2560 fp16 | `--impl image8x8`,B as RGBA fp16 `image2d_t`,no local/barrier,`gemm_gpu` host | PASS, `max_rel=5.0e-4`,7.80ms(1.72 TFLOPS) |

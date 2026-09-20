@@ -280,16 +280,17 @@ def make_fragment_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, thre
     return gemm_nt_kernel
 
 
-def make_tiled_fragment_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, threads: int):
+def make_tiled_fragment_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, threads: int, b_layout: str = "nk"):
     tile_m = 8
     tile_n = 8
 
     @T.prim_func
     def gemm_nt_kernel(
         A: T.Tensor((M, K), "float16"),
-        B: T.Tensor((N, K), "float16"),
+        B: T.Tensor((K, N) if b_layout == "kn" else (N, K), "float16"),
         C: T.Tensor((M, N), "float16"),
     ):
+        T.func_attr({"tl.opencl.b_layout": b_layout})
         # Pure-IR tiled GEMM_NT: cooperatively stage A/B K tiles in OpenCL
         # shared(local) memory, while each work-item owns one private 8x8
         # fp32 fragment accumulator and writes one 8x8 output tile.
@@ -299,7 +300,7 @@ def make_tiled_fragment_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int
             tm = tx // tiles_n
             tn = tx - tm * tiles_n
             A_shared = T.alloc_shared((bm, bk), "float16")
-            B_shared = T.alloc_shared((bn, bk), "float16")
+            B_shared = T.alloc_shared((bk, bn) if b_layout == "kn" else (bn, bk), "float16")
             acc = T.alloc_fragment((tile_m, tile_n), "float32")
 
             for ii in T.unroll(tile_m, explicit=True):
@@ -308,9 +309,15 @@ def make_tiled_fragment_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int
 
             for ko in T.serial(T.ceildiv(K, bk)):
                 T.copy(A[by * bm, ko * bk], A_shared)
-                T.copy(B[bx * bn, ko * bk], B_shared)
+                if b_layout == "kn":
+                    T.copy(B[ko * bk, bx * bn], B_shared)
+                else:
+                    T.copy(B[bx * bn, ko * bk], B_shared)
                 T.sync_threads()
-                T.gemm(A_shared[tm * tile_m, 0], B_shared[tn * tile_n, 0], acc, transpose_B=True)
+                if b_layout == "kn":
+                    T.gemm(A_shared[tm * tile_m, 0], B_shared[0, tn * tile_n], acc)
+                else:
+                    T.gemm(A_shared[tm * tile_m, 0], B_shared[tn * tile_n, 0], acc, transpose_B=True)
                 T.sync_threads()
 
             for ii in T.unroll(tile_m, explicit=True):
@@ -351,7 +358,7 @@ def main() -> int:
     ap.add_argument("--bk", type=int, default=64)
     ap.add_argument("--threads", type=int, default=128)
     ap.add_argument("--impl", choices=("tilelang", "fragment", "tiled_fragment", "local64x128", "local_tiled", "direct8x8", "image8x8"), default="local64x128")
-    ap.add_argument("--b-layout", choices=("nk", "kn"), default="nk", help="B buffer layout for fragment/direct8x8: nk=B[N,K], kn=pretransposed Bt[K,N]")
+    ap.add_argument("--b-layout", choices=("nk", "kn"), default="nk", help="B buffer layout for fragment/tiled_fragment/direct8x8: nk=B[N,K], kn=pretransposed Bt[K,N]")
     ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent.parent / "out" / "gemm_nt.cl")
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
@@ -410,12 +417,20 @@ def main() -> int:
         expected_threads = (args.bm // 8) * (args.bn // 8)
         if args.threads != expected_threads:
             raise SystemExit(f"tiled_fragment requires --threads {expected_threads} for 8x8/thread BM={args.bm} BN={args.bn}")
-        with tvm.target.Target("opencl"):
-            artifact = tilelang.lower(
-                make_tiled_fragment_kernel(args.m, args.n, args.k, args.bm, args.bn, args.bk, args.threads),
-                target="opencl",
-                enable_device_compile=False,
-            )
+        old_b_layout = os.environ.get("TL_OPENCL_B_LAYOUT")
+        os.environ["TL_OPENCL_B_LAYOUT"] = args.b_layout
+        try:
+            with tvm.target.Target("opencl"):
+                artifact = tilelang.lower(
+                    make_tiled_fragment_kernel(args.m, args.n, args.k, args.bm, args.bn, args.bk, args.threads, args.b_layout),
+                    target="opencl",
+                    enable_device_compile=False,
+                )
+        finally:
+            if old_b_layout is None:
+                os.environ.pop("TL_OPENCL_B_LAYOUT", None)
+            else:
+                os.environ["TL_OPENCL_B_LAYOUT"] = old_b_layout
         kernel_source = artifact.kernel_source
     else:
         with tvm.target.Target("opencl"):

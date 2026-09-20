@@ -170,15 +170,18 @@ rms-scaled `max_rel < 0.1`：
 ### GEMM_NT tiled fragment buffer variant
 
 `gemm_nt.py --impl tiled_fragment` 是 buffer 路线的纯 TileLang IR 版本：`T.copy`
-把 A/B K tile 搬进 `T.alloc_shared`，`T.sync_threads()` 后用
-`T.gemm(..., transpose_B=True)` 累加到 `T.alloc_fragment((8, 8), "float32")`，每个
-work-item 负责一个 8×8 输出 tile。`VectorizePrivateFragment` 在 TIR 管线中识别
-该形态，codegen 前选择与手写 buffer 8×8 同构的向量 lowering：保留 shared staging，
-inner K loop 用 shared `half8` 读、`float8 acc[8]` 累加和 `vstore8` 写回。
+把 A/B K tile 搬进 `T.alloc_shared`，`T.sync_threads()` 后用 `T.gemm` 累加到
+`T.alloc_fragment((8, 8), "float32")`，每个 work-item 负责一个 8×8 输出 tile。
+默认 `--b-layout nk` 保持旧 ABI(`B[N,K]`)并调用 `transpose_B=True`；`--b-layout kn`
+表示 host 传入预转置 `Bt[K,N]`，B tile 以 `(BK,BN)` 顺序搬进 shared，调用标准
+NN 内链。`VectorizePrivateFragment` 在 TIR 管线中识别该形态，codegen 前选择与
+手写 buffer 8×8 同构的向量 lowering：保留 shared staging，inner K loop 用 shared
+`half8` 读、`float8 acc[8]` 累加和 `vstore8` 写回。
 
-生成物形态：A/B global→shared staging 为每 work-item 多次 `vload4` + scalar shared
-store；inner K loop 每步各一次 shared `half8` load（A/B），8 个 `float8` fp32 累加器，
-每 BK tile 2 个 `barrier(CLK_LOCAL_MEM_FENCE)`。
+生成物形态：`nk` 路径的 A/B global→shared staging 为每 work-item 多次 `vload4` +
+scalar shared store；`kn` 路径的 B global→shared staging 为每 work-item 连续
+`vload8` + `vstore8` 宽 copy。两种路径的 inner K loop 每步各一次 shared `half8`
+load（A/B），8 个 `float8` fp32 累加器，每 BK tile 2 个 `barrier(CLK_LOCAL_MEM_FENCE)`。
 
 OnePlus 13 / Adreno 830 真机 `tl_probe gemm` kernel-only event 口径，fp64 reference，
 rms-scaled `max_rel < 0.1`；全部 case `bad 0/4096`：
@@ -210,10 +213,41 @@ rms-scaled `max_rel < 0.1`；全部 case `bad 0/4096`：
 | 1024×2560×2560 | 32×128/BK32 | 45.551 | 0.295 | 0.000473 |
 | 1024×2560×2560 | 32×128/BK64 | 82.904 | 0.162 | 0.000473 |
 
-相对锚点：prod 形状 0.797T，比 fragment direct-global 0.545T 快 46%，高于
-local_tiled escape 0.750T，但仍低于手写 buffer 8×8 1.025T 约 22%。BK16 明显最优；
-BK32/64 退化来自 local footprint 变大、每 work-group occupancy/issue 下降，shared staging
-的 scalar store 形态仍不如手写 buffer 源码紧凑。
+`--b-layout kn` 真机扫描（同一 runner；全部 case `bad 0/4096`）：
+
+| 形状 (`Bt[K,N]`) | tile/BK | ms | TFLOPS | max_rel |
+|---|---:|---:|---:|---:|
+| 512³ | 64×64/BK16 | 0.360 | 0.746 | 0.000468 |
+| 512³ | 64×64/BK32 | 0.497 | 0.540 | 0.000468 |
+| 512³ | 64×64/BK64 | 0.603 | 0.445 | 0.000468 |
+| 512³ | 64×128/BK16 | **0.311** | **0.863** | 0.000468 |
+| 512³ | 64×128/BK32 | 0.426 | 0.629 | 0.000468 |
+| 512³ | 64×128/BK64 | 0.501 | 0.536 | 0.000468 |
+| 512³ | 128×64/BK16 | 0.350 | 0.768 | 0.000468 |
+| 512³ | 128×64/BK32 | 0.535 | 0.502 | 0.000468 |
+| 512³ | 128×64/BK64 | 0.648 | 0.414 | 0.000468 |
+| 512³ | 32×128/BK16 | 0.336 | 0.800 | 0.000468 |
+| 512³ | 32×128/BK32 | 0.414 | 0.649 | 0.000468 |
+| 512³ | 32×128/BK64 | 0.982 | 0.273 | 0.000468 |
+| 1024×2560×2560 | 64×64/BK16 | 15.721 | 0.854 | 0.000466 |
+| 1024×2560×2560 | 64×64/BK32 | 21.014 | 0.639 | 0.000466 |
+| 1024×2560×2560 | 64×64/BK64 | 30.349 | 0.442 | 0.000466 |
+| 1024×2560×2560 | 64×128/BK16 | **13.464** | **0.997** | 0.000466 |
+| 1024×2560×2560 | 64×128/BK32 | 16.736 | 0.802 | 0.000466 |
+| 1024×2560×2560 | 64×128/BK64 | 24.426 | 0.549 | 0.000466 |
+| 1024×2560×2560 | 128×64/BK16 | 15.142 | 0.886 | 0.000466 |
+| 1024×2560×2560 | 128×64/BK32 | 20.360 | 0.659 | 0.000466 |
+| 1024×2560×2560 | 128×64/BK64 | 30.235 | 0.444 | 0.000466 |
+| 1024×2560×2560 | 32×128/BK16 | 14.805 | 0.907 | 0.000466 |
+| 1024×2560×2560 | 32×128/BK32 | 21.207 | 0.633 | 0.000466 |
+| 1024×2560×2560 | 32×128/BK64 | 52.195 | 0.257 | 0.000466 |
+
+相对锚点：`nk` prod 形状 0.797T，比 fragment direct-global `nk` 0.545T 快 46%，
+高于 local_tiled escape 0.750T，但仍低于手写 buffer 8×8 1.025T 约 22%。`kn` +
+宽 staging 后 prod 最优 0.997T，比 `nk` tiled 0.797T 快 25%，但仍低于 `kn` direct
+fragment 1.372T 约 27%；因此 B 的 staging 在 `kn` 下没有带来净收益，额外的
+barrier/shared traffic 抵消了对全局连续读的复用。BK16 仍明显最优；BK32/64 退化来自
+local footprint 变大、每 work-group occupancy/issue 下降。
 
 ## Texture copy (`kernels/texture_copy.py`)
 
