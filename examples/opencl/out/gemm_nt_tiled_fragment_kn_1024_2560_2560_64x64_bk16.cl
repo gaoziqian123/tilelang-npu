@@ -39,11 +39,11 @@ __kernel void gemm_nt_kernel_kernel(__global half* restrict A_1, __global half* 
   acc_6 = ((float8)(broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6));
   float broadcast_var_7 = 0.000000e+00f;
   acc_7 = ((float8)(broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7));
-  for (int kb = 0; kb < 2560; kb += 16) {
+  for (int kbb = 0; kbb < 160; ++kbb) {
     for (int v = (convert_int(get_local_id(0))); v < 256; v += 64) {
       int r = (v >> 2);
       int c4 = (v - ((v >> 2) * 4));
-      half4 aval = vload4(0, ((__global half *)A_1 + (((((convert_int(get_group_id(1))) * 163840) + ((v >> 2) * 2544)) + (v * 4)) + kb)));
+      half4 aval = vload4(0, A_1 + (((((convert_int(get_group_id(1))) * 163840) + ((v >> 2) * 2544)) + (kbb * 16)) + (v * 4)));
       As[((v * 256) - ((v >> 2) * 1023))] = (aval).s0;
       As[(((v * 256) + 64) - ((v >> 2) * 1023))] = (aval).s1;
       As[(((v * 256) + 128) - ((v >> 2) * 1023))] = (aval).s2;
@@ -52,8 +52,7 @@ __kernel void gemm_nt_kernel_kernel(__global half* restrict A_1, __global half* 
     for (int v_1 = (convert_int(get_local_id(0))); v_1 < 128; v_1 += 64) {
       int k = (v_1 >> 3);
       int c8 = (v_1 - ((v_1 >> 3) * 8));
-      half8 bval = vload8(0, ((__global half *)B_1 + ((((kb * 2560) + ((v_1 >> 3) * 2496)) + ((convert_int(get_group_id(0))) * 64)) + (v_1 * 8))));
-      vstore8(bval, 0, Bs + (v_1 * 8));
+      vstore8(vload8(0, B_1 + ((((kbb * 40960) + ((v_1 >> 3) * 2496)) + ((convert_int(get_group_id(0))) * 64)) + (v_1 * 8))), 0, Bs + (v_1 * 8));
     }
     barrier(CLK_LOCAL_MEM_FENCE);
     for (int kk = 0; kk < 16; ++kk) {

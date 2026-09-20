@@ -189,6 +189,14 @@ fragment direct-global 的新结论是:`Bt[K,N]` 布局是 buffer 路径的关�
 对拍工具: `/root/project/backend/gpu/tl_probe/tl_probe.c`。用法由 argv 传入
 `.cl` 路径、kernel 名与算子类型;host 侧完成 dlopen OpenCL、program build、kernel
 
+**向量 load 的 codegen 判定规则(踩过,写 pass 时必读)**:legacy codegen_c 只在
+`modular_set(ramp->base)` 的 coeff 与 base 都能被 lane 数整除时才打 `vloadN`,
+否则**静默退化成逐元素 gather**(性能数量级掉)。该 analyzer 是新建的空上下文,
+不认识循环变量的步进——所以向量索引里每个变量必须**语法上**带着 lane 倍数的系数
+(如循环写成 `for pos4 in range(K//4)`、索引用 `pos4*4`,而不是 `pos += 4` 后直接用
+`pos`)。多输入 `T.Shuffle` 会被打成 `float8(b0[0],...)` 函数式构造,Adreno 前端
+**拒收**(nk gather 保留 `(float8)(b0.s0,...)` 显式构造的原因)。
+
 **已证伪的假设(2026-09-19,别再试)**:纯 IR 纹理 GEMM(`gemm_nt_tex.py`,0.015T)
 的瓶颈**不是** accumulator 私有数组无法寄存器化——`tilelang/opencl/codegen.py` 的
 source 级修复(`float acc[64]` → `float8 acc_0..7`、`((half*)&v_)[lane]` → `v_.sN`,

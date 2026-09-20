@@ -216,22 +216,25 @@ def _direct_fragment_script(p: FragmentPlan) -> str:
         '        tn = tx - tm * %d' % tiles_n,
         f'        r0 = by * {p.bm} + tm * 8',
         f'        c0 = bx * {p.bn} + tn * 8',
-        f'        for pos in range(0, {p.K}, 4):',
+        f'        for pos4 in range(0, {p.K // 4}):',
     ]
     lines[-1:-1] = [f'        acc[{i}] = T.Broadcast(T.float32(0), 8)' for i in range(8)]
     for i in range(8):
-        lines.append(f'            a{i}: T.float32x4 = T.call_extern("float32x4", "convert_float4", T.call_extern("float16x4", "vload4", 0, T.address_of(A_1[(r0 + {i}) * {p.K} + pos])))')
+        lines.append(f'            a{i}: T.float32x4 = T.Cast("float32x4", A_1[T.Ramp((r0 + {i}) * {p.K} + pos4 * 4, 1, 4)])')
     if p.b_layout == "kn":
         for comp in range(4):
-            lines.append(f'            b{comp}: T.float32x8 = T.call_extern("float32x8", "convert_float8", T.call_extern("float16x8", "vload8", 0, T.address_of(B_1[(pos + {comp}) * {p.N} + c0])))')
+            lines.append(f'            b{comp}: T.float32x8 = T.Cast("float32x8", B_1[T.Ramp((pos4 * 4 + {comp}) * {p.N} + c0, 1, 8)])')
         for i in range(8):
             for comp in range(4):
                 lines.append(f'            acc[{i}] = acc[{i}] + T.Broadcast(T.Shuffle([a{i}], [{comp}]), 8) * b{comp}')
     else:
         for j in range(8):
-            lines.append(f'            b{j}: T.float32x4 = T.call_extern("float32x4", "convert_float4", T.call_extern("float16x4", "vload4", 0, T.address_of(B_1[(c0 + {j}) * {p.K} + pos])))')
+            lines.append(f'            b{j}: T.float32x4 = T.Cast("float32x4", B_1[T.Ramp((c0 + {j}) * {p.K} + pos4 * 4, 1, 4)])')
         for i in range(8):
             for comp in range(4):
+                # nk (legacy) B gather: legacy codegen prints multi-vector
+                # Shuffle as `float8(b0[0], ...)`, which the Adreno
+                # frontend rejects, so keep the explicit constructor form.
                 args = ", ".join(f"T.Shuffle([b{j}], [{comp}])" for j in range(8))
                 lines.append(f'            acc[{i}] = acc[{i}] + T.Broadcast(T.Shuffle([a{i}], [{comp}]), 8) * T.call_extern("float32x8", "(float8)", {args})')
     for i in range(8):
@@ -269,22 +272,30 @@ def _tiled_fragment_script(p: FragmentPlan) -> str:
     ]
     lines += [f'        acc[{i}] = T.Broadcast(T.float32(0), 8)' for i in range(8)]
     lines += [
-        f'        for kb in range(0, {p.K}, {p.bk}):',
+        f'        for kbb in range(0, {p.K // p.bk}):',
         f'            for v in range(tx, {p.bm * p.bk // 4}, {p.threads}):',
         f'                r = v // ({p.bk} // 4)',
         f'                c4 = v - r * ({p.bk} // 4)',
-        f'                aval: T.float16x4 = T.call_extern("float16x4", "vload4", 0, T.address_of(A_1[(rbase + r) * {p.K} + kb + c4 * 4]))',
+        f'                aval: T.float16x4 = A_1[T.Ramp((rbase + r) * {p.K} + kbb * {p.bk} + c4 * 4, 1, 4)]',
     ]
     for lane in range(4):
         lines.append(f'                As[(c4 * 4 + {lane}) * {p.bm} + r] = T.Shuffle([aval], [{lane}])')
-    lines += [
-        f'            for v in range(tx, {p.bn * p.bk // 4}, {p.threads}):',
-        f'                c = v // ({p.bk} // 4)',
-        f'                k4 = v - c * ({p.bk} // 4)',
-        f'                bval: T.float16x4 = T.call_extern("float16x4", "vload4", 0, T.address_of(B_1[(cbase + c) * {p.K} + kb + k4 * 4]))',
-    ]
-    for lane in range(4):
-        lines.append(f'                Bs[(k4 * 4 + {lane}) * {p.bn} + c] = T.Shuffle([bval], [{lane}])')
+    if p.b_layout == "kn":
+        lines += [
+            f'            for v in range(tx, {p.bn * p.bk // 8}, {p.threads}):',
+            f'                k = v // ({p.bn} // 8)',
+            f'                c8 = v - k * ({p.bn} // 8)',
+            f'                Bs[T.Ramp(k * {p.bn} + c8 * 8, 1, 8)] = B_1[T.Ramp((kbb * {p.bk} + k) * {p.N} + cbase + c8 * 8, 1, 8)]',
+        ]
+    else:
+        lines += [
+            f'            for v in range(tx, {p.bn * p.bk // 4}, {p.threads}):',
+            f'                c = v // ({p.bk} // 4)',
+            f'                k4 = v - c * ({p.bk} // 4)',
+            f'                bval: T.float16x4 = B_1[T.Ramp((cbase + c) * {p.K} + kbb * {p.bk} + k4 * 4, 1, 4)]',
+        ]
+        for lane in range(4):
+            lines.append(f'                Bs[(k4 * 4 + {lane}) * {p.bn} + c] = T.Shuffle([bval], [{lane}])')
     lines += [
         '            T.tvm_storage_sync("shared")',
         f'            for kk in T.unroll({p.bk}):',
