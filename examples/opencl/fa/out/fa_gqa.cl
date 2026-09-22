@@ -31,6 +31,7 @@ __kernel void fa_gqa_kernel_kernel(__global half* restrict K, __global half* res
   half qtmp[4];
   half ktmp[4];
   half q4[4];
+  half k4[4];
   float m_old[1];
   float m_new[1];
   float l_t[1];
@@ -98,14 +99,11 @@ __kernel void fa_gqa_kernel_kernel(__global half* restrict K, __global half* res
       barrier(CLK_LOCAL_MEM_FENCE);
       for (int k = 0; k < 16; ++k) {
         half4 q4_1_v = vload4(0, (half*)Qs + ((k * 32) + (((convert_int(get_local_id(0))) >> 5) * 4)));
-                half4 Ks_local_cast_v = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
-                acc_s_1_0_lo = ((((float4)(convert_float(q4_1_v.s0)) * (convert_float4(Ks_local_cast_v))) + acc_s_1_0_lo));
-        half4 Ks_local_cast_1_v = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
-                acc_s_1_0_hi = ((((float4)(convert_float(q4_1_v.s1)) * (convert_float4(Ks_local_cast_1_v))) + acc_s_1_0_hi));
-        half4 Ks_local_cast_2_v = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
-                acc_s_1_1_lo = ((((float4)(convert_float(q4_1_v.s2)) * (convert_float4(Ks_local_cast_2_v))) + acc_s_1_1_lo));
-        half4 Ks_local_cast_3_v = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
-                acc_s_1_1_hi = ((((float4)(convert_float(q4_1_v.s3)) * (convert_float4(Ks_local_cast_3_v))) + acc_s_1_1_hi));
+        half4 k4_1_v = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
+                        acc_s_1_0_lo = ((((float4)(convert_float(q4_1_v.s0)) * (convert_float4(k4_1_v))) + acc_s_1_0_lo));
+        acc_s_1_0_hi = ((((float4)(convert_float(q4_1_v.s1)) * (convert_float4(k4_1_v))) + acc_s_1_0_hi));
+        acc_s_1_1_lo = ((((float4)(convert_float(q4_1_v.s2)) * (convert_float4(k4_1_v))) + acc_s_1_1_lo));
+        acc_s_1_1_hi = ((((float4)(convert_float(q4_1_v.s3)) * (convert_float4(k4_1_v))) + acc_s_1_1_hi));
       }
       barrier(CLK_LOCAL_MEM_FENCE);
     }
@@ -251,36 +249,36 @@ __kernel void fa_gqa_kernel_kernel(__global half* restrict K, __global half* res
     acc_o_1_3_lo = ((acc_o_1_3_lo * ((float4)(((float*)alpha)[((convert_int(get_local_id(0))) >> 3)], ((float*)alpha)[((convert_int(get_local_id(0))) >> 3)], ((float*)alpha)[((convert_int(get_local_id(0))) >> 3)], ((float*)alpha)[((convert_int(get_local_id(0))) >> 3)]))));
     acc_o_1_3_hi = ((acc_o_1_3_hi * ((float4)(((float*)alpha)[((convert_int(get_local_id(0))) >> 3)], ((float*)alpha)[((convert_int(get_local_id(0))) >> 3)], ((float*)alpha)[((convert_int(get_local_id(0))) >> 3)], ((float*)alpha)[((convert_int(get_local_id(0))) >> 3)]))));
     for (int j = 0; j < 128; ++j) {
-      half8 V_local_cast_1_v = vload8(0, V + ((((((convert_int(get_group_id(1))) >> 2) * 262144) + (ks * 32768)) + (j * 256)) + (((convert_int(get_local_id(0))) & 7) * 32)));
-            acc_o_1_0_lo = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_1_v.lo))) + acc_o_1_0_lo));
-      acc_o_1_0_hi = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_1_v.hi))) + acc_o_1_0_hi));
-      half8 V_local_cast_1_1_v = vload8(0, V + (((((((convert_int(get_group_id(1))) >> 2) * 262144) + (ks * 32768)) + (j * 256)) + (((convert_int(get_local_id(0))) & 7) * 32)) + 8));
-            acc_o_1_1_lo = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_1_1_v.lo))) + acc_o_1_1_lo));
-      acc_o_1_1_hi = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_1_1_v.hi))) + acc_o_1_1_hi));
-      half8 V_local_cast_1_2_v = vload8(0, V + (((((((convert_int(get_group_id(1))) >> 2) * 262144) + (ks * 32768)) + (j * 256)) + (((convert_int(get_local_id(0))) & 7) * 32)) + 16));
-            acc_o_1_2_lo = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_1_2_v.lo))) + acc_o_1_2_lo));
-      acc_o_1_2_hi = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_1_2_v.hi))) + acc_o_1_2_hi));
-      half8 V_local_cast_1_3_v = vload8(0, V + (((((((convert_int(get_group_id(1))) >> 2) * 262144) + (ks * 32768)) + (j * 256)) + (((convert_int(get_local_id(0))) & 7) * 32)) + 24));
-            acc_o_1_3_lo = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_1_3_v.lo))) + acc_o_1_3_lo));
-      acc_o_1_3_hi = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_1_3_v.hi))) + acc_o_1_3_hi));
+      half8 V_local_cast_v = vload8(0, V + ((((((convert_int(get_group_id(1))) >> 2) * 262144) + (ks * 32768)) + (j * 256)) + (((convert_int(get_local_id(0))) & 7) * 32)));
+            acc_o_1_0_lo = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_v.lo))) + acc_o_1_0_lo));
+      acc_o_1_0_hi = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_v.hi))) + acc_o_1_0_hi));
+      half8 V_local_cast_1_v = vload8(0, V + (((((((convert_int(get_group_id(1))) >> 2) * 262144) + (ks * 32768)) + (j * 256)) + (((convert_int(get_local_id(0))) & 7) * 32)) + 8));
+            acc_o_1_1_lo = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_1_v.lo))) + acc_o_1_1_lo));
+      acc_o_1_1_hi = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_1_v.hi))) + acc_o_1_1_hi));
+      half8 V_local_cast_2_v = vload8(0, V + (((((((convert_int(get_group_id(1))) >> 2) * 262144) + (ks * 32768)) + (j * 256)) + (((convert_int(get_local_id(0))) & 7) * 32)) + 16));
+            acc_o_1_2_lo = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_2_v.lo))) + acc_o_1_2_lo));
+      acc_o_1_2_hi = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_2_v.hi))) + acc_o_1_2_hi));
+      half8 V_local_cast_3_v = vload8(0, V + (((((((convert_int(get_group_id(1))) >> 2) * 262144) + (ks * 32768)) + (j * 256)) + (((convert_int(get_local_id(0))) & 7) * 32)) + 24));
+            acc_o_1_3_lo = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_3_v.lo))) + acc_o_1_3_lo));
+      acc_o_1_3_hi = ((((float4)(convert_float(((half*)Sh)[((((convert_int(get_local_id(0))) >> 3) * 128) + j)])) * (convert_float4(V_local_cast_3_v.hi))) + acc_o_1_3_hi));
     }
     barrier(CLK_LOCAL_MEM_FENCE);
   }
-  half O_local_cast_2[8];
-  (*(half4*)(O_local_cast_2 + 0)) = (convert_half4((acc_o_1_0_lo / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
-  (*(half4*)(O_local_cast_2 + 4)) = (convert_half4((acc_o_1_0_hi / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
-  vstore8((*(half8*)(O_local_cast_2 + 0)), 0, O + ((((convert_int(get_group_id(1))) * 262144) + ((convert_int(get_group_id(0))) * 8192)) + ((convert_int(get_local_id(0))) * 32)));
-  half O_local_cast_2_1[8];
-  (*(half4*)(O_local_cast_2_1 + 0)) = (convert_half4((acc_o_1_1_lo / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
-  (*(half4*)(O_local_cast_2_1 + 4)) = (convert_half4((acc_o_1_1_hi / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
-  vstore8((*(half8*)(O_local_cast_2_1 + 0)), 0, O + (((((convert_int(get_group_id(1))) * 262144) + ((convert_int(get_group_id(0))) * 8192)) + ((convert_int(get_local_id(0))) * 32)) + 8));
-  half O_local_cast_2_2[8];
-  (*(half4*)(O_local_cast_2_2 + 0)) = (convert_half4((acc_o_1_2_lo / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
-  (*(half4*)(O_local_cast_2_2 + 4)) = (convert_half4((acc_o_1_2_hi / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
-  vstore8((*(half8*)(O_local_cast_2_2 + 0)), 0, O + (((((convert_int(get_group_id(1))) * 262144) + ((convert_int(get_group_id(0))) * 8192)) + ((convert_int(get_local_id(0))) * 32)) + 16));
-  half O_local_cast_2_3[8];
-  (*(half4*)(O_local_cast_2_3 + 0)) = (convert_half4((acc_o_1_3_lo / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
-  (*(half4*)(O_local_cast_2_3 + 4)) = (convert_half4((acc_o_1_3_hi / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
-  vstore8((*(half8*)(O_local_cast_2_3 + 0)), 0, O + (((((convert_int(get_group_id(1))) * 262144) + ((convert_int(get_group_id(0))) * 8192)) + ((convert_int(get_local_id(0))) * 32)) + 24));
+  half O_local_cast_1[8];
+  (*(half4*)(O_local_cast_1 + 0)) = (convert_half4((acc_o_1_0_lo / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
+  (*(half4*)(O_local_cast_1 + 4)) = (convert_half4((acc_o_1_0_hi / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
+  vstore8((*(half8*)(O_local_cast_1 + 0)), 0, O + ((((convert_int(get_group_id(1))) * 262144) + ((convert_int(get_group_id(0))) * 8192)) + ((convert_int(get_local_id(0))) * 32)));
+  half O_local_cast_1_1[8];
+  (*(half4*)(O_local_cast_1_1 + 0)) = (convert_half4((acc_o_1_1_lo / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
+  (*(half4*)(O_local_cast_1_1 + 4)) = (convert_half4((acc_o_1_1_hi / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
+  vstore8((*(half8*)(O_local_cast_1_1 + 0)), 0, O + (((((convert_int(get_group_id(1))) * 262144) + ((convert_int(get_group_id(0))) * 8192)) + ((convert_int(get_local_id(0))) * 32)) + 8));
+  half O_local_cast_1_2[8];
+  (*(half4*)(O_local_cast_1_2 + 0)) = (convert_half4((acc_o_1_2_lo / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
+  (*(half4*)(O_local_cast_1_2 + 4)) = (convert_half4((acc_o_1_2_hi / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
+  vstore8((*(half8*)(O_local_cast_1_2 + 0)), 0, O + (((((convert_int(get_group_id(1))) * 262144) + ((convert_int(get_group_id(0))) * 8192)) + ((convert_int(get_local_id(0))) * 32)) + 16));
+  half O_local_cast_1_3[8];
+  (*(half4*)(O_local_cast_1_3 + 0)) = (convert_half4((acc_o_1_3_lo / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
+  (*(half4*)(O_local_cast_1_3 + 4)) = (convert_half4((acc_o_1_3_hi / ((float4)(((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)], ((float*)lrun)[((convert_int(get_local_id(0))) >> 3)])))));
+  vstore8((*(half8*)(O_local_cast_1_3 + 0)), 0, O + (((((convert_int(get_group_id(1))) * 262144) + ((convert_int(get_group_id(0))) * 8192)) + ((convert_int(get_local_id(0))) * 32)) + 24));
 }
 

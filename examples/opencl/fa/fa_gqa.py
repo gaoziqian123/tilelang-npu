@@ -90,6 +90,7 @@ def make_fa_kernel(S: int, HQ: int, HKV: int, D: int, tile_q: int, tile_kv: int,
             # form) instead of a scalar load + convert + (float4)(x,x,x,x)
             # constructor per FMA row.
             q4 = T.alloc_local((4,), "float16")
+            k4 = T.alloc_local((4,), "float16")
             qtmp = T.alloc_local((4,), "float16")
             ktmp = T.alloc_local((4,), "float16")
 
@@ -140,12 +141,18 @@ def make_fa_kernel(S: int, HQ: int, HKV: int, D: int, tile_q: int, tile_kv: int,
                             for k in T.serial(bk):
                                 for ii in T.vectorized(4):
                                     q4[ii] = Qs[k, bi * 4 + ii]
+                                # Hoist the ii-invariant Ks vector load out
+                                # of the ii loop: the vectorizer otherwise
+                                # emits one vload4 per ii (4x redundant
+                                # loads the device compiler does not CSE).
+                                for jj in T.vectorized(4):
+                                    k4[jj] = Ks[k, bj * 4 + jj]
                                 for ii in T.serial(4):
                                     for jj in T.serial(4):
                                         acc_s[bi, bj, ii, jj] = (
                                             acc_s[bi, bj, ii, jj]
                                             + T.Cast("float32", q4[ii])
-                                            * T.Cast("float32", Ks[k, bj * 4 + jj])
+                                            * T.Cast("float32", k4[jj])
                                         )
                     T.sync_threads()
                 # Causal mask + scale, store fp16 in place.
