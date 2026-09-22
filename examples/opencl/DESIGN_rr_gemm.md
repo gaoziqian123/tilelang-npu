@@ -403,8 +403,51 @@ codegen 后处理 peephole:
 手写 fa.cl 锚点仍为 **27.4ms**;两边瓦片形状完全相同(BM=32 BN=128
 BK=16 WG=256),QK 指令形式现已一致。Adreno 830 的
 `CL_KERNEL_{WORK_GROUP,PRIVATE,LOCAL}_MEM_SIZE` 全部返回 0,拿不到寄存器 /
-spill 诊断。剩余 **71 vs 27.4ms** 差距在指令形式对齐后仍未解释,需要
-SASS 级分析。
+spill 诊断。该版剩余 **71 vs 27.4ms** 差距在本日续战中已破解,见本节
+终审记录。
 
 FFN 链不受本轮 peephole 影响(其 `mad()` 是整变量 float8 FMA,不会被
 float8 split 命中),复测 **345.2ms** 全 PASS。
+
+### 12.1 终审:71 vs 27.4 三根因(2026-09-22 续)
+
+tilelang commit `51a0662` 后,通过差分 morphing + 手术移植把 71ms vs
+fa.cl 27.4ms 的差距关平。最终结论:差距不是 QK/softmax 逻辑,也不是
+float8 vs float4 累加器宽度,而是三个 OpenCL codegen / 映射细节叠加。
+
+1. **generic 指针访问 shared**:TVM 的 `MergeSharedMemoryAllocations` 把
+   所有 shared buffer 打包进一个 `__local uchar buf_dyn_shmem[]` + `void*`
+   别名,所有 shared 访问都经过泛型地址空间 cast;Adreno 对这种泛型 shared
+   访问惩罚极重。改成类型化 `__local half Sh[4096]` 等数组后
+   **71.0 → 38.5ms**。已固化为 codegen.py 的
+   `_patch_opencl_typed_shared` peephole,带守卫:偏移互异、单一元素类型、
+   仅 cast 使用、extent 由下一边界限定;不满足则不改。
+2. **PV 的 V 全局加载 bound**:手术消融把 V load 换成常量后证明 PV
+   约 25ms 几乎全是 V 加载(去掉后 PV 约 1ms),有效带宽约 **186GB/s**。
+   1 行×32 列线程映射相比 fa.cl 的 2 行×16 列每 2 行多读一倍 V。
+   `acc_o` 改成 5D fragment `(tile_q//2, D//16, 2, 2, 8)`(每维 scale-1),
+   `ii` 不变的 V 向量 stage 到 `half[16]` local 后两 row 共享。注意:
+   2×16 的 4D fragment 会让 layout inference 每线程复制 4 倍工作(7.5s),
+   所以采用 5D(Parallel 维 + ii + dv8 + vectorized-8)。
+3. **vload8 与 scalar×vector 形式**:half-staging peephole 扩展到 `half[16]`,
+   使地址连续的 4×`vload4` staging 融合为 2×`vload8`;同时加入
+   splat-mul peephole:`((float4)(convert_float(E))) * convert_float4(V)` →
+   `convert_float(E) * convert_float4(V)`。这两项合计把 **38.5 → 27.8ms**。
+
+补充实验:
+
+- fa.cl 对 `#pragma unroll` 完全无感:k 循环、J 循环或全部 pragma 去掉后
+  仍为 **27.2-27.9ms**;因此之前的"unroll 之谜"不是差距来源。TileLang
+  版本在 QK k 循环加 pragma 反而更慢(105ms)。
+- 手术移植把 fa.cl 的 PV 段(2 行×16 列、float8 全变量 FMA、
+  `#pragma unroll 4`)搬进 TileLang kernel 后为 **27.2ms**,证明其余部分
+  (QK/softmax/staging)已无差距。
+- float8 vs float4 累加器宽度不影响性能:fa_v12 使用 float4 lo/hi +
+  `p0 * vv0.lo` scalar×vector 也是 **27.6ms**。
+- 38.5ms 版相位归因:QK **10.8ms** / PV **24.7ms** / softmax **2.2ms** /
+  其余约 **1ms**;`noPV=13.8ms`,即非 PV 全部。
+
+最终结果:**27.8/28.0ms** 稳定复现,PASS(cos **0.999999971**,
+max_rel **0.0074**),与手写 fa.cl 锚点 **27.4-27.8ms** 持平。FFN 链
+复测 **345.0ms** 全 PASS;typed-shared 对 FFN 无增益(gemm 的 shared staging
+不是其瓶颈)。`probe_rr` 回归绿。
