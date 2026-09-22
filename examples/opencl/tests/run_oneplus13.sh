@@ -52,7 +52,7 @@ fi
 echo "MD5_OK"
 
 tag="tl_opencl_$(date +%Y%m%d_%H%M%S)"
-ssh "${SSH_OPT[@]}" "$PHONE_HOST" "cd $REMOTE_DIR && rm -f $tag.log $tag.done && nohup sh -c 'LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64 ./tl_probe silu.cl silu_kernel_kernel silu; r1=\$?; LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64 ./tl_probe rmsnorm.cl rmsnorm_kernel_kernel rmsnorm; r2=\$?; LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64 ./tl_probe gemm_nt.cl gemm_nt_kernel_kernel gemm; r3=\$?; rc=0; [ \$r1 -eq 0 ] || rc=\$r1; [ \$r2 -eq 0 ] || rc=\$r2; [ \$r3 -eq 0 ] || rc=\$r3; echo \$rc > $tag.done; exit \$rc' > $tag.log 2>&1 &"
+ssh "${SSH_OPT[@]}" "$PHONE_HOST" "cd $REMOTE_DIR && rm -f $tag.log $tag.done && nohup sh -c 'LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64 ./tl_probe silu.cl silu_kernel_kernel silu; r1=\$?; LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64 ./tl_probe rmsnorm.cl rmsnorm_kernel_kernel rmsnorm; r2=\$?; TL_B_LAYOUT=kn TL_BM=32 TL_BN=128 TL_THREADS=64 TL_CHECK=cosine LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64 ./tl_probe gemm_nt.cl gemm_nt_kernel_kernel gemm; r3=\$?; rc=0; [ \$r1 -eq 0 ] || rc=\$r1; [ \$r2 -eq 0 ] || rc=\$r2; [ \$r3 -eq 0 ] || rc=\$r3; echo \$rc > $tag.done; exit \$rc' > $tag.log 2>&1 &"
 
 for _ in $(seq 1 120); do
   if ssh "${SSH_OPT[@]}" "$PHONE_HOST" "test -f $REMOTE_DIR/$tag.done"; then

@@ -16,7 +16,111 @@ KERNELS = REPO_ROOT / "examples" / "opencl" / "gemm"
 if str(KERNELS) not in sys.path:
     sys.path.insert(0, str(KERNELS))
 
-from gemm_nt import make_grgemm_kernel, make_rrgemm_kernel, make_rrgemm_source, syntax_check  # noqa: E402
+from gemm_nt import make_grgemm_kernel, syntax_check  # noqa: E402
+
+import tilelang.language as T  # noqa: E402
+
+# RR (replicated-fragment staging) builders live here, not in gemm_nt.py:
+# the staged path is correctness-only reference on Adreno (see DESIGN_rr_gemm §10).
+def make_rrgemm_source(M: int, N: int, K: int, bm: int, bn: int, bk: int, threads: int, b_layout: str = "kn") -> str:
+    row_tiles = bm // 8
+    col_tiles = bn // 8
+    if b_layout == "kn":
+        b_decl = "float8 b[4];"
+        b_loads = f"""        #pragma unroll
+        for (int i = 0; i < 4; ++i)
+            b[i] = convert_float8(vload8(0, B + (size_t)(pos + i) * TL_N + c0));"""
+        macs = """            acc[i] += (float8)(a[i].x) * b[0];
+            acc[i] += (float8)(a[i].y) * b[1];
+            acc[i] += (float8)(a[i].z) * b[2];
+            acc[i] += (float8)(a[i].w) * b[3];"""
+    else:
+        b_decl = "float4 b4[8];"
+        b_loads = """        #pragma unroll
+        for (int j = 0; j < 8; ++j)
+            b4[j] = convert_float4(vload4(0, B + (size_t)(c0 + j) * TL_K + pos));"""
+        macs = """            acc[i] += (float8)(a[i].x) * (float8)(b4[0].x, b4[1].x, b4[2].x, b4[3].x, b4[4].x, b4[5].x, b4[6].x, b4[7].x);
+            acc[i] += (float8)(a[i].y) * (float8)(b4[0].y, b4[1].y, b4[2].y, b4[3].y, b4[4].y, b4[5].y, b4[6].y, b4[7].y);
+            acc[i] += (float8)(a[i].z) * (float8)(b4[0].z, b4[1].z, b4[2].z, b4[3].z, b4[4].z, b4[5].z, b4[6].z, b4[7].z);
+            acc[i] += (float8)(a[i].w) * (float8)(b4[0].w, b4[1].w, b4[2].w, b4[3].w, b4[4].w, b4[5].w, b4[6].w, b4[7].w);"""
+    return f"""// Function: gemm_nt_kernel_kernel
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+
+#define TL_M {M}
+#define TL_N {N}
+#define TL_K {K}
+#define TL_BM {bm}
+#define TL_BN {bn}
+#define TL_BK {bk}
+#define TL_WG {threads}
+#define TL_NT {col_tiles}
+
+__kernel void gemm_nt_kernel_kernel(__global const half *restrict A,
+                                    __global const half *restrict B,
+                                    __global half *restrict C) {{
+    const int bx = get_group_id(0);
+    const int by = get_group_id(1);
+    const int tx = get_local_id(0);
+    const int tm = tx / TL_NT;
+    const int tn = tx - tm * TL_NT;
+    const int r0 = by * TL_BM + tm * 8;
+    const int c0 = bx * TL_BN + tn * 8;
+    float8 acc[8];
+    #pragma unroll
+    for (int i = 0; i < 8; ++i) acc[i] = (float8)(0.0f);
+    for (int kb = 0; kb < TL_K; kb += TL_BK) {{
+        for (int pos = kb; pos < kb + TL_BK; pos += 4) {{
+            float4 a[8];
+            {b_decl}
+            #pragma unroll
+            for (int i = 0; i < 8; ++i)
+                a[i] = convert_float4(vload4(0, A + (size_t)(r0 + i) * TL_K + pos));
+{b_loads}
+            #pragma unroll
+            for (int i = 0; i < 8; ++i) {{
+{macs}
+            }}
+        }}
+    }}
+    #pragma unroll
+    for (int i = 0; i < 8; ++i)
+        if (r0 + i < TL_M && c0 + 7 < TL_N)
+            vstore8(convert_half8(acc[i]), 0, C + (size_t)(r0 + i) * TL_N + c0);
+}}
+"""
+
+
+def make_rrgemm_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, threads: int, b_layout: str = "kn", accum_dtype: str = "float32"):
+    @T.prim_func
+    def gemm_nt_kernel(
+        A: T.Tensor((M, K), "float16"),
+        B: T.Tensor((K, N) if b_layout == "kn" else (N, K), "float16"),
+        C: T.Tensor((M, N), "float16"),
+    ):
+        T.func_attr({"tl.opencl.b_layout": b_layout})
+        # RR GEMM: both input operands and the accumulator are OpenCL fragments.
+        # GemmFMA.infer_layout supplies the full-tile fragment layouts; its RR
+        # lower emits 8 float32x8 (or float16x8 when accum_dtype=float16)
+        # accumulators per work-item directly.
+        with T.Kernel(T.ceildiv(N, bn), T.ceildiv(M, bm), threads=threads) as (bx, by):
+            A_frag = T.alloc_fragment((bm, bk), "float16")
+            B_frag = T.alloc_fragment((bk, bn) if b_layout == "kn" else (bn, bk), "float16")
+            C_frag = T.alloc_fragment((bm, bn), accum_dtype)
+
+            for ko in T.serial(T.ceildiv(K, bk)):
+                T.copy(A[by * bm, ko * bk], A_frag)
+                if b_layout == "kn":
+                    T.copy(B[ko * bk, bx * bn], B_frag)
+                    T.gemm(A_frag, B_frag, C_frag, clear_accum=(ko == 0))
+                else:
+                    T.copy(B[bx * bn, ko * bk], B_frag)
+                    T.gemm(A_frag, B_frag, C_frag, transpose_B=True, clear_accum=(ko == 0))
+            T.copy(C_frag, C[by * bm, bx * bn])
+
+    return gemm_nt_kernel
+
+
+
 
 import tilelang  # noqa: E402
 from tilelang import tvm  # noqa: E402
