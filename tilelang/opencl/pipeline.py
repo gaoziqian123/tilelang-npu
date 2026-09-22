@@ -76,7 +76,12 @@ class _SharedDynToSharedMutator(PyStmtExprMutator):
     def visit_alloc_buffer_(self, op: AllocBuffer):
         new_scope = self.scope_map.get(op.buffer.scope())
         if new_scope is None:
-            return super().visit_alloc_buffer_(op)
+            # Do NOT delegate to super(): the PyStmtExprMutator base in this
+            # tirx fork silently drops AllocBuffer nodes it does not know
+            # (observed: DecoupleTypeCast's fp16<->fp32 *_local_cast staging
+            # buffers lost their allocation and reached codegen as dangling
+            # vars).  Rebuild the node explicitly like the mapped branch.
+            return AllocBuffer(op.buffer, getattr(op, "annotations", None), getattr(op, "span", None))
         new_data = _clone_var_with_scope(op.buffer.data, new_scope)
         new_buffer = _clone_buffer_with_scope(op.buffer, new_scope, new_data)
         self.buffer_map.append((op.buffer, new_buffer))

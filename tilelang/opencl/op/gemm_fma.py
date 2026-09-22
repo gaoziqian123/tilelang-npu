@@ -44,17 +44,18 @@ class GemmFMA(GemmBase):
         return "kn"
 
     def _is_gemm_gr(self) -> bool:
-        """Global-operand vector GEMM: A/B tiles read straight from global
-        memory, C accumulated in a fragment.  On Adreno, staging replicated
-        A/B fragments in private memory costs one memory round-trip per FMA
-        (measured 0.012-0.043 TFLOPS across bk=64/16/8, register file cannot
-        hold replicate-amplified tiles), so the fast path keeps operands in
-        global and only the accumulator in registers."""
+        """Direct-operand vector GEMM: A/B tiles read straight from global or
+        shared memory, C accumulated in a fragment.  On Adreno, staging
+        replicated A/B fragments in private memory costs one memory round-trip
+        per FMA (measured 0.012-0.043 TFLOPS across bk=64/16/8, register file
+        cannot hold replicate-amplified tiles), so the fast path keeps
+        operands where they are and only the accumulator in registers.  Shared
+        operands are fine: OpenCL vector loads work on __local pointers and
+        Adreno local memory has real cross-thread reuse (e.g. flash-attention
+        P tiles)."""
         return (
             not is_fragment(self.A)
             and not is_fragment(self.B)
-            and not is_shared(self.A)
-            and not is_shared(self.B)
             and is_fragment(self.C)
         )
 
