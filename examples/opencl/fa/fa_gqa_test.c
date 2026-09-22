@@ -41,6 +41,7 @@ typedef cl_int (*PFN_clSetKernelArg)(cl_kernel, cl_uint, size_t, const void *);
 typedef cl_int (*PFN_clEnqueueNDRangeKernel)(cl_command_queue, cl_kernel, cl_uint, const size_t *, const size_t *, const size_t *, cl_uint, const cl_event *, cl_event *);
 typedef cl_int (*PFN_clEnqueueWriteBuffer)(cl_command_queue, cl_mem, cl_bool, size_t, size_t, const void *, cl_uint, const cl_event *, cl_event *);
 typedef cl_int (*PFN_clEnqueueReadBuffer)(cl_command_queue, cl_mem, cl_bool, size_t, size_t, void *, cl_uint, const cl_event *, cl_event *);
+typedef cl_int (*PFN_clEnqueueFillBuffer)(cl_command_queue, cl_mem, const void *, size_t, size_t, size_t, cl_uint, const cl_event *, cl_event *);
 typedef cl_int (*PFN_clFinish)(cl_command_queue);
 typedef cl_int (*PFN_clGetEventProfilingInfo)(cl_event, cl_profiling_info, size_t, void *, size_t *);
 typedef cl_int (*PFN_clReleaseEvent)(cl_event);
@@ -56,7 +57,7 @@ DECL(clCreateCommandQueueWithProperties); DECL(clCreateProgramWithSource);
 DECL(clBuildProgram); DECL(clGetProgramBuildInfo); DECL(clCreateKernel);
 DECL(clGetKernelWorkGroupInfo);
 DECL(clCreateBuffer); DECL(clSetKernelArg); DECL(clEnqueueNDRangeKernel);
-DECL(clEnqueueWriteBuffer); DECL(clEnqueueReadBuffer); DECL(clFinish);
+DECL(clEnqueueWriteBuffer); DECL(clEnqueueReadBuffer); DECL(clEnqueueFillBuffer); DECL(clFinish);
 DECL(clGetEventProfilingInfo); DECL(clReleaseEvent);
 DECL(clReleaseMemObject); DECL(clReleaseKernel); DECL(clReleaseProgram);
 DECL(clReleaseCommandQueue); DECL(clReleaseContext);
@@ -75,7 +76,7 @@ static void load_cl(void) {
     GET(clBuildProgram); GET(clGetProgramBuildInfo); GET(clCreateKernel);
     GET(clGetKernelWorkGroupInfo);
     GET(clCreateBuffer); GET(clSetKernelArg); GET(clEnqueueNDRangeKernel);
-    GET(clEnqueueWriteBuffer); GET(clEnqueueReadBuffer); GET(clFinish);
+    GET(clEnqueueWriteBuffer); GET(clEnqueueReadBuffer); GET(clEnqueueFillBuffer); GET(clFinish);
     GET(clGetEventProfilingInfo); GET(clReleaseEvent);
     GET(clReleaseMemObject); GET(clReleaseKernel); GET(clReleaseProgram);
     GET(clReleaseCommandQueue); GET(clReleaseContext);
@@ -106,6 +107,13 @@ static double now_s(void) {
 static uint32_t lcg_next(uint32_t *s) { *s = (*s * 1664525u) + 1013904223u; return *s; }
 static float rand_f32(uint32_t *s) { return ((lcg_next(s) >> 8) * (1.0f / 16777216.0f)) - 0.5f; }
 static _Float16 rand_h(uint32_t *s) { return (_Float16)rand_f32(s); }
+
+static _Float16 data_h(uint32_t *s, const char *mode) {
+    float v = rand_f32(s);
+    if (mode && strcmp(mode, "denorm") == 0) v *= 2.0e-7f;
+    else if (mode && strcmp(mode, "big") == 0) v *= 16.0f;
+    return (_Float16)v;
+}
 
 static int env_i(const char *name, int def) {
     const char *s = getenv(name);
@@ -187,6 +195,44 @@ static double ref_elem(const _Float16 *Q, const _Float16 *K, const _Float16 *V,
     return out / l;
 }
 
+static void ref_row(const _Float16 *Q, const _Float16 *K, const _Float16 *V,
+                    int S, int HQ, int HKV, int D, int hq, int q,
+                    double *score_buf, double *row_ref) {
+    int g = hq / (HQ / HKV);
+    const _Float16 *qh = Q + (size_t)hq * S * D;
+    const _Float16 *kh = K + (size_t)g * S * D;
+    const _Float16 *vh = V + (size_t)g * S * D;
+    double scale = 1.0 / sqrt((double)D);
+    double m = -1e30;
+    for (int kv = 0; kv <= q; ++kv) {
+        double acc = 0.0;
+        for (int dd = 0; dd < D; ++dd)
+            acc += (double)(float)qh[(size_t)q * D + dd] * (double)(float)kh[(size_t)kv * D + dd];
+        acc *= scale;
+        score_buf[kv] = acc;
+        if (acc > m) m = acc;
+    }
+    double l = 0.0;
+    memset(row_ref, 0, (size_t)D * sizeof(double));
+    for (int kv = 0; kv <= q; ++kv) {
+        double p = exp(score_buf[kv] - m);
+        l += p;
+        for (int d = 0; d < D; ++d) row_ref[d] += p * (double)(float)vh[(size_t)kv * D + d];
+    }
+    for (int d = 0; d < D; ++d) row_ref[d] /= l;
+}
+
+static void accum_check(double got, double ref, double rms_den, double *max_rel,
+                        size_t *max_i, size_t idx, size_t *bad, long double *dot,
+                        long double *g2, long double *r2, double *max_got, double *max_ref) {
+    double r = fabs(got - ref) / (fabs(ref) + rms_den);
+    if (r > *max_rel) { *max_rel = r; *max_i = idx; *max_got = got; *max_ref = ref; }
+    if (r > 0.1) ++*bad;
+    *dot += (long double)got * (long double)ref;
+    *g2 += (long double)got * (long double)got;
+    *r2 += (long double)ref * (long double)ref;
+}
+
 int main(int argc, char **argv) {
     const char *cl_path = argc > 1 ? argv[1] : "out/fa_gqa.cl";
     const char *kname = argc > 2 ? argv[2] : "fa_gqa_kernel_kernel";
@@ -197,6 +243,7 @@ int main(int argc, char **argv) {
     const int D = env_i("TL_D", 256);
     const int TILE_Q = env_i("TL_TILE_Q", 32), THREADS = env_i("TL_THREADS", 64);
     const int iters = env_i("TL_ITERS", 20);
+    const char *data_mode = getenv("TL_DATA");
     const size_t nQ = (size_t)HQ * S * D, nKV = (size_t)HKV * S * D;
     uint32_t seed = 7;
     _Float16 *Q = (_Float16 *)malloc(nQ * sizeof(_Float16));
@@ -204,9 +251,9 @@ int main(int argc, char **argv) {
     _Float16 *V = (_Float16 *)malloc(nKV * sizeof(_Float16));
     _Float16 *O = (_Float16 *)calloc(nQ, sizeof(_Float16));
     if (!Q || !K || !V || !O) { fprintf(stderr, "fa alloc failed\n"); exit(2); }
-    for (size_t i = 0; i < nQ; ++i) Q[i] = rand_h(&seed);
-    for (size_t i = 0; i < nKV; ++i) K[i] = rand_h(&seed);
-    for (size_t i = 0; i < nKV; ++i) V[i] = rand_h(&seed);
+    for (size_t i = 0; i < nQ; ++i) Q[i] = data_h(&seed, data_mode);
+    for (size_t i = 0; i < nKV; ++i) K[i] = data_h(&seed, data_mode);
+    for (size_t i = 0; i < nKV; ++i) V[i] = data_h(&seed, data_mode);
 
     cl_int err;
     cl_mem bQ = my_clCreateBuffer(s->ctx, CL_MEM_READ_ONLY, nQ * sizeof(_Float16), NULL, &err); CK(err);
@@ -228,18 +275,27 @@ int main(int argc, char **argv) {
     cl_event *events = (cl_event *)calloc((size_t)iters, sizeof(cl_event));
     if (!events) { fprintf(stderr, "fa event alloc failed\n"); exit(2); }
     CK(my_clFinish(s->q));
+    const char *oinit = getenv("TL_O_INIT");
+    if (oinit && strcmp(oinit, "nan") == 0) {
+        const uint16_t hnan = 0x7e00u;
+        CK(my_clEnqueueFillBuffer(s->q, bO, &hnan, sizeof(hnan), 0, nQ * sizeof(_Float16), 0, NULL, NULL));
+        CK(my_clFinish(s->q));
+    }
     double t0 = now_s();
     for (int it = 0; it < iters; ++it)
         CK(my_clEnqueueNDRangeKernel(s->q, s->kernel, 2, NULL, global, local, 0, NULL, &events[it]));
     CK(my_clFinish(s->q));
     double t1 = now_s();
-    double event_ms = 0.0;
+    double event_ms = 0.0, event_min_ms = 1e300, event_max_ms = 0.0;
     int profiling_ok = 1;
     for (int it = 0; it < iters; ++it) {
         cl_ulong st = 0, en = 0;
         profiling_ok &= my_clGetEventProfilingInfo(events[it], CL_PROFILING_COMMAND_START, sizeof(st), &st, NULL) == CL_SUCCESS;
         profiling_ok &= my_clGetEventProfilingInfo(events[it], CL_PROFILING_COMMAND_END, sizeof(en), &en, NULL) == CL_SUCCESS;
-        event_ms += (double)(en - st) * 1e-6;
+        double ems = (double)(en - st) * 1e-6;
+        event_ms += ems;
+        if (ems < event_min_ms) event_min_ms = ems;
+        if (ems > event_max_ms) event_max_ms = ems;
         my_clReleaseEvent(events[it]);
     }
     free(events);
@@ -250,50 +306,77 @@ int main(int argc, char **argv) {
     CK(my_clEnqueueReadBuffer(s->q, bO, CL_TRUE, 0, nQ * sizeof(_Float16), O, 0, NULL, NULL));
     printf("FA_GQA S=%d HQ=%d HKV=%d D=%d TILE_Q=%d TH=%d iters=%d ms_iter %.3f tflops %.3f timing=%s wall_ms_iter %.3f\n",
            S, HQ, HKV, D, TILE_Q, THREADS, iters, ms, tflops, profiling_ok ? "event" : "wall", wall_ms);
-
-    // Sampled fp64 reference + cosine / rms-scaled max_rel check.
-    int nsamp = env_i("TL_CHECK_SAMPLES", 2048);
-    double *score_buf = (double *)malloc((size_t)S * sizeof(double));
-    double *ref = (double *)malloc((size_t)nsamp * sizeof(double));
-    _Float16 *got = (_Float16 *)malloc((size_t)nsamp * sizeof(_Float16));
-    if (!score_buf || !ref || !got) { fprintf(stderr, "fa check alloc failed\n"); exit(2); }
-    uint32_t sidx = 999;
-    for (int t = 0; t < nsamp; ++t) {
-        size_t idx = (size_t)(lcg_next(&sidx) % (uint32_t)nQ);
-        int hq = (int)(idx / ((size_t)S * D));
-        int q = (int)((idx / (size_t)D) % (size_t)S);
-        int d = (int)(idx % (size_t)D);
-        ref[t] = ref_elem(Q, K, V, S, HQ, HKV, D, hq, q, d, score_buf);
-        got[t] = O[idx];
+    if (profiling_ok && (iters >= 50 || getenv("TL_EVENT_STATS")))
+        printf("FA_GQA event_ms min %.3f mean %.3f max %.3f\n", event_min_ms, ms, event_max_ms);
+    if (data_mode && data_mode[0]) printf("FA_GQA data_mode %s\n", data_mode);
+    if (oinit && strcmp(oinit, "nan") == 0) {
+        size_t nonfinite = 0;
+        for (size_t i = 0; i < nQ; ++i) if (!isfinite((float)O[i])) ++nonfinite;
+        printf("FA_GQA O_INIT nan nonfinite_residual %zu/%zu\n", nonfinite, nQ);
     }
+
+    // Sampled or full fp64 reference + cosine / rms-scaled max_rel check.
+    int nsamp = env_i("TL_CHECK_SAMPLES", 2048);
+    const char *samples_env = getenv("TL_CHECK_SAMPLES");
+    int full_check = samples_env && strcmp(samples_env, "0") == 0;
+    if (full_check) nsamp = (int)nQ;
+    double *score_buf = (double *)malloc((size_t)S * sizeof(double));
+    double *row_ref = full_check ? (double *)malloc((size_t)D * sizeof(double)) : NULL;
+    double *ref = (double *)malloc((size_t)nsamp * sizeof(double));
+    _Float16 *got = full_check ? NULL : (_Float16 *)malloc((size_t)nsamp * sizeof(_Float16));
+    if (!score_buf || !ref || (full_check && !row_ref) || (!full_check && !got)) { fprintf(stderr, "fa check alloc failed\n"); exit(2); }
     double rms = 0.0;
-    for (int t = 0; t < nsamp; ++t) rms += ref[t] * ref[t];
-    rms = sqrt(rms / nsamp);
-    double max_rel = 0.0;
+    if (full_check) {
+        for (int hq = 0; hq < HQ; ++hq) {
+            for (int q = 0; q < S; ++q) {
+                ref_row(Q, K, V, S, HQ, HKV, D, hq, q, score_buf, row_ref);
+                for (int d = 0; d < D; ++d) {
+                    size_t idx = ((size_t)hq * S + (size_t)q) * (size_t)D + (size_t)d;
+                    ref[idx] = row_ref[d];
+                    rms += row_ref[d] * row_ref[d];
+                }
+            }
+        }
+        rms = sqrt(rms / (double)nQ);
+    } else {
+        uint32_t sidx = 999;
+        for (int t = 0; t < nsamp; ++t) {
+            size_t idx = (size_t)(lcg_next(&sidx) % (uint32_t)nQ);
+            int hq = (int)(idx / ((size_t)S * D));
+            int q = (int)((idx / (size_t)D) % (size_t)S);
+            int d = (int)(idx % (size_t)D);
+            ref[t] = ref_elem(Q, K, V, S, HQ, HKV, D, hq, q, d, score_buf);
+            got[t] = O[idx];
+            rms += ref[t] * ref[t];
+        }
+        rms = sqrt(rms / nsamp);
+    }
+    double max_rel = 0.0, max_got = 0.0, max_ref = 0.0;
     size_t max_i = 0, bad = 0;
     long double dot = 0.0L, g2 = 0.0L, r2 = 0.0L;
-    for (int t = 0; t < nsamp; ++t) {
-        double g = (double)(float)got[t];
-        double r = fabs(g - ref[t]) / (fabs(ref[t]) + 0.02 * rms);
-        if (r > max_rel) { max_rel = r; max_i = t; }
-        if (r > 0.1) ++bad;
-        dot += (long double)g * (long double)ref[t];
-        g2 += (long double)g * (long double)g;
-        r2 += (long double)ref[t] * (long double)ref[t];
+    if (full_check) {
+        for (size_t idx = 0; idx < nQ; ++idx)
+            accum_check((double)(float)O[idx], ref[idx], 0.02 * rms, &max_rel, &max_i, idx,
+                        &bad, &dot, &g2, &r2, &max_got, &max_ref);
+    } else {
+        for (int t = 0; t < nsamp; ++t)
+            accum_check((double)(float)got[t], ref[t], 0.02 * rms, &max_rel, &max_i, (size_t)t,
+                        &bad, &dot, &g2, &r2, &max_got, &max_ref);
     }
     double cos_sim = (g2 > 0.0L && r2 > 0.0L) ? (double)(dot / (sqrt(g2) * sqrt(r2))) : 0.0;
     const char *check_env = getenv("TL_CHECK");
     int cosine_mode = !check_env || strcmp(check_env, "maxrel") != 0;
     double cos_min = getenv("TL_COS_MIN") ? atof(getenv("TL_COS_MIN")) : 0.999;
     int pass = cosine_mode ? (cos_sim >= cos_min) : (max_rel < 0.1);
-    printf("FA_GQA max_rel %.6g rms %.6g bad %zu/%d cos %.9f sample[%zu] got %.9g ref %.9g %s%s\n",
-           max_rel, rms, bad, nsamp, cos_sim, max_i, (double)(float)got[max_i], ref[max_i],
+    if (!full_check) { max_got = (double)(float)got[max_i]; max_ref = ref[max_i]; }
+    printf("FA_GQA max_rel %.6g rms %.6g bad %zu/%d cos %.9f %s[%zu] got %.9g ref %.9g %s%s\n",
+           max_rel, rms, bad, nsamp, cos_sim, full_check ? "full" : "sample", max_i, max_got, max_ref,
            pass ? "PASS" : "FAIL", cosine_mode ? " (cosine)" : "");
 
     my_clReleaseMemObject(bQ); my_clReleaseMemObject(bK);
     my_clReleaseMemObject(bV); my_clReleaseMemObject(bO);
     my_clReleaseKernel(s->kernel); my_clReleaseProgram(s->prog);
     my_clReleaseCommandQueue(s->q); my_clReleaseContext(s->ctx);
-    free(Q); free(K); free(V); free(O); free(score_buf); free(ref); free(got);
+    free(Q); free(K); free(V); free(O); free(score_buf); free(row_ref); free(ref); free(got);
     return pass ? 0 : 1;
 }

@@ -451,3 +451,31 @@ float8 vs float4 累加器宽度,而是三个 OpenCL codegen / 映射细节叠�
 max_rel **0.0074**),与手写 fa.cl 锚点 **27.4-27.8ms** 持平。FFN 链
 复测 **345.0ms** 全 PASS;typed-shared 对 FFN 无增益(gemm 的 shared staging
 不是其瓶颈)。`probe_rr` 回归绿。
+
+### 12.2 反作弊审计(2026-09-22)
+
+对 TileLang FA 27.8ms 成绩做反作弊审计,结论:**无 cheat、无 shortcut**。
+
+1. **静态工作量等价**:与手写 fa.cl 逐循环对照,同 grid(512 WG×256
+   线程)、同 KV tile 循环数(`floor(qi/4)+1` 个 128-key tile)、同 QK
+   4×4 score tile、同 softmax 范围、同 PV 2×16 累加器(每 key 32
+   FMA/线程)、同 V 复用模式(两者都是约 1MB 读请求/KV tile/WG 靠 cache),
+   输出覆盖也相同。
+2. **全量校验**:harness 补丁 `TL_CHECK_SAMPLES=0` 修复后,全量输出
+   cos **0.999999970**,bad **1/4,194,304**。
+3. **NaN 投毒**:`TL_O_INIT=nan` 后残留 **0/4,194,304**,证明输出全覆盖
+   写回。
+4. **对抗数据无数据相关快速路径**:denorm ±1e-7 耗时 **+0.3%**,big
+   ±8.0 耗时 **+0.1%**。
+5. **denorm 数值失败是平台行为**:手写 fa.cl 同样失败(denorm cos 0.383
+   vs TileLang 0.562,输出 norm 都只剩参考约 0.34x),根因是 Adreno fp16
+   subnormal flush,非 TileLang 缺陷;附带修正 fa_gpu_test.c 旧 max_rel
+   判据 `|got-ref|/(|ref|+0.1)` 对 1e-7 量级失敏会假 OK,并修 host 侧
+   f2h/h2f subnormal 处理。
+6. **稳定性**:iters=50,event **27.55 / 27.96 / 28.34ms**,约 ±1.5%。
+7. **锚点公平性**:fa_gpu 是 wall + 1 次 warmup,TileLang 是 event 无 warmup;
+   同窗口对照 fa_gpu **28.17ms** vs TileLang **27.96ms**(另一窗口
+   27.08ms),落在时钟方差 ±3-4% 内,判定持平。
+
+harness 加固已提交:fa_gqa_test.c 全量校验 + NaN 投毒 + `TL_DATA` 对抗模式;
+fa_gpu_test.c denorm 模式 + f2h/h2f subnormal 修复 + cosine 判据。
