@@ -6,30 +6,59 @@
 OnePlus 13 / SM8750 的 Adreno OpenCL 驱动上编译、执行和对拍。语法、scope
 映射与当前限制见 [`docs/opencl/00_syntax_and_rules.md`](../../docs/opencl/00_syntax_and_rules.md)。
 
-## 目录结构、环境与运行方法
+## 目录结构（hexagon 标准，2026-09-22 起）
 
-本目录现在按职责拆分：`kernels/` 放 TileLang kernel 生成脚本，顶层
-`out/` 放生成的 OpenCL C golden 文件，`tests/` 放 OnePlus 13 设备侧
-部署与对拍脚本。设备侧验证使用主仓库通用 runner
+每个标准 kernel 一个目录，三个文件——TileLang kernel 生成脚本、独立
+host C 测试（自包含 OpenCL harness，fp64 参考对拍）、生成的 kernel 源码：
+
+```
+gemm/     gemm_nt.py   gemm_nt_test.c   out/gemm_nt.cl   # GR fp16 kn, 真机 1.34-1.40 TFLOPS
+rmsnorm/  rmsnorm.py   rmsnorm_test.c   out/rmsnorm.cl
+silu/     silu.py      silu_test.c      out/silu.cl
+experimental/   # 早期 texture/staging 探索脚本（buffer_staging, gemm_nt_tex* 等）
+tests/          # probe_l0/l1/rr 形态测试 + run_oneplus13.sh 一键部署
+out/            # 历史生成的 golden .cl 归档
+```
+
+标准产物再生命令（GEMM 为当前最快配置）：
+
+```bash
+python examples/opencl/gemm/gemm_nt.py --impl grgemm --b-layout kn --accum fp16 \
+  --m 1024 --n 2560 --k 2560 --bm 32 --bn 128 --bk 64 --threads 64
+python examples/opencl/rmsnorm/rmsnorm.py
+python examples/opencl/silu/silu.py
+```
+
+test.c 编译（Android 交叉，OpenCL-Headers 在 backend/gpu/OpenCL-Headers）：
+
+```bash
+$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang \
+  -target aarch64-linux-android26 -march=armv8.2-a+dotprod+fp16 -std=c11 -O3 -fPIE -pie \
+  -I/root/project/backend/gpu/OpenCL-Headers examples/opencl/gemm/gemm_nt_test.c -ldl -lm -o gemm_nt_test
+```
+
+## 历史运行方法（tl_probe 通用 runner）
+
+设备侧验证也可以用主仓库通用 runner
 `/root/project/backend/gpu/tl_probe/tl_probe.c`，runner 在手机上 dlopen
 OpenCL、编译 `.cl`、运行 kernel，并用 fp64 reference + rms-scaled
 `max_rel < 0.1` 判据对拍。
 
 | 文件夹 | kernel 脚本 | 设备对拍 runner | 生成物 | 一键命令 |
 |---|---|---|---|---|
-| `kernels/` | `silu.py` | `tests/run_oneplus13.sh` (`silu`) | `out/silu.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
-| `kernels/` | `rmsnorm.py` | `tests/run_oneplus13.sh` (`rmsnorm`) | `out/rmsnorm.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
-| `kernels/` | `gemm_nt.py` | `tests/run_oneplus13.sh` (`gemm`) | `out/gemm_nt.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
-| `kernels/` | `gemm_nt_texstage.py` | `tl_probe` (`gemm_texstage`) | `out/gemm_nt_texstage_*.cl` | 手机:`./tl_probe gemm_nt_texstage_512_bk16.cl gemm_nt_texstage_kernel gemm_texstage` |
-| `kernels/` | `gemm_nt_texstaged.py` | `tl_probe` (`gemm_texstage`) | `out/gemm_nt_texstaged_*.cl` | 手机:`./tl_probe gemm_nt_texstaged_512_512_512_64x128_bk16.cl gemm_nt_texstaged_kernel_kernel gemm_texstage` |
-| `kernels/` | `texture_copy.py` | `tests/run_oneplus13.sh` (`texcopy`) | `out/texture_copy.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
-| `kernels/` | `texture_staging.py` | `tl_probe` (`texstage`) | `out/texture_staging.cl` | 手机:`./tl_probe texture_staging.cl texture_staging_kernel_kernel texstage` |
+| `silu/` | `silu.py` | `tests/run_oneplus13.sh` (`silu`) | `silu/out/silu.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
+| `rmsnorm/` | `rmsnorm.py` | `tests/run_oneplus13.sh` (`rmsnorm`) | `rmsnorm/out/rmsnorm.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
+| `gemm/` | `gemm_nt.py` | `tests/run_oneplus13.sh` (`gemm`) | `gemm/out/gemm_nt.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
+| `experimental/` | `gemm_nt_texstage.py` | `tl_probe` (`gemm_texstage`) | `out/gemm_nt_texstage_*.cl` | 手机:`./tl_probe gemm_nt_texstage_512_bk16.cl gemm_nt_texstage_kernel gemm_texstage` |
+| `experimental/` | `gemm_nt_texstaged.py` | `tl_probe` (`gemm_texstage`) | `out/gemm_nt_texstaged_*.cl` | 手机:`./tl_probe gemm_nt_texstaged_512_512_512_64x128_bk16.cl gemm_nt_texstaged_kernel_kernel gemm_texstage` |
+| `experimental/` | `texture_copy.py` | `tests/run_oneplus13.sh` (`texcopy`) | `out/texture_copy.cl` | `bash examples/opencl/tests/run_oneplus13.sh` |
+| `experimental/` | `texture_staging.py` | `tl_probe` (`texstage`) | `out/texture_staging.cl` | 手机:`./tl_probe texture_staging.cl texture_staging_kernel_kernel texstage` |
 
 从仓库根目录运行，显式设置 `PYTHONPATH` 并使用仓库内虚拟环境：
 
 ```bash
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/silu.py
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/rmsnorm.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/silu/silu.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/rmsnorm/rmsnorm.py
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/gemm_nt.py
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/texture_copy.py
 ```

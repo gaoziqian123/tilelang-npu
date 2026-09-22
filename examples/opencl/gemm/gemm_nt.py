@@ -495,7 +495,7 @@ def main() -> int:
     ap.add_argument("--impl", choices=("tilelang", "fragment", "tiled_fragment", "rrgemm", "grgemm", "local64x128", "local_tiled", "direct8x8", "image8x8"), default="local64x128")
     ap.add_argument("--b-layout", choices=("nk", "kn"), default="nk", help="B buffer layout for fragment/tiled_fragment/rrgemm/grgemm/direct8x8: nk=B[N,K], kn=pretransposed Bt[K,N]")
     ap.add_argument("--accum", choices=("fp32", "fp16"), default="fp32", help="rrgemm/grgemm accumulator dtype: fp32 inner chain or full-fp16 (no converts)")
-    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent.parent / "out" / "gemm_nt.cl")
+    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent / "out" / "gemm_nt.cl")
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
 

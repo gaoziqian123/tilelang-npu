@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+import sys
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import tilelang
 import tilelang.opencl  # noqa: F401 - registers OpenCL TileOp implementations
@@ -51,7 +56,7 @@ def main() -> int:
     ap.add_argument("--rows", type=int, default=8192)
     ap.add_argument("--cols", type=int, default=960)
     ap.add_argument("--threads", type=int, default=256)
-    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent.parent / "out" / "silu.cl")
+    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent / "out" / "silu.cl")
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
 

@@ -12,7 +12,7 @@ import tilelang  # noqa: F401
 import tilelang.opencl  # noqa: F401 - register OpenCL backend
 from tilelang.opencl.op.gemm_fma import GemmFMA  # noqa: F401
 
-KERNELS = REPO_ROOT / "examples" / "opencl" / "kernels"
+KERNELS = REPO_ROOT / "examples" / "opencl" / "gemm"
 if str(KERNELS) not in sys.path:
     sys.path.insert(0, str(KERNELS))
 
