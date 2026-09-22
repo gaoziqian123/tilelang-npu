@@ -338,3 +338,73 @@ nk 512³ 0.44T（gather 路径，符合 nk < kn 的预期）。
 - 私有/局部数组向量访问统一为 deref 形式 `(*(halfN*)(arr+off))`
   (vloadN/vstoreN 对 __local/__private 指针在 Adreno 不存在);
   probe_rr 断言已同步放宽为两种拼写都接受。
+
+## 12. FA GQA 战役第二轮:94.9 -> 71.0ms 与 codegen peephole 集(2026-09-22)
+
+本轮全部数字均为 OnePlus 13 / Adreno 830 真机实测,fp64 参考对拍通过。
+
+### 12.1 codegen.py peephole 集
+
+tilelang 仓 commit `49f101f` / `f38bc70` / `2fa25de` 新增一组 OpenCL
+codegen 后处理 peephole:
+
+- `_patch_opencl_float8_split`:float8 SSA 累加器变量当且仅当所有使用都是
+  `.lo`/`.hi`/`.sN` 分量访问时拆成 float4 lo/hi 对;若存在整变量使用
+  (如 `mad()`)则跳过。目标是消除向量化更新里每条 FMA 的
+  `(float4)(acc.s0..s3)` 重建。
+- `_patch_opencl_identity_splat`:`(float4)(X.s0, X.s1, X.s2, X.s3)` →
+  `X`,覆盖 C 打印器在任意位置把一个变量用自己的 lane 重建的情形。
+- `_patch_opencl_inline_splat`:`((float4)((convert_float(E)), ×4))` →
+  `(float4)(convert_float(E))`,把 4 次 convert 折成 1 次 convert + splat。
+- `_patch_opencl_splat_convert`:仅被 `convert_float4` 消费的 half4 splat
+  staging 变量提升为 float4 变量。
+- half-staging 提升扩展:half8 数组的 half4-deref 读
+  (`(*(half4*)(X + 0/4))`)→ `.lo`/`.hi`;同时修了一个 scrub 正则 bug
+  (half4-deref scrub 误配 half4 数组的 store,导致所有 half4 staging
+  数组被静默跳过提升)。
+
+### 12.2 fa_gqa.py 结构改动与主结果
+
+- `acc_o` 改为 `(tile_q, D//8, 8)` fragment,PV 内层改 `T.vectorized(8)`,
+  使 V 操作数发出 `vload8`。
+- QK 的 Ks 向量 load 用 k4 hoist 提出 `ii` 循环;否则向量化器会在每个
+  `ii` 发一条 `vload4`,设备编译器不做 CSE。
+- 结果:FA GQA prefill **94.9 → 71.0ms**,PASS,cos **0.999999971**。
+
+### 12.3 实测病理记录
+
+- 4D 块化 `acc_o` `(tile_q//2, D//16, 2, 16)`(试图复刻 fa.cl PV
+  2×16 线程映射)触发 layout inference 把每线程工作复制 4 倍
+  (128 个累加器),最终 **7.5s**。
+- `T.vectorized(16)` 报错 `VectorizeLoop before LiftStorageAlloc`;flat
+  `acc_o` 循环里用 `dv8*8+dv` 索引触发 `CanProveEqual(scale,1)` 失败。
+  结论:fragment 索引必须每维 scale-1,块因子只能放进 fragment 形状。
+- 2 行变体 `(tile_q//2, D//8, 2, 8)` 形式正确但 **77.2ms**,比 1 行
+  形态的 71.0ms 更慢。
+- half8 staging 数组未提升时(PV 每 `j` 一条 `half X[8]` + `vload8`
+  store + half4-deref 读)为 **630ms**——per-j 私有内存往返;提升为
+  `half8 X_v` SSA 变量后回到 71ms。
+- `#pragma unroll` 加在 QK k 循环是毒药:**105ms**(+34ms);加在 PV j
+  循环(unroll 4)基本中性。手写 fa.cl 全展开 k 循环却是 27.4ms,不对称
+  原因未明。
+- **DCE 污染教训**:"每 ks 全新累加器"探针显示 69ms,但实际 `a4..a7`
+  链被死代码消除,少了一半 FMA。之后所有手术消融必须核对 emit 工作量
+  完整,否则计时不予采信。
+
+### 12.4 相位归因与剩余差距
+
+71.2ms 版本通过手术删除循环体归因:
+
+- QK ≈ **24.4ms**
+- PV ≈ **31.4ms**
+- softmax ≈ **6.0ms**
+- staging / mask / epilogue ≈ **9.4ms**
+
+手写 fa.cl 锚点仍为 **27.4ms**;两边瓦片形状完全相同(BM=32 BN=128
+BK=16 WG=256),QK 指令形式现已一致。Adreno 830 的
+`CL_KERNEL_{WORK_GROUP,PRIVATE,LOCAL}_MEM_SIZE` 全部返回 0,拿不到寄存器 /
+spill 诊断。剩余 **71 vs 27.4ms** 差距在指令形式对齐后仍未解释,需要
+SASS 级分析。
+
+FFN 链不受本轮 peephole 影响(其 `mad()` 是整变量 float8 FMA,不会被
+float8 split 命中),复测 **345.2ms** 全 PASS。
