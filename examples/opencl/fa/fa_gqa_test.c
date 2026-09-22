@@ -35,6 +35,7 @@ typedef cl_program (*PFN_clCreateProgramWithSource)(cl_context, cl_uint, const c
 typedef cl_int (*PFN_clBuildProgram)(cl_program, cl_uint, const cl_device_id *, const char *, void (CL_CALLBACK *)(cl_program, void *), void *);
 typedef cl_int (*PFN_clGetProgramBuildInfo)(cl_program, cl_device_id, cl_program_build_info, size_t, void *, size_t *);
 typedef cl_kernel (*PFN_clCreateKernel)(cl_program, const char *, cl_int *);
+typedef cl_int (*PFN_clGetKernelWorkGroupInfo)(cl_kernel, cl_device_id, cl_kernel_work_group_info, size_t, void *, size_t *);
 typedef cl_mem (*PFN_clCreateBuffer)(cl_context, cl_mem_flags, size_t, void *, cl_int *);
 typedef cl_int (*PFN_clSetKernelArg)(cl_kernel, cl_uint, size_t, const void *);
 typedef cl_int (*PFN_clEnqueueNDRangeKernel)(cl_command_queue, cl_kernel, cl_uint, const size_t *, const size_t *, const size_t *, cl_uint, const cl_event *, cl_event *);
@@ -53,6 +54,7 @@ typedef cl_int (*PFN_clReleaseContext)(cl_context);
 DECL(clGetPlatformIDs); DECL(clGetDeviceIDs); DECL(clCreateContext);
 DECL(clCreateCommandQueueWithProperties); DECL(clCreateProgramWithSource);
 DECL(clBuildProgram); DECL(clGetProgramBuildInfo); DECL(clCreateKernel);
+DECL(clGetKernelWorkGroupInfo);
 DECL(clCreateBuffer); DECL(clSetKernelArg); DECL(clEnqueueNDRangeKernel);
 DECL(clEnqueueWriteBuffer); DECL(clEnqueueReadBuffer); DECL(clFinish);
 DECL(clGetEventProfilingInfo); DECL(clReleaseEvent);
@@ -71,6 +73,7 @@ static void load_cl(void) {
     GET(clGetPlatformIDs); GET(clGetDeviceIDs); GET(clCreateContext);
     GET(clCreateCommandQueueWithProperties); GET(clCreateProgramWithSource);
     GET(clBuildProgram); GET(clGetProgramBuildInfo); GET(clCreateKernel);
+    GET(clGetKernelWorkGroupInfo);
     GET(clCreateBuffer); GET(clSetKernelArg); GET(clEnqueueNDRangeKernel);
     GET(clEnqueueWriteBuffer); GET(clEnqueueReadBuffer); GET(clFinish);
     GET(clGetEventProfilingInfo); GET(clReleaseEvent);
@@ -146,6 +149,13 @@ static ClState cl_init_build(const char *cl_path, const char *kernel_name) {
     }
     if (err != CL_SUCCESS) exit(3);
     s.kernel = my_clCreateKernel(s.prog, kernel_name, &err); CK(err);
+    {
+        size_t wg = 0, priv = 0, lmem = 0;
+        my_clGetKernelWorkGroupInfo(s.kernel, s.dev, 0x11B6 /*CL_KERNEL_WORK_GROUP_SIZE*/, sizeof(wg), &wg, NULL);
+        my_clGetKernelWorkGroupInfo(s.kernel, s.dev, 0x11BA /*CL_KERNEL_PRIVATE_MEM_SIZE*/, sizeof(priv), &priv, NULL);
+        my_clGetKernelWorkGroupInfo(s.kernel, s.dev, 0x11B8 /*CL_KERNEL_LOCAL_MEM_SIZE*/, sizeof(lmem), &lmem, NULL);
+        printf("kernel_info wg_size=%zu private_mem=%zu local_mem=%zu\n", wg, priv, lmem);
+    }
     free(src);
     return s;
 }

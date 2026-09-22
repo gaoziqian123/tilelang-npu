@@ -46,7 +46,7 @@ PASS_CFG = {"tl.UnrollLoop": {"explicit_unroll": True, "unroll_local_access": Tr
 
 
 def make_fa_kernel(S: int, HQ: int, HKV: int, D: int, tile_q: int, tile_kv: int,
-                   threads: int, bk: int):
+                   threads: int, bk: int, ablate: str = "none"):
     group = HQ // HKV
 
     @T.prim_func
@@ -72,16 +72,41 @@ def make_fa_kernel(S: int, HQ: int, HKV: int, D: int, tile_q: int, tile_kv: int,
             lrun = T.alloc_shared((tile_q,), "float32")
             alpha = T.alloc_shared((tile_q,), "float32")
             # Score fragment (per kv tile) and the persistent output
-            # accumulator: (tile_q, D) fp32 spread over all threads.
-            acc_s = T.alloc_fragment((tile_q, tile_kv), "float32")
-            acc_o = T.alloc_fragment((tile_q, D), "float32")
+            # accumulator.  Shaped as (block_i, block_j, 4, 4) / (block_i,
+            # block_v, 2, 16) so every fragment access is unit-scale in the
+            # loop variables: layout inference's InverseAffineIterMap rejects
+            # scaled indices (acc[bi*4+ii] -> CanProveEqual(scale,1) fails),
+            # so the block factor lives in the fragment shape instead.
+            acc_s = T.alloc_fragment((tile_q // 4, tile_kv // 4, 4, 4), "float32")
+            # NOTE: a 4D-blocked acc_o (e.g. (tile_q//2, D//16, 2, 16), the
+            # fa.cl PV thread mapping) makes layout inference replicate 4x
+            # work per thread (128 accs) -> certain spills, ~7.5s.  Instead
+            # keep one fragment dim per index (scale-1 everywhere) and let
+            # the last dim be the vector lane: 8-wide V loads via
+            # T.vectorized(8).
+            acc_o = T.alloc_fragment((tile_q, D // 8, 8), "float32")
+            # Per-thread half4 staging for the QK splat operands: one deref
+            # vector load per k, then free .sN component splats (the fa.cl
+            # form) instead of a scalar load + convert + (float4)(x,x,x,x)
+            # constructor per FMA row.
+            q4 = T.alloc_local((4,), "float16")
+            qtmp = T.alloc_local((4,), "float16")
+            ktmp = T.alloc_local((4,), "float16")
 
             for i in T.Parallel(tile_q):
                 mrun[i] = -32768.0
                 lrun[i] = 0.0
                 alpha[i] = 1.0
-            for i, dv in T.Parallel(tile_q, D):
-                acc_o[i, dv] = 0.0
+            # All fragment accesses use the handwritten fa.cl block-threaded
+            # form: the Parallel loop maps threads to 4x4 (QK) / 2x16 (PV)
+            # blocks one-to-one, serial loops inside are per-thread.  Layout
+            # inference then derives the fa.cl thread mapping naturally
+            # (Qs/Ks vector loads + splat FMAs); mixing flat fragment loops
+            # with blocked ones breaks InverseAffineIterMap, so EVERY
+            # acc_s/acc_o access below is block-indexed.
+            for i, dv8 in T.Parallel(tile_q, D // 8):
+                for dv in T.serial(8):
+                    acc_o[i, dv8, dv] = 0.0
             T.sync_threads()
 
             q0 = bx * tile_q
@@ -91,39 +116,62 @@ def make_fa_kernel(S: int, HQ: int, HKV: int, D: int, tile_q: int, tile_kv: int,
                 kv0 = ks * tile_kv
 
                 # ---- Phase 1: Sh = Q_tile @ K_tile^T, bk-dim chunks ----
-                for i, j in T.Parallel(tile_q, tile_kv):
-                    acc_s[i, j] = 0.0
+                for bi, bj in T.Parallel(tile_q // 4, tile_kv // 4):
+                    for ii in T.serial(4):
+                        for jj in T.serial(4):
+                            acc_s[bi, bj, ii, jj] = 0.0
                 for kb in T.serial(0, D, bk):
-                    # Stage transposed: consecutive c is stride-tile_q /
-                    # stride-tile_kv in the store (scalar shared stores,
-                    # contiguous vector global loads along D).
-                    for m, c in T.Parallel(tile_q, bk):
-                        Qs[c, m] = Q[hq * S + q0 + m, kb + c]
-                    for n, c in T.Parallel(tile_kv, bk):
-                        Ks[c, n] = K[g * S + kv0 + n, kb + c]
+                    # Stage transposed: half4 vector loads along D into a
+                    # per-thread local, then scalar strided shared stores
+                    # (the fa.cl staging form).
+                    for m, c4 in T.Parallel(tile_q if ablate not in ("stage", "all") else 1, bk // 4) if ablate not in ("stage", "all") else T.Parallel(1, 1):
+                        for cc in T.vectorized(4):
+                            qtmp[cc] = Q[hq * S + q0 + m, kb + c4 * 4 + cc]
+                        for cc in T.serial(4):
+                            Qs[c4 * 4 + cc, m] = qtmp[cc]
+                    for n, c4 in T.Parallel(tile_kv if ablate != "skel" else 1, bk // 4) if ablate != "skel" else T.Parallel(1, 1):
+                        for cc in T.vectorized(4):
+                            ktmp[cc] = K[g * S + kv0 + n, kb + c4 * 4 + cc]
+                        for cc in T.serial(4):
+                            Ks[c4 * 4 + cc, n] = ktmp[cc]
                     T.sync_threads()
-                    for k in T.serial(bk):
-                        for i, j in T.Parallel(tile_q, tile_kv):
-                            acc_s[i, j] = (
-                                acc_s[i, j]
-                                + T.Cast("float32", Qs[k, i])
-                                * T.Cast("float32", Ks[k, j])
-                            )
+                    if ablate not in ("qk", "all"):
+                        for bi, bj in T.Parallel(tile_q // 4, tile_kv // 4):
+                            for k in T.serial(bk):
+                                for ii in T.vectorized(4):
+                                    q4[ii] = Qs[k, bi * 4 + ii]
+                                for ii in T.serial(4):
+                                    for jj in T.serial(4):
+                                        acc_s[bi, bj, ii, jj] = (
+                                            acc_s[bi, bj, ii, jj]
+                                            + T.Cast("float32", q4[ii])
+                                            * T.Cast("float32", Ks[k, bj * 4 + jj])
+                                        )
                     T.sync_threads()
                 # Causal mask + scale, store fp16 in place.
-                for i, j in T.Parallel(tile_q, tile_kv):
-                    Sh[i, j] = T.Cast(
-                        "float16",
-                        T.if_then_else(
-                            kv0 + j > q0 + i,
-                            -32768.0,
-                            acc_s[i, j] * 0.0625,  # 1/sqrt(256)
-                        ),
-                    )
+                if ablate not in ("mask", "all"):
+                    for bi, bj in T.Parallel(tile_q // 4, tile_kv // 4):
+                        for ii in T.serial(4):
+                            for jj in T.serial(4):
+                                Sh[bi * 4 + ii, bj * 4 + jj] = T.Cast(
+                                    "float16",
+                                    T.if_then_else(
+                                        kv0 + bj * 4 + jj > q0 + bi * 4 + ii,
+                                        -32768.0,
+                                        acc_s[bi, bj, ii, jj] * 0.0625,  # 1/sqrt(256)
+                                    ),
+                                )
+                elif ablate == "mask":
+                    for bi, bj in T.Parallel(tile_q // 4, tile_kv // 4):
+                        for ii in T.serial(4):
+                            for jj in T.serial(4):
+                                Sh[bi * 4 + ii, bj * 4 + jj] = T.Cast(
+                                    "float16", acc_s[bi, bj, ii, jj] * 0.0625
+                                )
                 T.sync_threads()
 
                 # ---- Phase 2: online softmax, one thread per row ----
-                for r in T.Parallel(tile_q):
+                for r in T.Parallel(tile_q) if ablate not in ("softmax", "all") else T.Parallel(1):
                     m_old = T.alloc_var("float32")
                     m_old = mrun[r]
                     m_new = T.alloc_var("float32")
@@ -144,20 +192,26 @@ def make_fa_kernel(S: int, HQ: int, HKV: int, D: int, tile_q: int, tile_kv: int,
                 # ---- Phase 3: acc_o = acc_o*alpha + P @ V tile ----
                 # V streams straight from global (hot in L2 across q tiles);
                 # P comes from shared as a per-row scalar broadcast.
-                for i, dv in T.Parallel(tile_q, D):
-                    acc_o[i, dv] = acc_o[i, dv] * alpha[i]
-                for j in T.serial(tile_kv):
-                    for i, dv in T.Parallel(tile_q, D):
-                        acc_o[i, dv] = (
-                            acc_o[i, dv]
-                            + T.Cast("float32", Sh[i, j])
-                            * T.Cast("float32", V[g * S + kv0 + j, dv])
-                        )
+                for i, dv8 in T.Parallel(tile_q if ablate != "skel" else 1, D // 8 if ablate != "skel" else 2) if ablate != "skel" else T.Parallel(1, 1):
+                    for dv in T.serial(8):
+                        acc_o[i, dv8, dv] = acc_o[i, dv8, dv] * alpha[i]
+                if ablate not in ("pv", "all"):
+                    for j in T.serial(tile_kv):
+                        for i, dv8 in T.Parallel(tile_q, D // 8):
+                            for dv in T.vectorized(8):
+                                acc_o[i, dv8, dv] = (
+                                    acc_o[i, dv8, dv]
+                                    + T.Cast("float32", Sh[i, j])
+                                    * T.Cast("float32", V[g * S + kv0 + j, dv8 * 8 + dv])
+                                )
                 T.sync_threads()
 
             # Epilogue: o = acc / l, fp16 store.
-            for i, dv in T.Parallel(tile_q, D):
-                O[hq * S + q0 + i, dv] = T.Cast("float16", acc_o[i, dv] / lrun[i])
+            for i, dv8 in T.Parallel(tile_q, D // 8):
+                for dv in T.serial(8):
+                    O[hq * S + q0 + i, dv8 * 8 + dv] = T.Cast(
+                        "float16", acc_o[i, dv8, dv] / lrun[i]
+                    )
 
     return fa_gqa_kernel
 
@@ -192,17 +246,24 @@ def main() -> int:
     ap.add_argument("--bk", type=int, default=16)
     ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent / "out" / "fa_gqa.cl")
     ap.add_argument("--skip-clang", action="store_true")
+    ap.add_argument("--ablate", choices=("none", "qk", "pv", "softmax", "stage", "mask", "all", "skel"), default="none")
     args = ap.parse_args()
 
     if args.hq % args.hkv:
         raise SystemExit("hq must be a multiple of hkv")
     if args.s % args.tile_q or args.d % args.bk:
         raise SystemExit("need s%tile_q==0 and d%bk==0")
+    if args.tile_q % 4 or args.tile_kv % 4 or args.d % 16:
+        raise SystemExit("need tile_q%4==0, tile_kv%4==0, d%16==0 (block-threaded loops)")
+    if (args.tile_q // 4) * (args.tile_kv // 4) != args.threads:
+        raise SystemExit("threads must equal (tile_q/4)*(tile_kv/4)")
+    if (args.tile_q // 2) * (args.d // 16) != args.threads:
+        raise SystemExit("threads must equal (tile_q/2)*(d/16)")
 
     with tvm.target.Target("opencl"), tvm.transform.PassContext(config=PASS_CFG):
         artifact = tilelang.lower(
             make_fa_kernel(args.s, args.hq, args.hkv, args.d, args.tile_q,
-                           args.tile_kv, args.threads, args.bk),
+                           args.tile_kv, args.threads, args.bk, args.ablate),
             target="opencl",
             enable_device_compile=False,
         )
