@@ -200,35 +200,61 @@ def _patch_opencl_half_staging(source: str) -> str:
     """
 
     original = source
-    decl_re = re.compile(r"(?m)^(\s*)half\s+([A-Za-z_]\w*)\[([48])\];\s*$")
-    candidates = []  # (name, n, rhs, store_line)
+    decl_re = re.compile(r"(?m)^(\s*)half\s+([A-Za-z_]\w*)\[(\d+)\];\s*$")
+    candidates = []  # (name, n, [(off, rhs, store_line), ...])
 
     for m in decl_re.finditer(source):
-        name, n_s = m.group(2), m.group(3)
-        n = int(n_s)
-        vec = f"half{n}"
-        store_re = re.compile(
-            r"\(\*\(" + vec + r"\*\)\(" + re.escape(name) + r" \+ 0\)\) = ([^;]+);"
-        )
-        sm = store_re.search(source)
-        if not sm:
+        name, n = m.group(2), int(m.group(3))
+        if n not in (4, 8, 16):
             continue
-        # The only `name +` occurrences must be the store itself plus
-        # (for half8) half4-deref reads at +0/+4 (rewritten to .lo/.hi below).
+        store_width = n
+        if n == 16:
+            # two accepted store forms: 2x half8, or 4x half4
+            stores = []
+            for off in (0, 8):
+                sm = re.search(
+                    r"\(\*\(half8\*\)\(" + re.escape(name) + r" \+ "
+                    + str(off) + r"\)\) = ([^;]+);",
+                    source,
+                )
+                if not sm:
+                    break
+                stores.append((off, sm.group(1), sm.group(0)))
+            if len(stores) == 2:
+                store_width = 8
+            else:
+                stores = []
+                for off in (0, 4, 8, 12):
+                    sm = re.search(
+                        r"\(\*\(half4\*\)\(" + re.escape(name) + r" \+ "
+                        + str(off) + r"\)\) = ([^;]+);",
+                        source,
+                    )
+                    if not sm:
+                        break
+                    stores.append((off, sm.group(1), sm.group(0)))
+                if len(stores) != 4:
+                    continue
+                store_width = 4
+        else:
+            vec = f"half{n}"
+            stores = []
+            sm = re.search(
+                r"\(\*\(" + vec + r"\*\)\(" + re.escape(name) + r" \+ 0\)\) = ([^;]+);",
+                source,
+            )
+            if sm:
+                stores.append((0, sm.group(1), sm.group(0)))
+            if len(stores) != 1:
+                continue
+        # The only `name +` occurrences must be the stores themselves plus
+        # (for half8/16) half4-deref reads (rewritten to .lo/.hi below).
         scrubbed = re.sub(
-            r"\(\*\(half" + str(n) + r"\*\)\(" + re.escape(name) + r" \+ 0\)\)(?!\s*=)",
+            r"\(\*\(half\d+\*\)\(" + re.escape(name) + r" \+ \d+\)\)(?!\s*=)",
             "",
             source,
         )
-        if n == 8:
-            # half4-deref reads at +0/+4 become .lo/.hi below; the store is
-            # a half8 deref so it cannot match here.
-            scrubbed = re.sub(
-                r"\(\*\(half4\*\)\(" + re.escape(name) + r" \+ [0-9]+\)\)",
-                "",
-                scrubbed,
-            )
-        if len(re.findall(re.escape(name) + r" \+", scrubbed)) != 1:
+        if len(re.findall(re.escape(name) + r" \+", scrubbed)) != len(stores):
             continue
         # No other decl of the same name, no address-of, no vload/vstore
         # naming the array directly.
@@ -240,34 +266,101 @@ def _patch_opencl_half_staging(source: str) -> str:
             continue
         if re.search(r"v(?:load|store)\d*\([^;]*\b" + re.escape(name) + r"\b", source):
             continue
-        candidates.append((name, n, sm.group(1), sm.group(0)))
+        candidates.append((name, n, stores, store_width))
 
-    for name, n, rhs, store_line in candidates:
-        vec = f"half{n}"
-        # drop the store line (it becomes the initializer)
-        source = source.replace(store_line + "\n", "", 1)
-        # replace the declaration with the vector variable definition
+    for name, n, stores, store_width in candidates:
+        # drop the store lines (they become the initializers)
+        for _, _, store_line in stores:
+            source = source.replace(store_line + "\n", "", 1)
+        if n == 16:
+            rhs_by_off = {off: rhs for off, rhs, _ in stores}
+            if store_width == 8:
+                decl_new = (
+                    f"half8 {name}_lo = {rhs_by_off[0]};\n"
+                    f"half8 {name}_hi = {rhs_by_off[8]};"
+                )
+            else:
+                # 4x vload4 stores: if each pair covers contiguous halfs
+                # (E(+4) == E(+0) + " + 4"), fuse into one vload8 per pair
+                # (the fa.cl form; 2x fewer load instructions).
+                def vload4_arg(rhs):
+                    mm = re.match(r"vload4\(0, (.*)\)$", rhs)
+                    return mm.group(1) if mm else None
+
+                e0, e4 = vload4_arg(rhs_by_off[0]), vload4_arg(rhs_by_off[4])
+                e8, e12 = vload4_arg(rhs_by_off[8]), vload4_arg(rhs_by_off[12])
+
+                def contiguous(a, b):
+                    # b must be exactly a + 4 halfs; the codegen prints
+                    # absolute trailing offsets (+4/+8/+12), so compare the
+                    # prefix modulo parens and the trailing constant.
+                    if not (a and b):
+                        return False
+                    fa = re.sub(r"[\s()]", "", a)
+                    fb = re.sub(r"[\s()]", "", b)
+                    ma = re.match(r"^(.*)\+(\d+)$", fa)
+                    mb = re.match(r"^(.*)\+(\d+)$", fb)
+                    if ma and mb:
+                        return ma.group(1) == mb.group(1) and int(mb.group(2)) - int(ma.group(2)) == 4
+                    return fb == fa + "+4"
+
+                if contiguous(e0, e4) and contiguous(e8, e12):
+                    decl_new = (
+                        f"half8 {name}_lo = vload8(0, {e0});\n"
+                        f"half8 {name}_hi = vload8(0, {e8});"
+                    )
+                else:
+                    decl_new = (
+                        f"half8 {name}_lo;\n"
+                        f"{name}_lo.lo = {rhs_by_off[0]};\n"
+                        f"{name}_lo.hi = {rhs_by_off[4]};\n"
+                        f"half8 {name}_hi;\n"
+                        f"{name}_hi.lo = {rhs_by_off[8]};\n"
+                        f"{name}_hi.hi = {rhs_by_off[12]};"
+                    )
+        else:
+            decl_new = f"half{n} {name}_v = {stores[0][1]};"
         source = re.sub(
             r"(?m)^(\s*)half\s+" + re.escape(name) + r"\[" + str(n) + r"\];\s*$",
-            lambda m: f"{m.group(1)}{vec} {name}_v = {rhs};",
+            lambda m, _d=decl_new: f"{m.group(1)}{_d}",
             source,
             count=1,
         )
-        # scalar reads -> component reads
-        source = re.sub(
-            r"\b" + re.escape(name) + r"\[(\d)\]",
-            lambda m, _n=name: f"{_n}_v.s{m.group(1)}",
-            source,
-        )
-        # whole-vector deref reads -> the variable itself
-        source = source.replace(
-            f"(*(half{n}*)({name} + 0))", f"{name}_v"
-        )
-        # half4-deref reads of a half8 staging array -> .lo/.hi
-        if n == 8:
+        if n == 16:
+            # scalar reads -> component reads of the lo/hi half8 vars
+            def lane16(mm, _n=name):
+                i = int(mm.group(1))
+                if i < 8:
+                    return f"{_n}_lo.s{i}"
+                return f"{_n}_hi.s{i - 8}"
+
+            source = re.sub(
+                r"\b" + re.escape(name) + r"\[(\d+)\]", lane16, source
+            )
             source = source.replace(
-                f"(*(half4*)({name} + 0))", f"{name}_v.lo"
-            ).replace(f"(*(half4*)({name} + 4))", f"{name}_v.hi")
+                f"(*(half8*)({name} + 0))", f"{name}_lo"
+            ).replace(f"(*(half8*)({name} + 8))", f"{name}_hi")
+            source = source.replace(
+                f"(*(half4*)({name} + 0))", f"{name}_lo.lo"
+            ).replace(f"(*(half4*)({name} + 4))", f"{name}_lo.hi"
+            ).replace(f"(*(half4*)({name} + 8))", f"{name}_hi.lo"
+            ).replace(f"(*(half4*)({name} + 12))", f"{name}_hi.hi")
+        else:
+            # scalar reads -> component reads
+            source = re.sub(
+                r"\b" + re.escape(name) + r"\[(\d)\]",
+                lambda m, _n=name: f"{_n}_v.s{m.group(1)}",
+                source,
+            )
+            # whole-vector deref reads -> the variable itself
+            source = source.replace(
+                f"(*(half{n}*)({name} + 0))", f"{name}_v"
+            )
+            # half4-deref reads of a half8 staging array -> .lo/.hi
+            if n == 8:
+                source = source.replace(
+                    f"(*(half4*)({name} + 0))", f"{name}_v.lo"
+                ).replace(f"(*(half4*)({name} + 4))", f"{name}_v.hi")
         # revert if any array-form use survives
         if re.search(r"\b" + re.escape(name) + r"\[", source) or re.search(
             r"\b" + re.escape(name) + r" \+", source
@@ -399,6 +492,90 @@ def _patch_opencl_inline_splat(source: str) -> str:
     )
 
 
+def _patch_opencl_splat_mul(source: str) -> str:
+    """((float4)(convert_float(E))) * (convert_float4(V))  ->  (convert_float(E) * convert_float4(V)).
+
+    Scalar-times-vector instead of splat-constructor-times-vector: drops one
+    constructor per FMA group (measured on the FA PV loop, part of the
+    33.6ms -> 27.6ms step).  Semantically identical.
+    """
+
+    return re.sub(
+        r"\(\(float4\)\(convert_float\((.*?)\)\)\) \* \(convert_float4\((.*?)\)\)",
+        r"(convert_float(\1) * convert_float4(\2))",
+        source,
+    )
+
+
+def _patch_opencl_typed_shared(source: str) -> str:
+    """Replace the merged uchar shared blob + void* aliases with typed __local arrays.
+
+    TVM's MergeSharedMemoryAllocations packs every shared buffer into one
+    `__local uchar buf_dyn_shmem[N]` blob and hands out `void*` aliases;
+    every access then goes through a generic-address-space cast
+    (`((half*)Sh)[...]`).  On Adreno these generic shared accesses are much
+    slower than __local-qualified ones (measured on the FA kernel:
+    71.0ms -> 38.5ms just by re-declaring the same buffers as typed
+    `__local half Sh[...]` etc.).
+
+    Guards (any failure -> source unchanged):
+    - the blob declaration and the consecutive `void* X = blob + OFF;`
+      aliases must match the exact printed form;
+    - all alias offsets must be distinct (aliased offsets mean the merger
+      reused storage; separate arrays would inflate shared usage);
+    - each alias may only be used through `(<T>*)X` / `((<T>*)X)[...]`
+      casts with a single element type (half/float), and never in pointer
+      arithmetic (`X + ...`) or as a bare value;
+    - the extent of each buffer is bounded by the next alias offset (or
+      the blob size for the last one), so the total is unchanged.
+    """
+
+    m = re.search(r"(?m)^(\s*__local uchar buf_dyn_shmem\[(\d+)\];\n((?:\s*void\* \w+ = \(\(void\*\)\(\(char\*\)buf_dyn_shmem \+ \d+\)\);\n)+))", source)
+    if not m:
+        return source
+    blob_size = int(m.group(2))
+    alias_re = re.compile(r"void\* (\w+) = \(\(void\*\)\(\(char\*\)buf_dyn_shmem \+ (\d+)\)\);")
+    aliases = [(name, int(off)) for name, off in alias_re.findall(m.group(3))]
+    if not aliases or len({off for _, off in aliases}) != len(aliases):
+        return source
+    body = source[: m.start()] + source[m.end():]
+
+    def cast_uses(name):
+        # `((T*)X)` (double-paren, indexing form) and `(T*)X` (single)
+        double = re.findall(r"\(\((\w+)\*\)" + re.escape(name) + r"\)", body)
+        single = re.findall(r"(?<!\()\((\w+)\*\)" + re.escape(name) + r"\b", body)
+        return double, single
+
+    def scrub(name):
+        out = re.sub(r"\(\(\w+\*\)" + re.escape(name) + r"\)", "", body)
+        out = re.sub(r"(?<!\()\(\w+\*\)" + re.escape(name) + r"\b", "", out)
+        return out
+
+    decls = []
+    offsets = sorted(off for _, off in aliases) + [blob_size]
+    for name, off in aliases:
+        double, single = cast_uses(name)
+        types = {t for t in double + single if t in ("half", "float")}
+        if len(types) != 1 or len(double) + len(single) == 0:
+            return source
+        if re.search(r"\b" + re.escape(name) + r"\b", scrub(name)):
+            return source  # pointer arithmetic or bare use
+        nxt = min(o for o in offsets if o > off)
+        extent = nxt - off
+        elem = types.pop()
+        esize = 2 if elem == "half" else 4
+        if extent % esize != 0:
+            return source
+        decls.append(f"__local {elem} {name}[{extent // esize}];")
+    out = body
+    for name, _ in aliases:
+        out = re.sub(r"\(\(\w+\*\)" + re.escape(name) + r"\)", name, out)
+        out = re.sub(r"(?<!\()\(\w+\*\)" + re.escape(name) + r"\b", name, out)
+    decl_block = "\n".join(decls) + "\n"
+    out = out[: m.start()] + decl_block + out[m.start():]
+    return out
+
+
 def build_opencl(mod, target):
     built = _raw_build_opencl(mod, target)
     source = built.inspect_source()
@@ -411,6 +588,9 @@ def build_opencl(mod, target):
     patched = _patch_opencl_float8_split(source)
     if patched != source:
         source = patched
+    patched = _patch_opencl_typed_shared(source)
+    if patched != source:
+        source = patched
     patched = _patch_opencl_splat_convert(source)
     if patched != source:
         source = patched
@@ -418,6 +598,9 @@ def build_opencl(mod, target):
     if patched != source:
         source = patched
     patched = _patch_opencl_inline_splat(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_splat_mul(source)
     if patched != source:
         source = patched
     if source != built.inspect_source():
