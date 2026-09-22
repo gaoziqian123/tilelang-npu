@@ -59,8 +59,8 @@ OpenCL、编译 `.cl`、运行 kernel，并用 fp64 reference + rms-scaled
 ```bash
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/silu/silu.py
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/rmsnorm/rmsnorm.py
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/gemm_nt.py
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/kernels/texture_copy.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/gemm/gemm_nt.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/opencl/experimental/texture_copy.py
 ```
 
 最小管线冒烟回归（不依赖手机，只验证 OpenCL source emission 形态）：
@@ -88,7 +88,7 @@ bash examples/opencl/tests/run_oneplus13.sh
 手机侧默认目录为 `~/tl_opencl/`，运行环境为
 `LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64`。
 
-## SiLU (`kernels/silu.py`)
+## SiLU (`silu/silu.py`)
 
 用户写法关键代码段如下：每个 work-item 处理一个 fp32 元素，签名为
 `(__global float* in, __global float* out)`。
@@ -103,7 +103,7 @@ with T.Kernel(T.ceildiv(nelem, threads), threads=threads) as bx:
 
 默认 launch：`local=256`，`global=8192*960`。
 
-## RMSNorm (`kernels/rmsnorm.py`)
+## RMSNorm (`rmsnorm/rmsnorm.py`)
 
 一行一个 work-group，`T.alloc_shared((threads,), "float32")` 保存局部平方和，
 经 barrier 树归约得到 `scale=rsqrt(mean(x^2)+eps)`，再回写整行。签名为
@@ -124,7 +124,7 @@ with T.Kernel(rows, threads=threads) as row:
 
 默认 launch：`local=256`，`global=960*256`。
 
-## GEMM_NT (`kernels/gemm_nt.py`)
+## GEMM_NT (`gemm/gemm_nt.py`)
 
 A 是 row-major `(M,K)`，B 是 NT 权重 `(N,K)`；脚本使用 `T.copy` 搬运
 shared tile，并调用 `T.gemm(..., transpose_B=True)`。签名为
@@ -166,7 +166,7 @@ A/B 按 K 维 `vload4`，C 用 `vstore8`，避免 Adreno 编译器把 `float acc
 
 ```bash
 PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python \
-  examples/opencl/kernels/gemm_nt.py --impl fragment \
+  examples/opencl/gemm/gemm_nt.py --impl fragment \
   --m 512 --n 512 --k 512 --bm 64 --bn 128 --bk 64 --threads 128 \
   --out examples/opencl/out/gemm_nt_fragment_512_512_512_64x128_bk64.cl
 ```
@@ -278,7 +278,7 @@ fragment 1.372T 约 27%；因此 B 的 staging 在 `kn` 下没有带来净收益
 barrier/shared traffic 抵消了对全局连续读的复用。BK16 仍明显最优；BK32/64 退化来自
 local footprint 变大、每 work-group occupancy/issue 下降。
 
-## Texture copy (`kernels/texture_copy.py`)
+## Texture copy (`experimental/texture_copy.py`)
 
 输入 `B` 使用 `T.Tensor((H, W, 4), "float16", scope="global.texture")`，
 OpenCL lowering 会在 `LowerTileOp` 后、`LowerAccessPtr` 前对 texture scope
@@ -296,7 +296,7 @@ with T.Kernel(width, height, threads=4) as (w, h):
 `clCreateImage` 创建 `CL_MEM_OBJECT_IMAGE2D_ARRAY`、`CL_RGBA/CL_HALF_FLOAT`、
 `depth=1` 后上传并对拍 `out = B * 2`。
 
-## Texture staging (`kernels/texture_staging.py`)
+## Texture staging (`experimental/texture_staging.py`)
 
 `T.copy(X[row, :, :], staged)` 把一整行 RGBA texel 从 texture 搬进
 `__local`，barrier 后再做行归约。OpenCL copy lowering 对 texture 源有特判
@@ -308,7 +308,7 @@ SIMT copy 会把线程映射到元素，相邻 4 lane 重复 READ_IMAGEH 同一 
 `texstage` runner）。注意 kernel 脚本不能设 `tirx.disable_vectorize`，
 否则 texel 特判发出的 channel 内循环不会被合并。
 
-## GEMM_NT B texture staging (`kernels/gemm_nt_texstage.py` / `gemm_nt_texstaged.py`)
+## GEMM_NT B texture staging (`experimental/gemm_nt_texstage.py` / `gemm_nt_texstaged.py`)
 
 这是 GEMM 的 texture→`__local` staging 探针：A 保持 row-major `__global`
 buffer，B 按 `Btex[k, n//4, n%4] = B_nt[n, k]` 存入 RGBA fp16
