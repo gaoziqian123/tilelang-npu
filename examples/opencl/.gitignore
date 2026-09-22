@@ -1,2 +1,3 @@
 examples/opencl/ffn/ffn_chain_test
 examples/opencl/ffn/ffn_test
+gemm/gemm_nt_test
