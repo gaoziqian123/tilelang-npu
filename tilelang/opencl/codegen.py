@@ -220,11 +220,14 @@ def _patch_opencl_half_staging(source: str) -> str:
             "",
             source,
         )
-        scrubbed = re.sub(
-            r"\(\*\(half4\*\)\(" + re.escape(name) + r" \+ [0-9]+\)\)",
-            "",
-            scrubbed,
-        )
+        if n == 8:
+            # half4-deref reads at +0/+4 become .lo/.hi below; the store is
+            # a half8 deref so it cannot match here.
+            scrubbed = re.sub(
+                r"\(\*\(half4\*\)\(" + re.escape(name) + r" \+ [0-9]+\)\)",
+                "",
+                scrubbed,
+            )
         if len(re.findall(re.escape(name) + r" \+", scrubbed)) != 1:
             continue
         # No other decl of the same name, no address-of, no vload/vstore

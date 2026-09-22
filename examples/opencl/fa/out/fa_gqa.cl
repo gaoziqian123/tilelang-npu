@@ -79,41 +79,33 @@ __kernel void fa_gqa_kernel_kernel(__global half* restrict K, __global half* res
     acc_s_1_1_hi = (((float4)(broadcast_var_11, broadcast_var_11, broadcast_var_11, broadcast_var_11)));
     for (int _tmp = 0; _tmp < 16; ++_tmp) {
       if ((convert_int(get_local_id(0))) < 128) {
-        half qtmp_1[4];
-        (*(half4*)(qtmp_1 + 0)) = vload4(0, Q + ((((((convert_int(get_group_id(1))) * 262144) + ((convert_int(get_group_id(0))) * 8192)) + (((convert_int(get_local_id(0))) >> 2) * 256)) + (_tmp * 16)) + (((convert_int(get_local_id(0))) & 3) * 4)));
-        ((half*)Qs)[((((convert_int(get_local_id(0))) & 3) * 128) + ((convert_int(get_local_id(0))) >> 2))] = qtmp_1[0];
-        ((half*)Qs)[(((((convert_int(get_local_id(0))) & 3) * 128) + ((convert_int(get_local_id(0))) >> 2)) + 32)] = qtmp_1[1];
-        ((half*)Qs)[(((((convert_int(get_local_id(0))) & 3) * 128) + ((convert_int(get_local_id(0))) >> 2)) + 64)] = qtmp_1[2];
-        ((half*)Qs)[(((((convert_int(get_local_id(0))) & 3) * 128) + ((convert_int(get_local_id(0))) >> 2)) + 96)] = qtmp_1[3];
+        half4 qtmp_1_v = vload4(0, Q + ((((((convert_int(get_group_id(1))) * 262144) + ((convert_int(get_group_id(0))) * 8192)) + (((convert_int(get_local_id(0))) >> 2) * 256)) + (_tmp * 16)) + (((convert_int(get_local_id(0))) & 3) * 4)));
+                ((half*)Qs)[((((convert_int(get_local_id(0))) & 3) * 128) + ((convert_int(get_local_id(0))) >> 2))] = qtmp_1_v.s0;
+        ((half*)Qs)[(((((convert_int(get_local_id(0))) & 3) * 128) + ((convert_int(get_local_id(0))) >> 2)) + 32)] = qtmp_1_v.s1;
+        ((half*)Qs)[(((((convert_int(get_local_id(0))) & 3) * 128) + ((convert_int(get_local_id(0))) >> 2)) + 64)] = qtmp_1_v.s2;
+        ((half*)Qs)[(((((convert_int(get_local_id(0))) & 3) * 128) + ((convert_int(get_local_id(0))) >> 2)) + 96)] = qtmp_1_v.s3;
       }
-      half ktmp_1[4];
-      (*(half4*)(ktmp_1 + 0)) = vload4(0, K + (((((((convert_int(get_group_id(1))) >> 2) * 262144) + (ks * 32768)) + (((convert_int(get_local_id(0))) >> 2) * 256)) + (_tmp * 16)) + (((convert_int(get_local_id(0))) & 3) * 4)));
-      ((half*)Ks)[((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2))] = ktmp_1[0];
-      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 128)] = ktmp_1[1];
-      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 256)] = ktmp_1[2];
-      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 384)] = ktmp_1[3];
-      half ktmp_2[4];
-      (*(half4*)(ktmp_2 + 0)) = vload4(0, K + ((((((((convert_int(get_group_id(1))) >> 2) * 262144) + (ks * 32768)) + (((convert_int(get_local_id(0))) >> 2) * 256)) + (_tmp * 16)) + (((convert_int(get_local_id(0))) & 3) * 4)) + 16384));
-      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 64)] = ktmp_2[0];
-      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 192)] = ktmp_2[1];
-      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 320)] = ktmp_2[2];
-      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 448)] = ktmp_2[3];
+      half4 ktmp_1_v = vload4(0, K + (((((((convert_int(get_group_id(1))) >> 2) * 262144) + (ks * 32768)) + (((convert_int(get_local_id(0))) >> 2) * 256)) + (_tmp * 16)) + (((convert_int(get_local_id(0))) & 3) * 4)));
+            ((half*)Ks)[((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2))] = ktmp_1_v.s0;
+      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 128)] = ktmp_1_v.s1;
+      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 256)] = ktmp_1_v.s2;
+      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 384)] = ktmp_1_v.s3;
+      half4 ktmp_2_v = vload4(0, K + ((((((((convert_int(get_group_id(1))) >> 2) * 262144) + (ks * 32768)) + (((convert_int(get_local_id(0))) >> 2) * 256)) + (_tmp * 16)) + (((convert_int(get_local_id(0))) & 3) * 4)) + 16384));
+            ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 64)] = ktmp_2_v.s0;
+      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 192)] = ktmp_2_v.s1;
+      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 320)] = ktmp_2_v.s2;
+      ((half*)Ks)[(((((convert_int(get_local_id(0))) & 3) * 512) + ((convert_int(get_local_id(0))) >> 2)) + 448)] = ktmp_2_v.s3;
       barrier(CLK_LOCAL_MEM_FENCE);
       for (int k = 0; k < 16; ++k) {
-        half q4_1[4];
-        (*(half4*)(q4_1 + 0)) = vload4(0, (half*)Qs + ((k * 32) + (((convert_int(get_local_id(0))) >> 5) * 4)));
-        half Ks_local_cast[4];
-        (*(half4*)(Ks_local_cast + 0)) = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
-        acc_s_1_0_lo = ((((float4)(convert_float(q4_1[0])) * (convert_float4((*(half4*)(Ks_local_cast + 0))))) + acc_s_1_0_lo));
-        half Ks_local_cast_1[4];
-        (*(half4*)(Ks_local_cast_1 + 0)) = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
-        acc_s_1_0_hi = ((((float4)(convert_float(q4_1[1])) * (convert_float4((*(half4*)(Ks_local_cast_1 + 0))))) + acc_s_1_0_hi));
-        half Ks_local_cast_2[4];
-        (*(half4*)(Ks_local_cast_2 + 0)) = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
-        acc_s_1_1_lo = ((((float4)(convert_float(q4_1[2])) * (convert_float4((*(half4*)(Ks_local_cast_2 + 0))))) + acc_s_1_1_lo));
-        half Ks_local_cast_3[4];
-        (*(half4*)(Ks_local_cast_3 + 0)) = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
-        acc_s_1_1_hi = ((((float4)(convert_float(q4_1[3])) * (convert_float4((*(half4*)(Ks_local_cast_3 + 0))))) + acc_s_1_1_hi));
+        half4 q4_1_v = vload4(0, (half*)Qs + ((k * 32) + (((convert_int(get_local_id(0))) >> 5) * 4)));
+                half4 Ks_local_cast_v = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
+                acc_s_1_0_lo = ((((float4)(convert_float(q4_1_v.s0)) * (convert_float4(Ks_local_cast_v))) + acc_s_1_0_lo));
+        half4 Ks_local_cast_1_v = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
+                acc_s_1_0_hi = ((((float4)(convert_float(q4_1_v.s1)) * (convert_float4(Ks_local_cast_1_v))) + acc_s_1_0_hi));
+        half4 Ks_local_cast_2_v = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
+                acc_s_1_1_lo = ((((float4)(convert_float(q4_1_v.s2)) * (convert_float4(Ks_local_cast_2_v))) + acc_s_1_1_lo));
+        half4 Ks_local_cast_3_v = vload4(0, (half*)Ks + ((k * 128) + (((convert_int(get_local_id(0))) & 31) * 4)));
+                acc_s_1_1_hi = ((((float4)(convert_float(q4_1_v.s3)) * (convert_float4(Ks_local_cast_3_v))) + acc_s_1_1_hi));
       }
       barrier(CLK_LOCAL_MEM_FENCE);
     }
