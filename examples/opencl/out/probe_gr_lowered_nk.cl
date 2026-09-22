@@ -123,13 +123,13 @@ __kernel void gemm_nt_kernel_kernel(__global half* restrict A, __global half* re
   C_frag_1[61] = (acc_1[7]).s5;
   C_frag_1[62] = (acc_1[7]).s6;
   C_frag_1[63] = (acc_1[7]).s7;
-  vstore8(vload8(0, C_frag_1 + 0), 0, C + (((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)));
-  vstore8(vload8(0, C_frag_1 + 8), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 512));
-  vstore8(vload8(0, C_frag_1 + 16), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 1024));
-  vstore8(vload8(0, C_frag_1 + 24), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 1536));
-  vstore8(vload8(0, C_frag_1 + 32), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 2048));
-  vstore8(vload8(0, C_frag_1 + 40), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 2560));
-  vstore8(vload8(0, C_frag_1 + 48), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 3072));
-  vstore8(vload8(0, C_frag_1 + 56), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 3584));
+  vstore8((*(half8*)(C_frag_1 + 0)), 0, C + (((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)));
+  vstore8((*(half8*)(C_frag_1 + 8)), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 512));
+  vstore8((*(half8*)(C_frag_1 + 16)), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 1024));
+  vstore8((*(half8*)(C_frag_1 + 24)), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 1536));
+  vstore8((*(half8*)(C_frag_1 + 32)), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 2048));
+  vstore8((*(half8*)(C_frag_1 + 40)), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 2560));
+  vstore8((*(half8*)(C_frag_1 + 48)), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 3072));
+  vstore8((*(half8*)(C_frag_1 + 56)), 0, C + ((((((convert_int(get_group_id(1))) * 16384) + (((convert_int(get_local_id(0))) >> 4) * 4096)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 3584));
 }
 

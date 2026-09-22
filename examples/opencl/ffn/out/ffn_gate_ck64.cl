@@ -1,0 +1,216 @@
+// Function: gemm_nt_kernel_kernel
+#ifdef cl_khr_fp16
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+#elif defined(cl_amd_fp16)
+#pragma OPENCL EXTENSION cl_amd_fp16 : enable
+#else
+#error "Half precision floating point not supported by OpenCL implementation on your device." 
+#endif
+
+__kernel void gemm_nt_kernel_kernel(__global half* restrict A, __global half* restrict B, __global half* restrict C);
+__kernel void gemm_nt_kernel_kernel(__global half* restrict A, __global half* restrict B, __global half* restrict C) {
+  __local uchar buf_dyn_shmem[20480];
+  void* B_sh = ((void*)((char*)buf_dyn_shmem + 0));
+  void* A_sh = ((void*)((char*)buf_dyn_shmem + 16384));
+  float C_frag[64];
+  half acc16[64];
+  float C_frag_1[64];
+  float broadcast_var = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 0)) = ((float4)(broadcast_var, broadcast_var, broadcast_var, broadcast_var));
+  float broadcast_var_1 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 4)) = ((float4)(broadcast_var_1, broadcast_var_1, broadcast_var_1, broadcast_var_1));
+  float broadcast_var_2 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 8)) = ((float4)(broadcast_var_2, broadcast_var_2, broadcast_var_2, broadcast_var_2));
+  float broadcast_var_3 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 12)) = ((float4)(broadcast_var_3, broadcast_var_3, broadcast_var_3, broadcast_var_3));
+  float broadcast_var_4 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 16)) = ((float4)(broadcast_var_4, broadcast_var_4, broadcast_var_4, broadcast_var_4));
+  float broadcast_var_5 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 20)) = ((float4)(broadcast_var_5, broadcast_var_5, broadcast_var_5, broadcast_var_5));
+  float broadcast_var_6 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 24)) = ((float4)(broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6));
+  float broadcast_var_7 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 28)) = ((float4)(broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7));
+  float broadcast_var_8 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 32)) = ((float4)(broadcast_var_8, broadcast_var_8, broadcast_var_8, broadcast_var_8));
+  float broadcast_var_9 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 36)) = ((float4)(broadcast_var_9, broadcast_var_9, broadcast_var_9, broadcast_var_9));
+  float broadcast_var_10 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 40)) = ((float4)(broadcast_var_10, broadcast_var_10, broadcast_var_10, broadcast_var_10));
+  float broadcast_var_11 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 44)) = ((float4)(broadcast_var_11, broadcast_var_11, broadcast_var_11, broadcast_var_11));
+  float broadcast_var_12 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 48)) = ((float4)(broadcast_var_12, broadcast_var_12, broadcast_var_12, broadcast_var_12));
+  float broadcast_var_13 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 52)) = ((float4)(broadcast_var_13, broadcast_var_13, broadcast_var_13, broadcast_var_13));
+  float broadcast_var_14 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 56)) = ((float4)(broadcast_var_14, broadcast_var_14, broadcast_var_14, broadcast_var_14));
+  float broadcast_var_15 = 0.000000e+00f;
+  (*(float4*)(C_frag_1 + 60)) = ((float4)(broadcast_var_15, broadcast_var_15, broadcast_var_15, broadcast_var_15));
+  for (int c = 0; c < 40; ++c) {
+    half acc16_1[64];
+    for (int copy8_i = 0; copy8_i < 4; ++copy8_i) {
+      vstore8(vload8(0, A + ((((((convert_int(get_group_id(1))) * 81920) + (copy8_i * 20480)) + (((convert_int(get_local_id(0))) >> 3) * 2560)) + (c * 64)) + (((convert_int(get_local_id(0))) & 7) * 8))), 0, (half*)A_sh + ((copy8_i * 512) + ((convert_int(get_local_id(0))) * 8)));
+    }
+    for (int copy8_i_1 = 0; copy8_i_1 < 16; ++copy8_i_1) {
+      vstore8(vload8(0, B + (((((c * 589824) + (copy8_i_1 * 36864)) + (((convert_int(get_local_id(0))) >> 4) * 9216)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8))), 0, (half*)B_sh + ((copy8_i_1 * 512) + ((convert_int(get_local_id(0))) * 8)));
+    }
+    half8 acc[8];
+    half4 av[8];
+    half8 bv[4];
+    half8 acc_1[8];
+    half broadcast_var_16 = (half)0.000000e+00f;
+    acc_1[0] = ((half8)(broadcast_var_16));
+    half broadcast_var_17 = (half)0.000000e+00f;
+    acc_1[1] = ((half8)(broadcast_var_17));
+    half broadcast_var_18 = (half)0.000000e+00f;
+    acc_1[2] = ((half8)(broadcast_var_18));
+    half broadcast_var_19 = (half)0.000000e+00f;
+    acc_1[3] = ((half8)(broadcast_var_19));
+    half broadcast_var_20 = (half)0.000000e+00f;
+    acc_1[4] = ((half8)(broadcast_var_20));
+    half broadcast_var_21 = (half)0.000000e+00f;
+    acc_1[5] = ((half8)(broadcast_var_21));
+    half broadcast_var_22 = (half)0.000000e+00f;
+    acc_1[6] = ((half8)(broadcast_var_22));
+    half broadcast_var_23 = (half)0.000000e+00f;
+    acc_1[7] = ((half8)(broadcast_var_23));
+    for (int pos4 = 0; pos4 < 16; ++pos4) {
+      half4 av_1[8];
+      half8 bv_1[4];
+      av_1[0] = vload4(0, (half*)A_sh + ((((convert_int(get_local_id(0))) >> 4) * 512) + (pos4 * 4)));
+      av_1[1] = vload4(0, (half*)A_sh + (((((convert_int(get_local_id(0))) >> 4) * 512) + (pos4 * 4)) + 64));
+      av_1[2] = vload4(0, (half*)A_sh + (((((convert_int(get_local_id(0))) >> 4) * 512) + (pos4 * 4)) + 128));
+      av_1[3] = vload4(0, (half*)A_sh + (((((convert_int(get_local_id(0))) >> 4) * 512) + (pos4 * 4)) + 192));
+      av_1[4] = vload4(0, (half*)A_sh + (((((convert_int(get_local_id(0))) >> 4) * 512) + (pos4 * 4)) + 256));
+      av_1[5] = vload4(0, (half*)A_sh + (((((convert_int(get_local_id(0))) >> 4) * 512) + (pos4 * 4)) + 320));
+      av_1[6] = vload4(0, (half*)A_sh + (((((convert_int(get_local_id(0))) >> 4) * 512) + (pos4 * 4)) + 384));
+      av_1[7] = vload4(0, (half*)A_sh + (((((convert_int(get_local_id(0))) >> 4) * 512) + (pos4 * 4)) + 448));
+      bv_1[0] = vload8(0, (half*)B_sh + ((pos4 * 512) + (((convert_int(get_local_id(0))) & 15) * 8)));
+      bv_1[1] = vload8(0, (half*)B_sh + (((pos4 * 512) + (((convert_int(get_local_id(0))) & 15) * 8)) + 128));
+      bv_1[2] = vload8(0, (half*)B_sh + (((pos4 * 512) + (((convert_int(get_local_id(0))) & 15) * 8)) + 256));
+      bv_1[3] = vload8(0, (half*)B_sh + (((pos4 * 512) + (((convert_int(get_local_id(0))) & 15) * 8)) + 384));
+      acc_1[0] = mad(((half8)((av_1[0]).s0)), bv_1[0], mad(((half8)((av_1[0]).s1)), bv_1[1], mad(((half8)((av_1[0]).s2)), bv_1[2], mad(((half8)((av_1[0]).s3)), bv_1[3], acc_1[0]))));
+      acc_1[1] = mad(((half8)((av_1[1]).s0)), bv_1[0], mad(((half8)((av_1[1]).s1)), bv_1[1], mad(((half8)((av_1[1]).s2)), bv_1[2], mad(((half8)((av_1[1]).s3)), bv_1[3], acc_1[1]))));
+      acc_1[2] = mad(((half8)((av_1[2]).s0)), bv_1[0], mad(((half8)((av_1[2]).s1)), bv_1[1], mad(((half8)((av_1[2]).s2)), bv_1[2], mad(((half8)((av_1[2]).s3)), bv_1[3], acc_1[2]))));
+      acc_1[3] = mad(((half8)((av_1[3]).s0)), bv_1[0], mad(((half8)((av_1[3]).s1)), bv_1[1], mad(((half8)((av_1[3]).s2)), bv_1[2], mad(((half8)((av_1[3]).s3)), bv_1[3], acc_1[3]))));
+      acc_1[4] = mad(((half8)((av_1[4]).s0)), bv_1[0], mad(((half8)((av_1[4]).s1)), bv_1[1], mad(((half8)((av_1[4]).s2)), bv_1[2], mad(((half8)((av_1[4]).s3)), bv_1[3], acc_1[4]))));
+      acc_1[5] = mad(((half8)((av_1[5]).s0)), bv_1[0], mad(((half8)((av_1[5]).s1)), bv_1[1], mad(((half8)((av_1[5]).s2)), bv_1[2], mad(((half8)((av_1[5]).s3)), bv_1[3], acc_1[5]))));
+      acc_1[6] = mad(((half8)((av_1[6]).s0)), bv_1[0], mad(((half8)((av_1[6]).s1)), bv_1[1], mad(((half8)((av_1[6]).s2)), bv_1[2], mad(((half8)((av_1[6]).s3)), bv_1[3], acc_1[6]))));
+      acc_1[7] = mad(((half8)((av_1[7]).s0)), bv_1[0], mad(((half8)((av_1[7]).s1)), bv_1[1], mad(((half8)((av_1[7]).s2)), bv_1[2], mad(((half8)((av_1[7]).s3)), bv_1[3], acc_1[7]))));
+    }
+    acc16_1[0] = (acc_1[0]).s0;
+    acc16_1[1] = (acc_1[0]).s1;
+    acc16_1[2] = (acc_1[0]).s2;
+    acc16_1[3] = (acc_1[0]).s3;
+    acc16_1[4] = (acc_1[0]).s4;
+    acc16_1[5] = (acc_1[0]).s5;
+    acc16_1[6] = (acc_1[0]).s6;
+    acc16_1[7] = (acc_1[0]).s7;
+    acc16_1[8] = (acc_1[1]).s0;
+    acc16_1[9] = (acc_1[1]).s1;
+    acc16_1[10] = (acc_1[1]).s2;
+    acc16_1[11] = (acc_1[1]).s3;
+    acc16_1[12] = (acc_1[1]).s4;
+    acc16_1[13] = (acc_1[1]).s5;
+    acc16_1[14] = (acc_1[1]).s6;
+    acc16_1[15] = (acc_1[1]).s7;
+    acc16_1[16] = (acc_1[2]).s0;
+    acc16_1[17] = (acc_1[2]).s1;
+    acc16_1[18] = (acc_1[2]).s2;
+    acc16_1[19] = (acc_1[2]).s3;
+    acc16_1[20] = (acc_1[2]).s4;
+    acc16_1[21] = (acc_1[2]).s5;
+    acc16_1[22] = (acc_1[2]).s6;
+    acc16_1[23] = (acc_1[2]).s7;
+    acc16_1[24] = (acc_1[3]).s0;
+    acc16_1[25] = (acc_1[3]).s1;
+    acc16_1[26] = (acc_1[3]).s2;
+    acc16_1[27] = (acc_1[3]).s3;
+    acc16_1[28] = (acc_1[3]).s4;
+    acc16_1[29] = (acc_1[3]).s5;
+    acc16_1[30] = (acc_1[3]).s6;
+    acc16_1[31] = (acc_1[3]).s7;
+    acc16_1[32] = (acc_1[4]).s0;
+    acc16_1[33] = (acc_1[4]).s1;
+    acc16_1[34] = (acc_1[4]).s2;
+    acc16_1[35] = (acc_1[4]).s3;
+    acc16_1[36] = (acc_1[4]).s4;
+    acc16_1[37] = (acc_1[4]).s5;
+    acc16_1[38] = (acc_1[4]).s6;
+    acc16_1[39] = (acc_1[4]).s7;
+    acc16_1[40] = (acc_1[5]).s0;
+    acc16_1[41] = (acc_1[5]).s1;
+    acc16_1[42] = (acc_1[5]).s2;
+    acc16_1[43] = (acc_1[5]).s3;
+    acc16_1[44] = (acc_1[5]).s4;
+    acc16_1[45] = (acc_1[5]).s5;
+    acc16_1[46] = (acc_1[5]).s6;
+    acc16_1[47] = (acc_1[5]).s7;
+    acc16_1[48] = (acc_1[6]).s0;
+    acc16_1[49] = (acc_1[6]).s1;
+    acc16_1[50] = (acc_1[6]).s2;
+    acc16_1[51] = (acc_1[6]).s3;
+    acc16_1[52] = (acc_1[6]).s4;
+    acc16_1[53] = (acc_1[6]).s5;
+    acc16_1[54] = (acc_1[6]).s6;
+    acc16_1[55] = (acc_1[6]).s7;
+    acc16_1[56] = (acc_1[7]).s0;
+    acc16_1[57] = (acc_1[7]).s1;
+    acc16_1[58] = (acc_1[7]).s2;
+    acc16_1[59] = (acc_1[7]).s3;
+    acc16_1[60] = (acc_1[7]).s4;
+    acc16_1[61] = (acc_1[7]).s5;
+    acc16_1[62] = (acc_1[7]).s6;
+    acc16_1[63] = (acc_1[7]).s7;
+    (*(float4*)(C_frag_1 + 0)) = ((*(float4*)(C_frag_1 + 0)) + (convert_float4((*(half4*)(acc16_1 + 0)))));
+    (*(float4*)(C_frag_1 + 4)) = ((*(float4*)(C_frag_1 + 4)) + (convert_float4((*(half4*)(acc16_1 + 4)))));
+    (*(float4*)(C_frag_1 + 8)) = ((*(float4*)(C_frag_1 + 8)) + (convert_float4((*(half4*)(acc16_1 + 8)))));
+    (*(float4*)(C_frag_1 + 12)) = ((*(float4*)(C_frag_1 + 12)) + (convert_float4((*(half4*)(acc16_1 + 12)))));
+    (*(float4*)(C_frag_1 + 16)) = ((*(float4*)(C_frag_1 + 16)) + (convert_float4((*(half4*)(acc16_1 + 16)))));
+    (*(float4*)(C_frag_1 + 20)) = ((*(float4*)(C_frag_1 + 20)) + (convert_float4((*(half4*)(acc16_1 + 20)))));
+    (*(float4*)(C_frag_1 + 24)) = ((*(float4*)(C_frag_1 + 24)) + (convert_float4((*(half4*)(acc16_1 + 24)))));
+    (*(float4*)(C_frag_1 + 28)) = ((*(float4*)(C_frag_1 + 28)) + (convert_float4((*(half4*)(acc16_1 + 28)))));
+    (*(float4*)(C_frag_1 + 32)) = ((*(float4*)(C_frag_1 + 32)) + (convert_float4((*(half4*)(acc16_1 + 32)))));
+    (*(float4*)(C_frag_1 + 36)) = ((*(float4*)(C_frag_1 + 36)) + (convert_float4((*(half4*)(acc16_1 + 36)))));
+    (*(float4*)(C_frag_1 + 40)) = ((*(float4*)(C_frag_1 + 40)) + (convert_float4((*(half4*)(acc16_1 + 40)))));
+    (*(float4*)(C_frag_1 + 44)) = ((*(float4*)(C_frag_1 + 44)) + (convert_float4((*(half4*)(acc16_1 + 44)))));
+    (*(float4*)(C_frag_1 + 48)) = ((*(float4*)(C_frag_1 + 48)) + (convert_float4((*(half4*)(acc16_1 + 48)))));
+    (*(float4*)(C_frag_1 + 52)) = ((*(float4*)(C_frag_1 + 52)) + (convert_float4((*(half4*)(acc16_1 + 52)))));
+    (*(float4*)(C_frag_1 + 56)) = ((*(float4*)(C_frag_1 + 56)) + (convert_float4((*(half4*)(acc16_1 + 56)))));
+    (*(float4*)(C_frag_1 + 60)) = ((*(float4*)(C_frag_1 + 60)) + (convert_float4((*(half4*)(acc16_1 + 60)))));
+  }
+  half C_local_cast[8];
+  (*(half4*)(C_local_cast + 0)) = (convert_half4((*(float4*)(C_frag_1 + 0))));
+  (*(half4*)(C_local_cast + 4)) = (convert_half4((*(float4*)(C_frag_1 + 4))));
+  vstore8((*(half8*)(C_local_cast + 0)), 0, C + (((((convert_int(get_group_id(1))) * 294912) + (((convert_int(get_local_id(0))) >> 4) * 73728)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)));
+  half C_local_cast_1[8];
+  (*(half4*)(C_local_cast_1 + 0)) = (convert_half4((*(float4*)(C_frag_1 + 8))));
+  (*(half4*)(C_local_cast_1 + 4)) = (convert_half4((*(float4*)(C_frag_1 + 12))));
+  vstore8((*(half8*)(C_local_cast_1 + 0)), 0, C + ((((((convert_int(get_group_id(1))) * 294912) + (((convert_int(get_local_id(0))) >> 4) * 73728)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 9216));
+  half C_local_cast_2[8];
+  (*(half4*)(C_local_cast_2 + 0)) = (convert_half4((*(float4*)(C_frag_1 + 16))));
+  (*(half4*)(C_local_cast_2 + 4)) = (convert_half4((*(float4*)(C_frag_1 + 20))));
+  vstore8((*(half8*)(C_local_cast_2 + 0)), 0, C + ((((((convert_int(get_group_id(1))) * 294912) + (((convert_int(get_local_id(0))) >> 4) * 73728)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 18432));
+  half C_local_cast_3[8];
+  (*(half4*)(C_local_cast_3 + 0)) = (convert_half4((*(float4*)(C_frag_1 + 24))));
+  (*(half4*)(C_local_cast_3 + 4)) = (convert_half4((*(float4*)(C_frag_1 + 28))));
+  vstore8((*(half8*)(C_local_cast_3 + 0)), 0, C + ((((((convert_int(get_group_id(1))) * 294912) + (((convert_int(get_local_id(0))) >> 4) * 73728)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 27648));
+  half C_local_cast_4[8];
+  (*(half4*)(C_local_cast_4 + 0)) = (convert_half4((*(float4*)(C_frag_1 + 32))));
+  (*(half4*)(C_local_cast_4 + 4)) = (convert_half4((*(float4*)(C_frag_1 + 36))));
+  vstore8((*(half8*)(C_local_cast_4 + 0)), 0, C + ((((((convert_int(get_group_id(1))) * 294912) + (((convert_int(get_local_id(0))) >> 4) * 73728)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 36864));
+  half C_local_cast_5[8];
+  (*(half4*)(C_local_cast_5 + 0)) = (convert_half4((*(float4*)(C_frag_1 + 40))));
+  (*(half4*)(C_local_cast_5 + 4)) = (convert_half4((*(float4*)(C_frag_1 + 44))));
+  vstore8((*(half8*)(C_local_cast_5 + 0)), 0, C + ((((((convert_int(get_group_id(1))) * 294912) + (((convert_int(get_local_id(0))) >> 4) * 73728)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 46080));
+  half C_local_cast_6[8];
+  (*(half4*)(C_local_cast_6 + 0)) = (convert_half4((*(float4*)(C_frag_1 + 48))));
+  (*(half4*)(C_local_cast_6 + 4)) = (convert_half4((*(float4*)(C_frag_1 + 52))));
+  vstore8((*(half8*)(C_local_cast_6 + 0)), 0, C + ((((((convert_int(get_group_id(1))) * 294912) + (((convert_int(get_local_id(0))) >> 4) * 73728)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 55296));
+  half C_local_cast_7[8];
+  (*(half4*)(C_local_cast_7 + 0)) = (convert_half4((*(float4*)(C_frag_1 + 56))));
+  (*(half4*)(C_local_cast_7 + 4)) = (convert_half4((*(float4*)(C_frag_1 + 60))));
+  vstore8((*(half8*)(C_local_cast_7 + 0)), 0, C + ((((((convert_int(get_group_id(1))) * 294912) + (((convert_int(get_local_id(0))) >> 4) * 73728)) + ((convert_int(get_group_id(0))) * 128)) + (((convert_int(get_local_id(0))) & 15) * 8)) + 64512));
+}
+

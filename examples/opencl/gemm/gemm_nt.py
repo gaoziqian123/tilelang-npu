@@ -16,7 +16,7 @@ from tilelang import tvm
 import tilelang.language as T
 
 
-def make_grgemm_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, threads: int, b_layout: str = "kn", accum_dtype: str = "float32"):
+def make_grgemm_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, threads: int, b_layout: str = "kn", accum_dtype: str = "float32", chunk_k: int = 256):
     @T.prim_func
     def gemm_nt_kernel(
         A: T.Tensor((M, K), "float16"),
@@ -31,13 +31,43 @@ def make_grgemm_kernel(M: int, N: int, K: int, bm: int, bn: int, bk: int, thread
         # while direct global vector loads reach the 1.35T anchor shape.
         # Single full-K T.gemm: point-indexed operands follow the Hexagon
         # "buffer + base offset" convention (extent = trailing buffer shape).
+        #
+        # accum_dtype="chunk16": fp16-accumulate each K chunk at the fp16 FMA
+        # rate (fp32 vector FMA + converts runs 3.5x slower on Adreno), then
+        # promote into the fp32 fragment once per chunk.
         with T.Kernel(T.ceildiv(N, bn), T.ceildiv(M, bm), threads=threads) as (bx, by):
             K  # keep K in the closure: the conditional B annotation needs it
-            C_frag = T.alloc_fragment((bm, bn), accum_dtype)
-            if b_layout == "kn":
-                T.gemm(A[by * bm, 0], B[0, bx * bn], C_frag, clear_accum=True)
+            if accum_dtype == "chunk16":
+                # T.gemm always covers the operand's full extent, so a chunk
+                # must be a real buffer with extent chunk_k: stage tiles into
+                # shared memory (GR accepts shared operands).
+                C_frag = T.alloc_fragment((bm, bn), "float32")
+                acc16 = T.alloc_fragment((bm, bn), "float16")
+                A_sh = T.alloc_shared((bm, chunk_k), "float16")
+                if b_layout == "kn":
+                    B_sh = T.alloc_shared((chunk_k, bn), "float16")
+                else:
+                    B_sh = T.alloc_shared((bn, chunk_k), "float16")
+                for i, j in T.Parallel(bm, bn):
+                    C_frag[i, j] = 0.0
+                for c in T.serial(K // chunk_k):
+                    T.copy(A[by * bm:(by + 1) * bm, c * chunk_k:(c + 1) * chunk_k], A_sh)
+                    if b_layout == "kn":
+                        T.copy(B[c * chunk_k:(c + 1) * chunk_k, bx * bn:(bx + 1) * bn], B_sh)
+                    else:
+                        T.copy(B[bx * bn:(bx + 1) * bn, c * chunk_k:(c + 1) * chunk_k], B_sh)
+                    if b_layout == "kn":
+                        T.gemm(A_sh, B_sh, acc16, clear_accum=True)
+                    else:
+                        T.gemm(A_sh, B_sh, acc16, transpose_B=True, clear_accum=True)
+                    for i, j in T.Parallel(bm, bn):
+                        C_frag[i, j] = C_frag[i, j] + T.Cast("float32", acc16[i, j])
             else:
-                T.gemm(A[by * bm, 0], B[bx * bn, 0], C_frag, transpose_B=True, clear_accum=True)
+                C_frag = T.alloc_fragment((bm, bn), accum_dtype)
+                if b_layout == "kn":
+                    T.gemm(A[by * bm, 0], B[0, bx * bn], C_frag, clear_accum=True)
+                else:
+                    T.gemm(A[by * bm, 0], B[bx * bn, 0], C_frag, transpose_B=True, clear_accum=True)
             T.copy(C_frag, C[by * bm, bx * bn])
 
     return gemm_nt_kernel
@@ -83,7 +113,8 @@ def main() -> int:
     ap.add_argument("--bk", type=int, default=64)
     ap.add_argument("--threads", type=int, default=64)
     ap.add_argument("--b-layout", choices=("kn", "nk"), default="kn")
-    ap.add_argument("--accum", choices=("fp32", "fp16"), default="fp16")
+    ap.add_argument("--accum", choices=("fp32", "fp16", "chunk16"), default="fp16")
+    ap.add_argument("--chunk-k", type=int, default=256)
     ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent / "out" / "gemm_nt.cl")
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
@@ -93,13 +124,15 @@ def main() -> int:
     if args.threads != (args.bm // 8) * (args.bn // 8):
         raise SystemExit(f"grgemm requires threads == (bm/8)*(bn/8) = {(args.bm // 8) * (args.bn // 8)}")
 
-    accum_dtype = "float16" if args.accum == "fp16" else "float32"
+    accum_dtype = {"fp16": "float16", "fp32": "float32", "chunk16": "chunk16"}[args.accum]
+    if accum_dtype == "chunk16" and args.k % args.chunk_k != 0:
+        raise SystemExit("chunk16 requires K % chunk_k == 0")
     with tvm.target.Target("opencl"), tvm.transform.PassContext(
         config={"tl.UnrollLoop": {"explicit_unroll": True, "unroll_local_access": True}}
     ):
         artifact = tilelang.lower(
             make_grgemm_kernel(args.m, args.n, args.k, args.bm, args.bn, args.bk, args.threads,
-                               args.b_layout, accum_dtype),
+                               args.b_layout, accum_dtype, args.chunk_k),
             target="opencl",
             enable_device_compile=False,
         )

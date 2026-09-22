@@ -181,20 +181,23 @@ def assert_lowered_fp16_shape(src: str, b_layout: str) -> None:
         raise AssertionError("missing float16x8 accumulator shape")
     if "float acc[64]" in src or "half acc[64]" in src:
         raise AssertionError("scalar acc[64] array must not appear")
-    if "vload4(0, A_frag" not in src:
+    # Fragment/private vector accesses use the Adreno-safe deref form
+    # (*(halfN*)(arr + off)) since codegen_opencl.cc dropped vloadN/vstoreN
+    # for __local/__private pointers; accept both spellings.
+    if not re.search(r"(vload4\(0, A_frag|\(\*\(half4\*\)\(A_frag)", src):
         raise AssertionError("missing A half4 vector load from fragment")
     if b_layout == "kn":
-        if "vload8(0, B_frag" not in src:
+        if not re.search(r"(vload8\(0, B_frag|\(\*\(half8\*\)\(B_frag)", src):
             raise AssertionError("missing kn B half8 vector load from fragment")
     else:
-        if "vload4(0, B_frag" not in src:
+        if not re.search(r"(vload4\(0, B_frag|\(\*\(half4\*\)\(B_frag)", src):
             raise AssertionError("missing nk B half4 gather load from fragment")
     if "convert_float" in src or "convert_half" in src:
         raise AssertionError("full-fp16 path must not contain any convert_* calls")
-    if "vstore8(vload8(0, A" not in src or "vstore8(vload8(0, B" not in src:
-        raise AssertionError("A/B global->fragment copies must be wide vload8/vstore8")
-    if "vstore8(vload8(0, C_frag" not in src:
-        raise AssertionError("C fragment->global store must be wide vload8/vstore8")
+    if "vload8(0, A +" not in src or "vload8(0, B +" not in src:
+        raise AssertionError("A/B global->fragment copies must be wide vload8")
+    if not re.search(r"vstore8\([^,]*, 0, C \+", src):
+        raise AssertionError("C fragment->global store must be wide vstore8")
     if re.search(r"for \([^;]*;[^;]*<\s*(512|2048)[^;]*;", src):
         raise AssertionError("element-wise A/B copy loop must not appear")
 

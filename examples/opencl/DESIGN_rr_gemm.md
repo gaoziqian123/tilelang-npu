@@ -312,3 +312,29 @@ nk 512³ 0.44T（gather 路径，符合 nk < kn 的预期）。
   和旧 `--impl tilelang` 仍被它挡（基线即失败，非本轮回归）。
 - RR staged 路径保留（正确性 PASS）但仅作参考实现；性能以其 staging
   成本为上限。
+
+## 11. 事实库增补(2026-09 中,FABLE/FFN 战役实测)
+
+- **GR gemm fp32 累加只有 ~0.40T,fp16 累加 1.42T**(同形状 M=960 N=9216
+  K=2560;512³ fp32 同速 0.37T,与形状无关)。瓶颈不是 mad 嵌套形式
+  (改成 `acc+=a*b` 零差别),是 fp32 向量 FMA + convert 的结构性代价。
+  手写 gemm.cl 的 1.66T fp32 数字与本路径不同构,未复现。
+- **fp16 全 K 累加精度不可接受**(K=2560 时 max_rel 1.4,bad 1.3%)。
+- **chunk16(fp16 内层 + fp32 外层提升)经 shared staging 实现正确
+  (max_rel 0.07)但慢**(ck64 0.149T / ck32 0.323T):T.gemm 恒覆盖操作数
+  完整 extent,分块必须先把 tile 拷进 shared,拷贝+同步开销吃光收益。
+  直接全局分块不可行(extent 取自 buffer 尾部形状)。
+- **FFN 结论**:split 链(gemm gate + gemm up + silu_mul + gemm down)
+  是出货路径;融合双累加器 kernel 与 split 同速(234 vs 231ms),无收益。
+  链总耗时 343.9ms @ 0.53T(全部 fp64 对拍 PASS)。work-item 语义:
+  clEnqueueNDRangeKernel 的 global_work_size 以 work-item 计,不是 wg 数
+  (踩过:silu 只覆盖 0.4% 数据,症状是下游 check 自洽地"假 PASS"——
+  用被测数据自身算参考会掩盖上游错误)。
+- **`half` 是 OpenCL 保留字**,不能当循环变量名(报 "expected expression"
+  且 device log 只有 "Pass")。
+- **fragment 显式布局标注(T.annotate_layout + T.Fragment)能用但危险**:
+  FA acc_o 标注使性能掉 20 倍(2570ms vs 129ms),acc_s 标注无变化;
+  标注后的 decoupled copy(acc_o_1)与实际使用点布局关系未明,暂列为禁区。
+- 私有/局部数组向量访问统一为 deref 形式 `(*(halfN*)(arr+off))`
+  (vloadN/vstoreN 对 __local/__private 指针在 Adreno 不存在);
+  probe_rr 断言已同步放宽为两种拼写都接受。
