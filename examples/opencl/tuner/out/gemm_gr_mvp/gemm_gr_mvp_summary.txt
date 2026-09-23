@@ -1,0 +1,15 @@
+total=54 scored=54 failures=0
+best=c0030 ms=9.8640 tflops=1.361 cos=0.999999979 cfg={'K': 2560, 'M': 1024, 'N': 2560, 'accum_dtype': 'float32', 'b_layout': 'kn', 'bk': 16, 'bm': 32, 'bn': 256, 'chunk_k': 256, 'threads': 128}
+champion_reference bm=32 bn=128 bk=64 kn ms=10.35 tflops=1.297
+top5:
+  c0030 ms=9.8640 cos=0.999999979 cfg={'K': 2560, 'M': 1024, 'N': 2560, 'accum_dtype': 'float32', 'b_layout': 'kn', 'bk': 16, 'bm': 32, 'bn': 256, 'chunk_k': 256, 'threads': 128}
+  c0032 ms=9.8700 cos=0.999999979 cfg={'K': 2560, 'M': 1024, 'N': 2560, 'accum_dtype': 'float32', 'b_layout': 'kn', 'bk': 32, 'bm': 32, 'bn': 256, 'chunk_k': 256, 'threads': 128}
+  c0034 ms=10.0730 cos=0.999999979 cfg={'K': 2560, 'M': 1024, 'N': 2560, 'accum_dtype': 'float32', 'b_layout': 'kn', 'bk': 64, 'bm': 32, 'bn': 256, 'chunk_k': 256, 'threads': 128}
+  c0024 ms=10.3700 cos=0.999999979 cfg={'K': 2560, 'M': 1024, 'N': 2560, 'accum_dtype': 'float32', 'b_layout': 'kn', 'bk': 16, 'bm': 32, 'bn': 128, 'chunk_k': 256, 'threads': 64}
+  c0026 ms=10.3700 cos=0.999999979 cfg={'K': 2560, 'M': 1024, 'N': 2560, 'accum_dtype': 'float32', 'b_layout': 'kn', 'bk': 32, 'bm': 32, 'bn': 128, 'chunk_k': 256, 'threads': 64}
+bottom5:
+  c0009 ms=120.0970 cos=0.999999978 cfg={'K': 2560, 'M': 1024, 'N': 2560, 'accum_dtype': 'float32', 'b_layout': 'nk', 'bk': 32, 'bm': 16, 'bn': 128, 'chunk_k': 256, 'threads': 32}
+  c0007 ms=120.9730 cos=0.999999978 cfg={'K': 2560, 'M': 1024, 'N': 2560, 'accum_dtype': 'float32', 'b_layout': 'nk', 'bk': 16, 'bm': 16, 'bn': 128, 'chunk_k': 256, 'threads': 32}
+  c0015 ms=147.2090 cos=0.999999978 cfg={'K': 2560, 'M': 1024, 'N': 2560, 'accum_dtype': 'float32', 'b_layout': 'nk', 'bk': 32, 'bm': 16, 'bn': 256, 'chunk_k': 256, 'threads': 64}
+  c0013 ms=147.4400 cos=0.999999978 cfg={'K': 2560, 'M': 1024, 'N': 2560, 'accum_dtype': 'float32', 'b_layout': 'nk', 'bk': 16, 'bm': 16, 'bn': 256, 'chunk_k': 256, 'threads': 64}
+  c0017 ms=147.7930 cos=0.999999978 cfg={'K': 2560, 'M': 1024, 'N': 2560, 'accum_dtype': 'float32', 'b_layout': 'nk', 'bk': 64, 'bm': 16, 'bn': 256, 'chunk_k': 256, 'threads': 64}

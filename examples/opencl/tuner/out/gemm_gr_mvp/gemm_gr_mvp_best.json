@@ -1,0 +1,18 @@
+{
+  "cache_key": "46a5fa454ebccb6683d428df7dad21425605084952d6cd47884eefdaee55a659",
+  "config": {
+    "K": 2560,
+    "M": 1024,
+    "N": 2560,
+    "accum_dtype": "float32",
+    "b_layout": "kn",
+    "bk": 16,
+    "bm": 32,
+    "bn": 256,
+    "chunk_k": 256,
+    "threads": 128
+  },
+  "config_id": "c0030",
+  "cos": 0.999999979,
+  "ms": 9.864
+}

@@ -1,0 +1,1946 @@
+[
+  {
+    "cache_key": "dc78f3f0e550835b15ab41b3bcaa37fae044202a45ec9e033a33adb0aa781375",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 16
+    },
+    "config_id": "c0000",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0000_r0.log",
+        "ms": 27.683,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0000_r1.log",
+        "ms": 27.69,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "40d55cb69c45cc436e82f7ac680289b1bc9d4de338f262ec322b75367cc6ff24"
+  },
+  {
+    "cache_key": "731fb0ec91c0e68af9ce6f319457205e6bdd89abd18fda8afdf23dbc74d9ec5d",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 16
+    },
+    "config_id": "c0001",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0001_r0.log",
+        "ms": 50.168,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0001_r1.log",
+        "ms": 50.701,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "6a738dc4dba67434fbf477462e580867c4c86f9ce4444a61a29246d5bcd0bdae"
+  },
+  {
+    "cache_key": "a42460b890dcfc6a7b7b9ac638efb47c46aca1643453b6b18aef75010a931534",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 16
+    },
+    "config_id": "c0002",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0002_r0.log",
+        "ms": 27.692,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0002_r1.log",
+        "ms": 27.714,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "40d55cb69c45cc436e82f7ac680289b1bc9d4de338f262ec322b75367cc6ff24"
+  },
+  {
+    "cache_key": "c142c395422d9ecbf249db3733dac5db49c03d071c6b7f90aa9b168c651a1320",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 16
+    },
+    "config_id": "c0003",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0003_r0.log",
+        "ms": 50.495,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0003_r1.log",
+        "ms": 50.327,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "6a738dc4dba67434fbf477462e580867c4c86f9ce4444a61a29246d5bcd0bdae"
+  },
+  {
+    "cache_key": "9dbe7839bff1c212563c3f7396033b08abd17bb7dd3337534363cc09d42efc67",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 16
+    },
+    "config_id": "c0004",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0004_r0.log",
+        "ms": 27.742,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0004_r1.log",
+        "ms": 27.703,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "40d55cb69c45cc436e82f7ac680289b1bc9d4de338f262ec322b75367cc6ff24"
+  },
+  {
+    "cache_key": "d290180582341bc25726d65cabe82a6f7e42a4a85377bca8c69dba71849f6f91",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 16
+    },
+    "config_id": "c0005",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0005_r0.log",
+        "ms": 50.293,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0005_r1.log",
+        "ms": 50.021,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "6a738dc4dba67434fbf477462e580867c4c86f9ce4444a61a29246d5bcd0bdae"
+  },
+  {
+    "cache_key": "f7b6578d7013e1b40c246f80a9e98c75bf071384fda91d045caf23397133c0eb",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 32
+    },
+    "config_id": "c0006",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0006_r0.log",
+        "ms": 15.332,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0006_r1.log",
+        "ms": 15.374,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "3cfafd1f79c23b0258bfc6ea34b8204bb958c6ec29bd9676f0814079f1ccddab"
+  },
+  {
+    "cache_key": "9ae7ce55aea7236ac41041bed166c437b57e8942553fa4ca2c6609d66f357f6a",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 32
+    },
+    "config_id": "c0007",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0007_r0.log",
+        "ms": 120.973,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0007_r1.log",
+        "ms": 121.021,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "a21f24b403155de6218ac285a2d406605fa331e12f7478046a0d0b1e0e535547"
+  },
+  {
+    "cache_key": "144df5f39e6589d3c53479277252e1b75b9ce3989444e76262a16501bc27a4b6",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 32
+    },
+    "config_id": "c0008",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0008_r0.log",
+        "ms": 15.387,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0008_r1.log",
+        "ms": 15.367,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "3cfafd1f79c23b0258bfc6ea34b8204bb958c6ec29bd9676f0814079f1ccddab"
+  },
+  {
+    "cache_key": "5a33f08d0f63f51e857c485862d15e59415099d6e560105b7d1803e4bfc27848",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 32
+    },
+    "config_id": "c0009",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0009_r0.log",
+        "ms": 121.387,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0009_r1.log",
+        "ms": 120.097,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "a21f24b403155de6218ac285a2d406605fa331e12f7478046a0d0b1e0e535547"
+  },
+  {
+    "cache_key": "f649ed0c1875b12711c5909f80a565ce567f074b938e47ce48d4ec0b94abb65d",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 32
+    },
+    "config_id": "c0010",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0010_r0.log",
+        "ms": 15.37,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0010_r1.log",
+        "ms": 15.448,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "3cfafd1f79c23b0258bfc6ea34b8204bb958c6ec29bd9676f0814079f1ccddab"
+  },
+  {
+    "cache_key": "40c40a8f5313307f663244da42d7b13a79c74e453fb5feae6f222eb8650a7dcc",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 32
+    },
+    "config_id": "c0011",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0011_r0.log",
+        "ms": 121.32,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0011_r1.log",
+        "ms": 119.989,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "a21f24b403155de6218ac285a2d406605fa331e12f7478046a0d0b1e0e535547"
+  },
+  {
+    "cache_key": "8a7a4dfaed86b2bb06c7f4818234aa99cd26d20241169e355bcf69ebfc958f5d",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0012",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0012_r0.log",
+        "ms": 10.38,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0012_r1.log",
+        "ms": 10.382,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "3169e84337872134de1720f318f387a146b8e809e1a25b605a8c00ffa801024d"
+  },
+  {
+    "cache_key": "81da4b458b98517e4106e844add9467f064cdda3b5581f70d9063a9aeb0c8da8",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0013",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0013_r0.log",
+        "ms": 147.44,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0013_r1.log",
+        "ms": 147.688,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "fbf6472b26ff00eeb2e40ba96e111d34f1c591fe017528dd4d2acf65b478ab6f"
+  },
+  {
+    "cache_key": "1a8d29bf12621f17e0269fe812e9bf9d42afff0113d94cfbf354af30fbefbb7e",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0014",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0014_r0.log",
+        "ms": 10.38,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0014_r1.log",
+        "ms": 10.371,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "3169e84337872134de1720f318f387a146b8e809e1a25b605a8c00ffa801024d"
+  },
+  {
+    "cache_key": "f802194f100b2c87892a046b28c72f097070c7607af2802467e325dde3948c01",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0015",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0015_r0.log",
+        "ms": 147.453,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0015_r1.log",
+        "ms": 147.209,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "fbf6472b26ff00eeb2e40ba96e111d34f1c591fe017528dd4d2acf65b478ab6f"
+  },
+  {
+    "cache_key": "2c0869fff4205c800d61f606162c5144682d3f5865fb5b196f068f8bd94a066c",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0016",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0016_r0.log",
+        "ms": 10.409,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0016_r1.log",
+        "ms": 10.381,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "3169e84337872134de1720f318f387a146b8e809e1a25b605a8c00ffa801024d"
+  },
+  {
+    "cache_key": "efd44a757887e47f68a0320f9d2e2fe9873d94ac3779697d67be8bf25489b007",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0017",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0017_r0.log",
+        "ms": 147.793,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0017_r1.log",
+        "ms": 148.209,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "fbf6472b26ff00eeb2e40ba96e111d34f1c591fe017528dd4d2acf65b478ab6f"
+  },
+  {
+    "cache_key": "b03b7ee6c93af793455a1ebd9fecdf93cd859252e58dd671da7a65feb02d179d",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 32
+    },
+    "config_id": "c0018",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0018_r0.log",
+        "ms": 14.635,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0018_r1.log",
+        "ms": 14.627,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "302e57a39e1eb5d88a41615b8ce13e1074b16fcceb658501a87d836ef19b2ab7"
+  },
+  {
+    "cache_key": "d29773d667fdf62103217d00d9366c830a0b2cf22ed88c017cebf57cdcecba11",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 32
+    },
+    "config_id": "c0019",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0019_r0.log",
+        "ms": 35.613,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0019_r1.log",
+        "ms": 35.248,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "ba0485e0a06c937eefb0cdcda646f528599dc7b2f9412ff5fc4d344cc3e883de"
+  },
+  {
+    "cache_key": "9122540b59233a971d6758e41badf5d5f886f6e393b88473a3169d0c93f9678e",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 32
+    },
+    "config_id": "c0020",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0020_r0.log",
+        "ms": 14.63,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0020_r1.log",
+        "ms": 14.632,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "302e57a39e1eb5d88a41615b8ce13e1074b16fcceb658501a87d836ef19b2ab7"
+  },
+  {
+    "cache_key": "3d79116c61f4fd54bf018a15cf17ec0f1bacbbe5fa1e9d0af521e5eca51975c3",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 32
+    },
+    "config_id": "c0021",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0021_r0.log",
+        "ms": 35.157,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0021_r1.log",
+        "ms": 36.082,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "ba0485e0a06c937eefb0cdcda646f528599dc7b2f9412ff5fc4d344cc3e883de"
+  },
+  {
+    "cache_key": "10f1ef6399c86018c6fb9dc86e85f83601212168a62864004d8aecac99e141f5",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 32
+    },
+    "config_id": "c0022",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0022_r0.log",
+        "ms": 14.627,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0022_r1.log",
+        "ms": 14.625,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "302e57a39e1eb5d88a41615b8ce13e1074b16fcceb658501a87d836ef19b2ab7"
+  },
+  {
+    "cache_key": "8c2e072f9857071f20ae6191cb41f6808a0fe8aed0bd1e589c1fb1c3da67b60a",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 32
+    },
+    "config_id": "c0023",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0023_r0.log",
+        "ms": 35.265,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0023_r1.log",
+        "ms": 35.007,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "ba0485e0a06c937eefb0cdcda646f528599dc7b2f9412ff5fc4d344cc3e883de"
+  },
+  {
+    "cache_key": "dfe26e9f47011326ffd6a9cc19ff54b06de3ffdbfed480e3d5215630716583e5",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0024",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0024_r0.log",
+        "ms": 10.37,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0024_r1.log",
+        "ms": 10.371,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "a7e7c27b069eb83fdf7c38626195b674598196706bc0f035d3fa3edb2de1c5f7"
+  },
+  {
+    "cache_key": "a640e49e57108fcffdc3097fd2abe6b6e6f118137fb251794a6896b8f47b3424",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0025",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0025_r0.log",
+        "ms": 70.132,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0025_r1.log",
+        "ms": 69.869,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "533cdef9d7181ba7e65175d0e2a63c220184e91fc1422137c7e7bbd4982fb0c5"
+  },
+  {
+    "cache_key": "b67700818dc8fd01963916c3a6012897dbbca68c0b3be14437ab832fe21a2829",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0026",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0026_r0.log",
+        "ms": 10.37,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0026_r1.log",
+        "ms": 10.37,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "a7e7c27b069eb83fdf7c38626195b674598196706bc0f035d3fa3edb2de1c5f7"
+  },
+  {
+    "cache_key": "43cfdeab97e7905944ae8059f5b88c54111ea16a2dadfca1eb52a538193c437c",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0027",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0027_r0.log",
+        "ms": 70.426,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0027_r1.log",
+        "ms": 70.977,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "533cdef9d7181ba7e65175d0e2a63c220184e91fc1422137c7e7bbd4982fb0c5"
+  },
+  {
+    "cache_key": "5ce40da33a2ee68de34b5ad73e72e025c9ae9dda312a9fc75e67f28333cbb240",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0028",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0028_r0.log",
+        "ms": 10.377,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0028_r1.log",
+        "ms": 10.379,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "a7e7c27b069eb83fdf7c38626195b674598196706bc0f035d3fa3edb2de1c5f7"
+  },
+  {
+    "cache_key": "4d844cfe17a9d8051bc45b41cd67376372a56c12a73d7cfd85de5d6a08b3762f",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0029",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0029_r0.log",
+        "ms": 70.674,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0029_r1.log",
+        "ms": 70.739,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "533cdef9d7181ba7e65175d0e2a63c220184e91fc1422137c7e7bbd4982fb0c5"
+  },
+  {
+    "cache_key": "46a5fa454ebccb6683d428df7dad21425605084952d6cd47884eefdaee55a659",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 128
+    },
+    "config_id": "c0030",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0030_r0.log",
+        "ms": 9.864,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0030_r1.log",
+        "ms": 9.87,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "74e9370b6cca2bbbea1b4ae9063d5c89ae6a7488b7f9c62ab6758185eb71d1c1"
+  },
+  {
+    "cache_key": "092cc61a36b5cfe03bd9d42be163ca5029f418328b2ff575b645ed4e4709d1c7",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 128
+    },
+    "config_id": "c0031",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0031_r0.log",
+        "ms": 82.543,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0031_r1.log",
+        "ms": 81.807,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "296583aedd67bbbcf0e9681b1a58b6b4d12ba01013f23bfe2b146a4660a26d2b"
+  },
+  {
+    "cache_key": "4ec267b403621093863c577f525172fd5fb15ed9bc1265b5912180529d6fd6ca",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 128
+    },
+    "config_id": "c0032",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0032_r0.log",
+        "ms": 9.879,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0032_r1.log",
+        "ms": 9.87,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "74e9370b6cca2bbbea1b4ae9063d5c89ae6a7488b7f9c62ab6758185eb71d1c1"
+  },
+  {
+    "cache_key": "902b3eacc164c659013ff76e6257aaf669bb9bcd527f0d0472a0497d35c1cd97",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 128
+    },
+    "config_id": "c0033",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0033_r0.log",
+        "ms": 81.954,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0033_r1.log",
+        "ms": 88.331,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "296583aedd67bbbcf0e9681b1a58b6b4d12ba01013f23bfe2b146a4660a26d2b"
+  },
+  {
+    "cache_key": "6ea24e3c7c7bdf7c588483d834241d7cc6c4f5dafb329c7379924c57f2279122",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 128
+    },
+    "config_id": "c0034",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0034_r0.log",
+        "ms": 10.073,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0034_r1.log",
+        "ms": 10.455,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "74e9370b6cca2bbbea1b4ae9063d5c89ae6a7488b7f9c62ab6758185eb71d1c1"
+  },
+  {
+    "cache_key": "5bc4ad513d133317bfb2914b6c5aef0a0ab3fcb75925ccc8befe7b594af0b025",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 128
+    },
+    "config_id": "c0035",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0035_r0.log",
+        "ms": 89.406,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0035_r1.log",
+        "ms": 91.082,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "296583aedd67bbbcf0e9681b1a58b6b4d12ba01013f23bfe2b146a4660a26d2b"
+  },
+  {
+    "cache_key": "920309d859affc3fad20f53ed0172a9aea2bf1b96c565ad5edd5d9aa2a986f61",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0036",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0036_r0.log",
+        "ms": 19.819,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0036_r1.log",
+        "ms": 19.315,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "33ce1649d2ef7d7e9929e39a2d14bf5cfb6f344bcefb71a935c7ab10459c9619"
+  },
+  {
+    "cache_key": "d29d5de21ac0d11308c089e3381169694db9bf64198f85e60fb4dc1eba0116b0",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0037",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0037_r0.log",
+        "ms": 31.679,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0037_r1.log",
+        "ms": 32.476,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "f19cec7eef66f8e02509716b62b2bbe90c115d116d7d2d0ddd81c6062914ce97"
+  },
+  {
+    "cache_key": "f17a73cf57074747b12589872169e7b4230a03bf90d4bf92695d31df6d182812",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0038",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0038_r0.log",
+        "ms": 19.477,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0038_r1.log",
+        "ms": 19.513,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "33ce1649d2ef7d7e9929e39a2d14bf5cfb6f344bcefb71a935c7ab10459c9619"
+  },
+  {
+    "cache_key": "3721418bee0e5d3ad67cca9cabccafb7250f05d07df5ee2ed47ec53df7624de4",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0039",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0039_r0.log",
+        "ms": 32.123,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0039_r1.log",
+        "ms": 31.853,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "f19cec7eef66f8e02509716b62b2bbe90c115d116d7d2d0ddd81c6062914ce97"
+  },
+  {
+    "cache_key": "f8b4e46e95c778e9f3de1c33bc85e5c44ae5a81caff14bfd1c24690e7eb2b315",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0040",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0040_r0.log",
+        "ms": 19.3,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0040_r1.log",
+        "ms": 19.625,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "33ce1649d2ef7d7e9929e39a2d14bf5cfb6f344bcefb71a935c7ab10459c9619"
+  },
+  {
+    "cache_key": "bf9b7b6411d83239bc9c91110b2b1cf8dbc4bfeedc221d7748691d6170b0104f",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "threads": 64
+    },
+    "config_id": "c0041",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0041_r0.log",
+        "ms": 31.664,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0041_r1.log",
+        "ms": 32.025,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "f19cec7eef66f8e02509716b62b2bbe90c115d116d7d2d0ddd81c6062914ce97"
+  },
+  {
+    "cache_key": "a0a614b37dd5556d3322e29e9d1144ea936c64ba77f8759a22e5ed806dbde6c3",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 128
+    },
+    "config_id": "c0042",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0042_r0.log",
+        "ms": 12.155,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0042_r1.log",
+        "ms": 11.891,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "df46097d39daeaf8b0e0d47c6e0bcb3bb90f87386362929052b3211aa33cfeaa"
+  },
+  {
+    "cache_key": "d7ccf5931b8b9bca7732fc0de80861677af0c0c50f17d99e9f7e75c607a7c13c",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 128
+    },
+    "config_id": "c0043",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0043_r0.log",
+        "ms": 33.456,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0043_r1.log",
+        "ms": 33.41,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "8d7eb24484f955c3663029b862d2208ba745989c0d5ec1dc31b215c54545e7ab"
+  },
+  {
+    "cache_key": "a0e631d6f931a7ce09c0401709b18c1d27e0b9145a161e49b4271ca6be0068c5",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 128
+    },
+    "config_id": "c0044",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0044_r0.log",
+        "ms": 11.856,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0044_r1.log",
+        "ms": 11.936,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "df46097d39daeaf8b0e0d47c6e0bcb3bb90f87386362929052b3211aa33cfeaa"
+  },
+  {
+    "cache_key": "b57fa548d4bceaf71e05cdd2745d67ba05fe25d3d29cbac112485596c4ec68af",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 128
+    },
+    "config_id": "c0045",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0045_r0.log",
+        "ms": 34.413,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0045_r1.log",
+        "ms": 34.924,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "8d7eb24484f955c3663029b862d2208ba745989c0d5ec1dc31b215c54545e7ab"
+  },
+  {
+    "cache_key": "a3a4c4ad235e2f941f137008b20c48cb8a29aba706d15a48b8ce2e882eedcdeb",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 128
+    },
+    "config_id": "c0046",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0046_r0.log",
+        "ms": 11.808,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0046_r1.log",
+        "ms": 12.115,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "df46097d39daeaf8b0e0d47c6e0bcb3bb90f87386362929052b3211aa33cfeaa"
+  },
+  {
+    "cache_key": "c45e7c61086af648775a0026a745b2590b05339fb9b14d4eb8437dd8cfe6bf40",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "threads": 128
+    },
+    "config_id": "c0047",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0047_r0.log",
+        "ms": 33.267,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0047_r1.log",
+        "ms": 33.55,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "8d7eb24484f955c3663029b862d2208ba745989c0d5ec1dc31b215c54545e7ab"
+  },
+  {
+    "cache_key": "31d38329a56c804a23a0de80acca8d3fe8c38f6575be73c37d07d8e695454d7f",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 256
+    },
+    "config_id": "c0048",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0048_r0.log",
+        "ms": 10.619,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0048_r1.log",
+        "ms": 10.584,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "db8b15394e633696a158feb283557191c058d6f75289b8f0d90289a57f46eca7"
+  },
+  {
+    "cache_key": "91b2bf1fcbd423d978309854f4303830738f87319f0e6144b952aa40985163c7",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 256
+    },
+    "config_id": "c0049",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0049_r0.log",
+        "ms": 82.478,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0049_r1.log",
+        "ms": 81.623,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "30b6ab12456fd92edde30b91232dcc19ad5612d8f7db2a43f07671c9aeb96954"
+  },
+  {
+    "cache_key": "76908a41aaa4acf952c0e412ef7d59c79ca81a7f9c36044a12394a87e63b3482",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 256
+    },
+    "config_id": "c0050",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0050_r0.log",
+        "ms": 10.617,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0050_r1.log",
+        "ms": 10.574,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "db8b15394e633696a158feb283557191c058d6f75289b8f0d90289a57f46eca7"
+  },
+  {
+    "cache_key": "57340ec6b9698f946fc6ab8ed3b881baccbe77d32387e0ca37eb3a6e47b196c4",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 256
+    },
+    "config_id": "c0051",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0051_r0.log",
+        "ms": 82.202,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0051_r1.log",
+        "ms": 82.368,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "30b6ab12456fd92edde30b91232dcc19ad5612d8f7db2a43f07671c9aeb96954"
+  },
+  {
+    "cache_key": "270267f7107d015f48441a116fc691653c4da5552918bf82107415fb45e124a3",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 256
+    },
+    "config_id": "c0052",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0052_r0.log",
+        "ms": 10.624,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "log": "logs/c0052_r1.log",
+        "ms": 10.531,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "db8b15394e633696a158feb283557191c058d6f75289b8f0d90289a57f46eca7"
+  },
+  {
+    "cache_key": "cf71e158890884d71970c51eef0cbf4d6fd774632554dff0184a327a37346fdf",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "threads": 256
+    },
+    "config_id": "c0053",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0053_r0.log",
+        "ms": 82.714,
+        "rc": 0,
+        "round": 0,
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999978,
+        "log": "logs/c0053_r1.log",
+        "ms": 82.478,
+        "rc": 0,
+        "round": 1,
+        "status": "PASS"
+      }
+    ],
+    "source_sha256": "30b6ab12456fd92edde30b91232dcc19ad5612d8f7db2a43f07671c9aeb96954"
+  }
+]

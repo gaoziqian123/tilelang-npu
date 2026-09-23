@@ -1,0 +1,866 @@
+[
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "file": "c0000.cl",
+    "id": "c0000"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "file": "c0001.cl",
+    "id": "c0001"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "file": "c0002.cl",
+    "id": "c0002"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "file": "c0003.cl",
+    "id": "c0003"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "file": "c0004.cl",
+    "id": "c0004"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "file": "c0005.cl",
+    "id": "c0005"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "file": "c0006.cl",
+    "id": "c0006"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "file": "c0007.cl",
+    "id": "c0007"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "file": "c0008.cl",
+    "id": "c0008"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "file": "c0009.cl",
+    "id": "c0009"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "file": "c0010.cl",
+    "id": "c0010"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "file": "c0011.cl",
+    "id": "c0011"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0012.cl",
+    "id": "c0012"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0013.cl",
+    "id": "c0013"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0014.cl",
+    "id": "c0014"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0015.cl",
+    "id": "c0015"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0016.cl",
+    "id": "c0016"
+  },
+  {
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0017.cl",
+    "id": "c0017"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "file": "c0018.cl",
+    "id": "c0018"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "file": "c0019.cl",
+    "id": "c0019"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "file": "c0020.cl",
+    "id": "c0020"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "file": "c0021.cl",
+    "id": "c0021"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "file": "c0022.cl",
+    "id": "c0022"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "file": "c0023.cl",
+    "id": "c0023"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0024.cl",
+    "id": "c0024"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0025.cl",
+    "id": "c0025"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0026.cl",
+    "id": "c0026"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0027.cl",
+    "id": "c0027"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0028.cl",
+    "id": "c0028"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0029.cl",
+    "id": "c0029"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "file": "c0030.cl",
+    "id": "c0030"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "file": "c0031.cl",
+    "id": "c0031"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "file": "c0032.cl",
+    "id": "c0032"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "file": "c0033.cl",
+    "id": "c0033"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "file": "c0034.cl",
+    "id": "c0034"
+  },
+  {
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "file": "c0035.cl",
+    "id": "c0035"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0036.cl",
+    "id": "c0036"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0037.cl",
+    "id": "c0037"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0038.cl",
+    "id": "c0038"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0039.cl",
+    "id": "c0039"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0040.cl",
+    "id": "c0040"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "file": "c0041.cl",
+    "id": "c0041"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "file": "c0042.cl",
+    "id": "c0042"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "file": "c0043.cl",
+    "id": "c0043"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "file": "c0044.cl",
+    "id": "c0044"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "file": "c0045.cl",
+    "id": "c0045"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "file": "c0046.cl",
+    "id": "c0046"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "file": "c0047.cl",
+    "id": "c0047"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "file": "c0048.cl",
+    "id": "c0048"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "file": "c0049.cl",
+    "id": "c0049"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "file": "c0050.cl",
+    "id": "c0050"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "file": "c0051.cl",
+    "id": "c0051"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "file": "c0052.cl",
+    "id": "c0052"
+  },
+  {
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "file": "c0053.cl",
+    "id": "c0053"
+  }
+]
