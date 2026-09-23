@@ -615,6 +615,29 @@ FFN 全量 fp64 参考在手机上太慢,实用深检使用 8192 抽样。
 
 | kernel | best config | 性能 | 备注 |
 |---|---|---|---|
-| GR gemm fp32 | `bm=32 bn=256 bk=16 layout=kn` | 9.864ms / 1.361T | 54 config 全 PASS |
+| GR gemm fp32 | `bm=32 bn=256 bk=16 layout=kn explicit_unroll=true` | 9.824ms(归一化) / 1.36T | 二期重跑最优不变 |
 | FFN gate/up | `bm=64 bn=256 threads=256` | 链 103.0ms | 坐标下降最优 |
 | FFN down | `bm=32 bn=128` | 链 103.0ms | 保持旧默认 |
+
+### 14.5 二期特性(f68175d)
+
+`examples/opencl/tuner/tune.py` 在 commit `f68175d` 增加四个二期特性:
+
+- **priors 先验排序**:`TuneSpec.priors` 放已知好 config,测量队列最先跑
+  当前冠军,避免大空间开局被坏点拖慢。
+- **early-stop**:族键定义为 config 去掉 `{bk, threads, pass_configs}` 后的
+  投影;族内首个被测 config 若慢于当前最优 2x,跳过同族剩余点(依据是
+  一期数据里 `bk` 在 tile 族内近似噪声)。连续 12 个被测 config 不进 top-3
+  则全局终止。
+- **`pass_configs` 入空间**:config dict 可带 `pass_configs` 键,工厂函数 pop
+  出来传给 `tilelang.lower`;当前演示维度是 `tl.UnrollLoop` 的
+  `explicit_unroll`。
+- **交错多轮 + canary 归一化**:奇数轮正序、偶数轮倒序;每 10 个 config
+  插一次当前最优重测(canary),最终排名按最近 canary 归一化时间,抵消热状态 /
+  时钟漂移。
+
+二期验证重跑 GR gemm:搜索空间 **108**(unroll 变体翻倍),实际只测 **48** 个
+kernel、其中 **29** 个独立计分;`skipped_family=41`,全局 `early_stopped=127`。
+canary 漂移仅 **+1.0%**(9.842→9.940ms)。最优 config 仍是
+`bm=32 bn=256 bk=16 layout=kn`,新带 `explicit_unroll=true`,归一化
+**9.824ms**,略优于一期 9.864ms,全量校验 PASS。
