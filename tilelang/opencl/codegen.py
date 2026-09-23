@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 
 from tilelang.backend.device_codegen import global_func_device_codegen
@@ -899,6 +900,68 @@ def _patch_opencl_grgemm_epilogue_direct_store(source: str) -> str:
     return out
 
 
+def _patch_opencl_grgemm_b_texture(source: str) -> str:
+    """Route GR-GEMM's direct-global B vload8s through an RGBA half image.
+
+    This is deliberately limited to the direct-global GR GEMM scaffold used by
+    examples/opencl/gemm/gemm_nt.py with B in KN layout.  The shape we accept is
+    the post-base-pointer form:
+
+        __global half* tl_Bp = B + (tl_loop_aff1 - tl_wi_aff2);
+        bv_1[i] = convert_float8(vload8(0, tl_Bp + i*N));  # i = 0..3
+
+    inside ``for (int pos4 = ... )``.  For KN layout, the host exposes B as an
+    image of width N/4 and height K, so each vload8 becomes two read_imageh()
+    calls at x = n0/4 and y = pos4*4+i.  If any of the exact scaffold markers are
+    absent, return the original source unchanged.
+    """
+
+    if os.environ.get("TL_PATCH_B_TEX") != "1":
+        return source
+    if "tl_wi_aff" not in source or "tl_loop_aff" not in source or "A_frag" in source or "B_frag" in source:
+        return source
+    if "__global half* tl_Bp = B + (tl_loop_aff1 - tl_wi_aff2);" not in source:
+        return source
+    if "read_only image2d_t" in source or "read_imageh" in source:
+        return source
+
+    loads = re.findall(r"convert_float8\(vload8\(0, tl_Bp(?: \+ (\d+))?\)\)", source)
+    if len(loads) != 4:
+        return source
+    offs = sorted(int(x or "0") for x in loads)
+    if offs[0] != 0 or len(set(offs)) != 4:
+        return source
+    stride = offs[1]
+    if stride <= 0 or offs != [0, stride, stride * 2, stride * 3] or stride % 4:
+        return source
+
+    out = source
+    out = out.replace("__global half* restrict B", "read_only image2d_t Bi")
+    out = out.replace(
+        "#pragma OPENCL EXTENSION cl_khr_fp16 : enable\n",
+        "#pragma OPENCL EXTENSION cl_khr_fp16 : enable\n\n"
+        "__constant sampler_t smp = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_NONE | CLK_FILTER_NEAREST;\n"
+        "static inline float8 tl_read_b8_tex(read_only image2d_t Bi, int x4, int k) {\n"
+        "  const half4 b_lo = read_imageh(Bi, smp, (int2)(x4, k));\n"
+        "  const half4 b_hi = read_imageh(Bi, smp, (int2)(x4 + 1, k));\n"
+        "  return convert_float8((half8)(b_lo, b_hi));\n"
+        "}\n",
+        1,
+    )
+    out = out.replace(
+        "__global half* tl_Ap = A + tl_loop_aff0; __global half* tl_Bp = B + (tl_loop_aff1 - tl_wi_aff2);",
+        f"__global half* tl_Ap = A + tl_loop_aff0; const int tl_B_tex_x = ((tl_loop_aff1 - tl_wi_aff2) - (pos4 * {stride * 4})) >> 2;",
+        1,
+    )
+    for idx, off in enumerate(offs):
+        old = "convert_float8(vload8(0, tl_Bp))" if off == 0 else f"convert_float8(vload8(0, tl_Bp + {off}))"
+        out = out.replace(old, f"tl_read_b8_tex(Bi, tl_B_tex_x, (pos4 * 4) + {idx})")
+
+    if "tl_Bp" in out or "__global half* restrict B" in out:
+        return source
+    return out
+
+
 def _patch_opencl_unused_local_decls(source: str) -> str:
     """Drop simple function-local declarations whose name is never referenced.
 
@@ -963,6 +1026,9 @@ def build_opencl(mod, target):
     if patched != source:
         source = patched
     patched = _patch_opencl_grgemm_epilogue_direct_store(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_grgemm_b_texture(source)
     if patched != source:
         source = patched
     patched = _patch_opencl_unused_local_decls(source)

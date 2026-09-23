@@ -41,9 +41,10 @@ def make_ffn_gate_up_kernel(M: int, N: int, K: int, bm: int, bn: int, threads: i
     @T.prim_func
     def ffn_gate_up_kernel(
         A: T.Tensor((M, K), "float16"),
-        H: T.Tensor((M, N), "float16"),
         Wg: T.Tensor((K, N), "float16"),
         Wu: T.Tensor((K, N), "float16"),
+        G: T.Tensor((M, N), "float16"),
+        U: T.Tensor((M, N), "float16"),
     ):
         T.func_attr({"tl.opencl.assume_inbounds": 1})
         K  # keep K in the closure: the point-indexed gemm operands need it
@@ -60,11 +61,8 @@ def make_ffn_gate_up_kernel(M: int, N: int, K: int, bm: int, bn: int, threads: i
             acc_u = T.alloc_fragment((bm, bn), "float32")
             T.gemm(A[by * bm, 0], Wg[0, bx * bn], acc_g, clear_accum=True)
             T.gemm(A[by * bm, 0], Wu[0, bx * bn], acc_u, clear_accum=True)
-            for i, j in T.Parallel(bm, bn):
-                g = acc_g[i, j]
-                H[by * bm + i, bx * bn + j] = T.Cast(
-                    "float16", (g / (1.0 + T.exp(-g))) * acc_u[i, j]
-                )
+            T.copy(acc_g, G[by * bm, bx * bn])
+            T.copy(acc_u, U[by * bm, bx * bn])
 
     return ffn_gate_up_kernel
 
@@ -124,7 +122,10 @@ def main() -> int:
     ap.add_argument("--down-bk", type=int, default=64)
     ap.add_argument("--down-threads", type=int, default=64)
     ap.add_argument("--out-dir", type=Path, default=Path(__file__).resolve().parent / "out")
-    ap.add_argument("--fused-out", type=Path, default=None, help="optionally also emit old fused gate_up reference")
+    ap.add_argument("--fused-out", type=Path, default=None, help="optionally also emit fused gate_up reference")
+    ap.add_argument("--fused-bm", type=int, default=None)
+    ap.add_argument("--fused-bn", type=int, default=None)
+    ap.add_argument("--fused-threads", type=int, default=None)
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
 
@@ -144,7 +145,12 @@ def main() -> int:
         )
     emit_kernel(make_silu_mul_kernel(args.m * args.n, 256, 8), args.out_dir / "silu_mul.cl")
     if args.fused_out is not None:
-        emit_kernel(make_ffn_gate_up_kernel(args.m, args.n, args.k, args.gate_bm, args.gate_bn, args.gate_threads), args.fused_out)
+        fbm = args.fused_bm or args.gate_bm
+        fbn = args.fused_bn or args.gate_bn
+        fthreads = args.fused_threads or ((fbm // 8) * (fbn // 8))
+        if fbm % 8 or fbn % 8 or fthreads != (fbm // 8) * (fbn // 8):
+            raise SystemExit(f"fused: threads == (bm/8)*(bn/8) = {(fbm // 8) * (fbn // 8)}")
+        emit_kernel(make_ffn_gate_up_kernel(args.m, args.n, args.k, fbm, fbn, fthreads), args.fused_out)
     if not args.skip_clang:
         for path in (args.out_dir / "ffn_gate.cl", args.out_dir / "ffn_up.cl", args.out_dir / "silu_mul.cl", args.out_dir / "ffn_down.cl"):
             rc = syntax_check(path)

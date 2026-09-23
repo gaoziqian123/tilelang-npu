@@ -11,7 +11,7 @@
 // Run (device, e.g. OnePlus 13):
 //   LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64 ./gemm_nt_test out/gemm_nt.cl gemm_nt_kernel_kernel
 //
-// Env: TL_M TL_N TL_K TL_BM TL_BN TL_THREADS TL_ITERS TL_B_LAYOUT=kn|nk
+// Env: TL_M TL_N TL_K TL_BM TL_BN TL_THREADS TL_ITERS TL_B_LAYOUT=kn|nk TL_B_TEX=1
 //      TL_CHECK=cosine|maxrel TL_COS_MIN (default 0.999) TL_CHECK_SAMPLES (0=all)
 
 #include <dlfcn.h>
@@ -34,9 +34,11 @@ typedef cl_int (*PFN_clBuildProgram)(cl_program, cl_uint, const cl_device_id *, 
 typedef cl_int (*PFN_clGetProgramBuildInfo)(cl_program, cl_device_id, cl_program_build_info, size_t, void *, size_t *);
 typedef cl_kernel (*PFN_clCreateKernel)(cl_program, const char *, cl_int *);
 typedef cl_mem (*PFN_clCreateBuffer)(cl_context, cl_mem_flags, size_t, void *, cl_int *);
+typedef cl_mem (*PFN_clCreateImage2D)(cl_context, cl_mem_flags, const cl_image_format *, size_t, size_t, size_t, void *, cl_int *);
 typedef cl_int (*PFN_clSetKernelArg)(cl_kernel, cl_uint, size_t, const void *);
 typedef cl_int (*PFN_clEnqueueNDRangeKernel)(cl_command_queue, cl_kernel, cl_uint, const size_t *, const size_t *, const size_t *, cl_uint, const cl_event *, cl_event *);
 typedef cl_int (*PFN_clEnqueueWriteBuffer)(cl_command_queue, cl_mem, cl_bool, size_t, size_t, const void *, cl_uint, const cl_event *, cl_event *);
+typedef cl_int (*PFN_clEnqueueWriteImage)(cl_command_queue, cl_mem, cl_bool, const size_t *, const size_t *, size_t, size_t, const void *, cl_uint, const cl_event *, cl_event *);
 typedef cl_int (*PFN_clEnqueueReadBuffer)(cl_command_queue, cl_mem, cl_bool, size_t, size_t, void *, cl_uint, const cl_event *, cl_event *);
 typedef cl_int (*PFN_clFinish)(cl_command_queue);
 typedef cl_int (*PFN_clGetEventProfilingInfo)(cl_event, cl_profiling_info, size_t, void *, size_t *);
@@ -51,8 +53,8 @@ typedef cl_int (*PFN_clReleaseContext)(cl_context);
 DECL(clGetPlatformIDs); DECL(clGetDeviceIDs); DECL(clCreateContext);
 DECL(clCreateCommandQueueWithProperties); DECL(clCreateProgramWithSource);
 DECL(clBuildProgram); DECL(clGetProgramBuildInfo); DECL(clCreateKernel);
-DECL(clCreateBuffer); DECL(clSetKernelArg); DECL(clEnqueueNDRangeKernel);
-DECL(clEnqueueWriteBuffer); DECL(clEnqueueReadBuffer); DECL(clFinish);
+DECL(clCreateBuffer); DECL(clCreateImage2D); DECL(clSetKernelArg); DECL(clEnqueueNDRangeKernel);
+DECL(clEnqueueWriteBuffer); DECL(clEnqueueWriteImage); DECL(clEnqueueReadBuffer); DECL(clFinish);
 DECL(clGetEventProfilingInfo); DECL(clReleaseEvent);
 DECL(clReleaseMemObject); DECL(clReleaseKernel); DECL(clReleaseProgram);
 DECL(clReleaseCommandQueue); DECL(clReleaseContext);
@@ -69,8 +71,8 @@ static void load_cl(void) {
     GET(clGetPlatformIDs); GET(clGetDeviceIDs); GET(clCreateContext);
     GET(clCreateCommandQueueWithProperties); GET(clCreateProgramWithSource);
     GET(clBuildProgram); GET(clGetProgramBuildInfo); GET(clCreateKernel);
-    GET(clCreateBuffer); GET(clSetKernelArg); GET(clEnqueueNDRangeKernel);
-    GET(clEnqueueWriteBuffer); GET(clEnqueueReadBuffer); GET(clFinish);
+    GET(clCreateBuffer); GET(clCreateImage2D); GET(clSetKernelArg); GET(clEnqueueNDRangeKernel);
+    GET(clEnqueueWriteBuffer); GET(clEnqueueWriteImage); GET(clEnqueueReadBuffer); GET(clFinish);
     GET(clGetEventProfilingInfo); GET(clReleaseEvent);
     GET(clReleaseMemObject); GET(clReleaseKernel); GET(clReleaseProgram);
     GET(clReleaseCommandQueue); GET(clReleaseContext);
@@ -194,6 +196,8 @@ int main(int argc, char **argv) {
     const int iters = env_i("TL_ITERS", 20);
     const char *b_layout_env = getenv("TL_B_LAYOUT");
     const int b_kn = !b_layout_env || !strcmp(b_layout_env, "kn");
+    const int b_tex = getenv("TL_B_TEX") && strcmp(getenv("TL_B_TEX"), "0");
+    if (b_tex && (!b_kn || (N % 4) != 0)) { fprintf(stderr, "TL_B_TEX requires KN layout and N%%4==0\n"); exit(2); }
     const size_t nA = (size_t)M * K, nB = (size_t)N * K, nC = (size_t)M * N;
     uint32_t seed = 3;
     _Float16 *A = (_Float16 *)malloc(nA * sizeof(_Float16));
@@ -206,10 +210,25 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < nB; ++i) B[i] = rand_h(&seed);
     cl_int err;
     cl_mem bA = my_clCreateBuffer(s->ctx, CL_MEM_READ_ONLY, nA * sizeof(_Float16), NULL, &err); CK(err);
-    cl_mem bB = my_clCreateBuffer(s->ctx, CL_MEM_READ_ONLY, nB * sizeof(_Float16), NULL, &err); CK(err);
+    cl_mem bB = NULL;
+    if (b_tex) {
+        cl_image_format fmt;
+        memset(&fmt, 0, sizeof(fmt));
+        fmt.image_channel_order = CL_RGBA;
+        fmt.image_channel_data_type = CL_HALF_FLOAT;
+        bB = my_clCreateImage2D(s->ctx, CL_MEM_READ_ONLY, &fmt, (size_t)N / 4, (size_t)K, 0, NULL, &err); CK(err);
+    } else {
+        bB = my_clCreateBuffer(s->ctx, CL_MEM_READ_ONLY, nB * sizeof(_Float16), NULL, &err); CK(err);
+    }
     cl_mem bC = my_clCreateBuffer(s->ctx, CL_MEM_WRITE_ONLY, nC * sizeof(_Float16), NULL, &err); CK(err);
     CK(my_clEnqueueWriteBuffer(s->q, bA, CL_TRUE, 0, nA * sizeof(_Float16), A, 0, NULL, NULL));
-    CK(my_clEnqueueWriteBuffer(s->q, bB, CL_TRUE, 0, nB * sizeof(_Float16), B, 0, NULL, NULL));
+    if (b_tex) {
+        const size_t origin[3] = {0, 0, 0};
+        const size_t region[3] = {(size_t)N / 4, (size_t)K, 1};
+        CK(my_clEnqueueWriteImage(s->q, bB, CL_TRUE, origin, region, (size_t)N * sizeof(_Float16), 0, B, 0, NULL, NULL));
+    } else {
+        CK(my_clEnqueueWriteBuffer(s->q, bB, CL_TRUE, 0, nB * sizeof(_Float16), B, 0, NULL, NULL));
+    }
     CK(my_clSetKernelArg(s->kernel, 0, sizeof(bA), &bA));
     CK(my_clSetKernelArg(s->kernel, 1, sizeof(bB), &bB));
     CK(my_clSetKernelArg(s->kernel, 2, sizeof(bC), &bC));
@@ -238,8 +257,8 @@ int main(int argc, char **argv) {
     const double ms = profiling_ok ? event_ms / (double)iters : wall_ms;
     const double tflops = (2.0 * (double)M * (double)N * (double)K) / (ms * 1.0e9);
     CK(my_clEnqueueReadBuffer(s->q, bC, CL_TRUE, 0, nC * sizeof(_Float16), C, 0, NULL, NULL));
-    printf("GEMM M=%d N=%d K=%d BM=%d BN=%d TH=%d B_LAYOUT=%s iters=%d ms_iter %.3f tflops %.3f timing=%s wall_ms_iter %.3f\n",
-           M, N, K, BM, BN, THREADS, b_kn ? "kn" : "nk", iters, ms, tflops, profiling_ok ? "event" : "wall", wall_ms);
+    printf("GEMM M=%d N=%d K=%d BM=%d BN=%d TH=%d B_LAYOUT=%s B_TEX=%d iters=%d ms_iter %.3f tflops %.3f timing=%s wall_ms_iter %.3f\n",
+           M, N, K, BM, BN, THREADS, b_kn ? "kn" : "nk", b_tex, iters, ms, tflops, profiling_ok ? "event" : "wall", wall_ms);
 
     int rc = 0;
     if (nsamp > 0) {

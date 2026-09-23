@@ -8,7 +8,7 @@
 #endif
 
 __kernel void gemm_nt_kernel_kernel(__global half* restrict A, __global half* restrict B, __global half* restrict C);
-__kernel void gemm_nt_kernel_kernel(__global half* restrict A, __global half* restrict B, __global half* restrict C) { const int tl_gid0 = convert_int(get_group_id(0)); const int tl_gid1 = convert_int(get_group_id(1)); const int tl_lid0 = convert_int(get_local_id(0)); const int tl_wi_aff0 = ((tl_gid1 * 589824) + ((tl_lid0 >> 5) * 73728)); const int tl_wi_aff1 = ((tl_gid1 * 163840) + ((tl_lid0 >> 5) * 20480)); const int tl_wi_aff2 = ((tl_wi_aff0 + (tl_gid0 * 256)) + ((tl_lid0 & 31) * 8)); const int tl_wi_aff3 = ((tl_lid0 >> 5) * 256); const int tl_wi_aff4 = (tl_gid0 * 256); const int tl_wi_aff5 = (tl_lid0 * 8);
+__kernel void gemm_nt_kernel_kernel(__global half* restrict A, __global half* restrict B, __global half* restrict C) { const int tl_gid0 = convert_int(get_group_id(0)); const int tl_gid1 = convert_int(get_group_id(1)); const int tl_lid0 = convert_int(get_local_id(0)); const int tl_wi_aff0 = ((tl_gid1 * 163840) + ((tl_lid0 >> 5) * 20480)); const int tl_wi_aff1 = ((tl_gid1 * 589824) + ((tl_lid0 >> 5) * 73728)); const int tl_wi_aff2 = ((tl_wi_aff1 + (tl_gid0 * 256)) + ((tl_lid0 & 31) * 8)); const int tl_wi_aff3 = ((tl_lid0 >> 5) * 256); const int tl_wi_aff4 = (tl_gid0 * 256); const int tl_wi_aff5 = (tl_lid0 * 8);
   float8 acc_1_0;
   float8 acc_1_1;
   float8 acc_1_2;
@@ -33,7 +33,7 @@ __kernel void gemm_nt_kernel_kernel(__global half* restrict A, __global half* re
   acc_1_6 = ((float8)(broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6));
   float broadcast_var_7 = 0.000000e+00f;
   acc_1_7 = ((float8)(broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7));
-  for (int pos4 = 0; pos4 < 640; ++pos4) { const int tl_loop_aff0 = (tl_wi_aff1 + (pos4 * 4)); const int tl_loop_aff1 = (((pos4 * 36864) + tl_wi_aff4) + tl_wi_aff5);
+  for (int pos4 = 0; pos4 < 640; ++pos4) { const int tl_loop_aff0 = (tl_wi_aff0 + (pos4 * 4)); const int tl_loop_aff1 = (((pos4 * 36864) + tl_wi_aff4) + tl_wi_aff5);
     float4 av_1[8];
     float8 bv_1[4];
     av_1[0] = (convert_float4(vload4(0, A + tl_loop_aff0)));

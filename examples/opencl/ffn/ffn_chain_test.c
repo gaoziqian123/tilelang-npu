@@ -15,6 +15,8 @@
 //
 // Env: TL_M TL_K TL_FF TL_N2 TL_THREADS TL_ITERS TL_CHECK_SAMPLES (256; 0=all)
 //      TL_{GATE,UP,DOWN}_{BM,BN,THREADS} override per-stage launch shapes.
+//      TL_FUSED_GATE_UP=1 treats argv[1] as a fused gate+up kernel
+//      (emitted TileLang ABI: A,G,U,Wg,Wu).
 //      Full fp64 FFN reference is very slow; for routine validation prefer a
 //      large sample (e.g. TL_CHECK_SAMPLES=8192) over TL_CHECK_SAMPLES=0.
 
@@ -248,6 +250,7 @@ int main(int argc, char **argv) {
     const int DOWN_THREADS = env_i("TL_DOWN_THREADS", THREADS);
     const int iters = env_i("TL_ITERS", 10);
     const int nsamp = env_i_allow_zero("TL_CHECK_SAMPLES", 256);
+    const int fused_gate_up = env_i_allow_zero("TL_FUSED_GATE_UP", 0);
 
     load_cl();
     cl_uint np = 0, nd = 0;
@@ -285,11 +288,11 @@ int main(int argc, char **argv) {
     CK(my_clEnqueueWriteBuffer(q, bWd, CL_TRUE, 0, nWd * 2, Wd, 0, NULL, NULL));
 
     cl_program pGate = build_prog(ctx, gate_cl, "gate");
-    cl_program pUp = (strcmp(up_cl, gate_cl) == 0) ? pGate : build_prog(ctx, up_cl, "up");
+    cl_program pUp = (fused_gate_up || strcmp(up_cl, gate_cl) == 0) ? pGate : build_prog(ctx, up_cl, "up");
     cl_program pSilu = build_prog(ctx, silu_cl, "silu");
     cl_program pDown = build_prog(ctx, down_cl, "down");
-    cl_kernel kGate = my_clCreateKernel(pGate, "gemm_nt_kernel_kernel", &err); CK(err);
-    cl_kernel kUp = my_clCreateKernel(pUp, "gemm_nt_kernel_kernel", &err); CK(err);
+    cl_kernel kGate = my_clCreateKernel(pGate, fused_gate_up ? "ffn_gate_up_kernel_kernel" : "gemm_nt_kernel_kernel", &err); CK(err);
+    cl_kernel kUp = fused_gate_up ? NULL : my_clCreateKernel(pUp, "gemm_nt_kernel_kernel", &err); if (!fused_gate_up) { CK(err); }
     cl_kernel kSilu = my_clCreateKernel(pSilu, "silu_mul_kernel_kernel", &err); CK(err);
     cl_kernel kDown = my_clCreateKernel(pDown, "gemm_nt_kernel_kernel", &err); CK(err);
 
@@ -307,16 +310,26 @@ int main(int argc, char **argv) {
     for (int it = 0; it < iters; ++it) {
         cl_event e;
         CK(my_clSetKernelArg(kGate, 0, sizeof(bA), &bA));
-        CK(my_clSetKernelArg(kGate, 1, sizeof(bWg), &bWg));
-        CK(my_clSetKernelArg(kGate, 2, sizeof(bG), &bG));
+        if (fused_gate_up) {
+            /* TileLang orders the fused signature as (A, G, U, Wg, Wu). */
+            CK(my_clSetKernelArg(kGate, 1, sizeof(bG), &bG));
+            CK(my_clSetKernelArg(kGate, 2, sizeof(bU), &bU));
+            CK(my_clSetKernelArg(kGate, 3, sizeof(bWg), &bWg));
+            CK(my_clSetKernelArg(kGate, 4, sizeof(bWu), &bWu));
+        } else {
+            CK(my_clSetKernelArg(kGate, 1, sizeof(bWg), &bWg));
+            CK(my_clSetKernelArg(kGate, 2, sizeof(bG), &bG));
+        }
         CK(my_clEnqueueNDRangeKernel(q, kGate, 2, NULL, gg, lgate, 0, NULL, &e));
         CK(my_clFinish(q)); ms_gate += ev_ms(e); my_clReleaseEvent(e);
 
-        CK(my_clSetKernelArg(kUp, 0, sizeof(bA), &bA));
-        CK(my_clSetKernelArg(kUp, 1, sizeof(bWu), &bWu));
-        CK(my_clSetKernelArg(kUp, 2, sizeof(bU), &bU));
-        CK(my_clEnqueueNDRangeKernel(q, kUp, 2, NULL, gu, lup, 0, NULL, &e));
-        CK(my_clFinish(q)); ms_up += ev_ms(e); my_clReleaseEvent(e);
+        if (!fused_gate_up) {
+            CK(my_clSetKernelArg(kUp, 0, sizeof(bA), &bA));
+            CK(my_clSetKernelArg(kUp, 1, sizeof(bWu), &bWu));
+            CK(my_clSetKernelArg(kUp, 2, sizeof(bU), &bU));
+            CK(my_clEnqueueNDRangeKernel(q, kUp, 2, NULL, gu, lup, 0, NULL, &e));
+            CK(my_clFinish(q)); ms_up += ev_ms(e); my_clReleaseEvent(e);
+        }
 
         CK(my_clSetKernelArg(kSilu, 0, sizeof(bG), &bG));
         CK(my_clSetKernelArg(kSilu, 1, sizeof(bH), &bH));
@@ -334,8 +347,8 @@ int main(int argc, char **argv) {
     const double ms_total = ms_gate + ms_up + ms_silu + ms_down;
     const double tflops = (6.0 * (double)M * (double)FF * (double)K +
                            2.0 * (double)M * (double)FF * (double)N2) / (ms_total * 1.0e9);
-    printf("FFN_CHAIN M=%d FF=%d K=%d iters=%d gate %.3f up %.3f silu %.3f down %.3f total %.3f ms tflops %.3f\n",
-           M, FF, K, iters, ms_gate, ms_up, ms_silu, ms_down, ms_total, tflops);
+    printf("FFN_CHAIN M=%d FF=%d K=%d iters=%d%s gate %.3f up %.3f silu %.3f down %.3f total %.3f ms tflops %.3f\n",
+           M, FF, K, iters, fused_gate_up ? " fused_gate_up" : "", ms_gate, ms_up, ms_silu, ms_down, ms_total, tflops);
 
     CK(my_clEnqueueReadBuffer(q, bG, CL_TRUE, 0, nH * 2, G, 0, NULL, NULL));
     CK(my_clEnqueueReadBuffer(q, bU, CL_TRUE, 0, nH * 2, U, 0, NULL, NULL));
@@ -352,7 +365,7 @@ int main(int argc, char **argv) {
     my_clReleaseMemObject(bA); my_clReleaseMemObject(bWg); my_clReleaseMemObject(bWu);
     my_clReleaseMemObject(bWd); my_clReleaseMemObject(bG); my_clReleaseMemObject(bU);
     my_clReleaseMemObject(bH); my_clReleaseMemObject(bO);
-    my_clReleaseKernel(kGate); my_clReleaseKernel(kUp); my_clReleaseKernel(kSilu); my_clReleaseKernel(kDown);
+    my_clReleaseKernel(kGate); if (kUp) my_clReleaseKernel(kUp); my_clReleaseKernel(kSilu); my_clReleaseKernel(kDown);
     my_clReleaseProgram(pGate); if (pUp != pGate) my_clReleaseProgram(pUp); my_clReleaseProgram(pSilu); my_clReleaseProgram(pDown);
     my_clReleaseCommandQueue(q); my_clReleaseContext(ctx);
     free(A); free(Wg); free(Wu); free(Wd); free(G); free(U); free(H); free(out);

@@ -115,6 +115,7 @@ def main() -> int:
     ap.add_argument("--b-layout", choices=("kn", "nk"), default="kn")
     ap.add_argument("--accum", choices=("fp32", "fp16", "chunk16"), default="fp16")
     ap.add_argument("--chunk-k", type=int, default=256)
+    ap.add_argument("--texture-b", action="store_true", help="emit GR-GEMM with B read from an RGBA half image (KN layout only)")
     ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent / "out" / "gemm_nt.cl")
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
@@ -127,6 +128,11 @@ def main() -> int:
     accum_dtype = {"fp16": "float16", "fp32": "float32", "chunk16": "chunk16"}[args.accum]
     if accum_dtype == "chunk16" and args.k % args.chunk_k != 0:
         raise SystemExit("chunk16 requires K % chunk_k == 0")
+    if args.texture_b and args.b_layout != "kn":
+        raise SystemExit("--texture-b requires --b-layout kn")
+    old_tex = os.environ.get("TL_PATCH_B_TEX")
+    if args.texture_b:
+        os.environ["TL_PATCH_B_TEX"] = "1"
     with tvm.target.Target("opencl"), tvm.transform.PassContext(
         config={"tl.UnrollLoop": {"explicit_unroll": True, "unroll_local_access": True}}
     ):
@@ -136,6 +142,11 @@ def main() -> int:
             target="opencl",
             enable_device_compile=False,
         )
+    if args.texture_b:
+        if old_tex is None:
+            os.environ.pop("TL_PATCH_B_TEX", None)
+        else:
+            os.environ["TL_PATCH_B_TEX"] = old_tex
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(artifact.kernel_source, encoding="utf-8")
     print(f"SELECTED_PATH grgemm")
