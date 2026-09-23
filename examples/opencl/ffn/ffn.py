@@ -1,11 +1,8 @@
-"""Fused FFN gate/up kernel for Adreno OpenCL via TileLang GR GEMM.
+"""Split FFN-chain kernels for Adreno OpenCL via TileLang GR GEMM.
 
-Computes H[m, n] = silu(sum_k x[m, k] * Wg[k, n]) * (sum_k x[m, k] * Wu[k, n])
-in one kernel: two GR fp16 GEMMs (direct-global vector loads, 8x8-per-thread
-fp32 accumulators) with a fused silu-mul epilogue writing H as fp16.
-
-The down projection out = H @ Wd is a plain GR GEMM and is emitted/tested via
-examples/opencl/gemm/gemm_nt.py + gemm_nt_test.c.
+Shipping path: G = A @ Wg, U = A @ Wu, H = silu(G) * U, out = H @ Wd,
+emitted as four serial OpenCL kernels. The old fused gate/up factory remains as
+a reference only.
 
 Qwen3.5-4B shapes: M=960 (prompt960), K=2560 (EMBD), N=9216 (FF).
 """
@@ -26,6 +23,16 @@ import tilelang
 import tilelang.opencl  # noqa: F401 - registers OpenCL TileOp implementations
 from tilelang import tvm
 import tilelang.language as T
+
+GEMM_DIR = REPO_ROOT / "examples" / "opencl" / "gemm"
+if str(GEMM_DIR) not in sys.path:
+    sys.path.insert(0, str(GEMM_DIR))
+from gemm_nt import make_grgemm_kernel  # noqa: E402
+
+FFN_DIR = REPO_ROOT / "examples" / "opencl" / "ffn"
+if str(FFN_DIR) not in sys.path:
+    sys.path.insert(0, str(FFN_DIR))
+from silu_mul import make_silu_mul_kernel  # noqa: E402
 
 PASS_CFG = {"tl.UnrollLoop": {"explicit_unroll": True, "unroll_local_access": True}}
 
@@ -88,37 +95,61 @@ def syntax_check(path: Path) -> int | None:
     return res.returncode
 
 
+def emit_kernel(func, out: Path) -> None:
+    with tvm.target.Target("opencl"), tvm.transform.PassContext(config=PASS_CFG):
+        artifact = tilelang.lower(func, target="opencl", enable_device_compile=False)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(artifact.kernel_source, encoding="utf-8")
+    print(f"SOURCE_PATH {out}")
+    print(f"SOURCE_LINES {len(artifact.kernel_source.splitlines())}")
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Emit the TileLang fused FFN gate/up OpenCL kernel.")
+    ap = argparse.ArgumentParser(description="Emit the TileLang split FFN-chain OpenCL kernels.")
     ap.add_argument("--m", type=int, default=960)
-    ap.add_argument("--n", type=int, default=9216)
+    ap.add_argument("--n", type=int, default=9216, help="FFN hidden width")
     ap.add_argument("--k", type=int, default=2560)
-    ap.add_argument("--bm", type=int, default=32)
-    ap.add_argument("--bn", type=int, default=128)
-    ap.add_argument("--threads", type=int, default=64)
-    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent / "out" / "ffn_gate_up.cl")
+    ap.add_argument("--n2", type=int, default=2560, help="down output width")
+    # Tuned by examples/opencl/tuner/tune_ffn.py; see tuner/out/ffn_cd_mvp/final_config.json.
+    ap.add_argument("--gate-bm", type=int, default=64)
+    ap.add_argument("--gate-bn", type=int, default=256)
+    ap.add_argument("--gate-bk", type=int, default=16)
+    ap.add_argument("--gate-threads", type=int, default=256)
+    ap.add_argument("--up-bm", type=int, default=64)
+    ap.add_argument("--up-bn", type=int, default=256)
+    ap.add_argument("--up-bk", type=int, default=64)
+    ap.add_argument("--up-threads", type=int, default=256)
+    ap.add_argument("--down-bm", type=int, default=32)
+    ap.add_argument("--down-bn", type=int, default=128)
+    ap.add_argument("--down-bk", type=int, default=64)
+    ap.add_argument("--down-threads", type=int, default=64)
+    ap.add_argument("--out-dir", type=Path, default=Path(__file__).resolve().parent / "out")
+    ap.add_argument("--fused-out", type=Path, default=None, help="optionally also emit old fused gate_up reference")
     ap.add_argument("--skip-clang", action="store_true")
     args = ap.parse_args()
 
-    if args.bm % 8 or args.bn % 8:
-        raise SystemExit("grgemm requires bm%8==0, bn%8==0")
-    if args.threads != (args.bm // 8) * (args.bn // 8):
-        raise SystemExit(f"grgemm requires threads == (bm/8)*(bn/8) = {(args.bm // 8) * (args.bn // 8)}")
-
-    with tvm.target.Target("opencl"), tvm.transform.PassContext(config=PASS_CFG):
-        artifact = tilelang.lower(
-            make_ffn_gate_up_kernel(args.m, args.n, args.k, args.bm, args.bn, args.threads),
-            target="opencl",
-            enable_device_compile=False,
+    stages = [
+        ("gate", args.gate_bm, args.gate_bn, args.gate_bk, args.gate_threads, args.k, args.n),
+        ("up", args.up_bm, args.up_bn, args.up_bk, args.up_threads, args.k, args.n),
+        ("down", args.down_bm, args.down_bn, args.down_bk, args.down_threads, args.n, args.n2),
+    ]
+    for name, bm, bn, bk, threads, kdim, ndim in stages:
+        if bm % 8 or bn % 8 or bk % 4:
+            raise SystemExit(f"{name}: grgemm requires bm%8==0, bn%8==0, bk%4==0")
+        if threads != (bm // 8) * (bn // 8):
+            raise SystemExit(f"{name}: threads == (bm/8)*(bn/8) = {(bm // 8) * (bn // 8)}")
+        emit_kernel(
+            make_grgemm_kernel(args.m, ndim, kdim, bm, bn, bk, threads, "kn", "float32", 256),
+            args.out_dir / f"ffn_{name}.cl",
         )
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(artifact.kernel_source, encoding="utf-8")
-    print(f"SOURCE_PATH {args.out}")
-    print(f"SOURCE_LINES {len(artifact.kernel_source.splitlines())}")
+    emit_kernel(make_silu_mul_kernel(args.m * args.n, 256, 8), args.out_dir / "silu_mul.cl")
+    if args.fused_out is not None:
+        emit_kernel(make_ffn_gate_up_kernel(args.m, args.n, args.k, args.gate_bm, args.gate_bn, args.gate_threads), args.fused_out)
     if not args.skip_clang:
-        rc = syntax_check(args.out)
-        if rc not in (0, None):
-            raise SystemExit(f"clang syntax failed: {rc}")
+        for path in (args.out_dir / "ffn_gate.cl", args.out_dir / "ffn_up.cl", args.out_dir / "silu_mul.cl", args.out_dir / "ffn_down.cl"):
+            rc = syntax_check(path)
+            if rc not in (0, None):
+                raise SystemExit(f"clang syntax failed for {path}: {rc}")
     return 0
 
 

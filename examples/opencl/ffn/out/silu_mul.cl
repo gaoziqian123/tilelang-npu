@@ -8,10 +8,10 @@
 #endif
 
 __kernel void silu_mul_kernel_kernel(__global half* restrict G, __global half* restrict H, __global half* restrict U);
-__kernel void silu_mul_kernel_kernel(__global half* restrict G, __global half* restrict H, __global half* restrict U) {
+__kernel void silu_mul_kernel_kernel(__global half* restrict G, __global half* restrict H, __global half* restrict U) { const int tl_gid0 = convert_int(get_group_id(0)); const int tl_lid0 = convert_int(get_local_id(0)); const int tl_wi_aff0 = (tl_gid0 * 2048); const int tl_wi_aff1 = (tl_lid0 * 8);
   for (int i = 0; i < 8; ++i) {
-    float g = (convert_float(G[((((convert_int(get_group_id(0))) * 2048) + ((convert_int(get_local_id(0))) * 8)) + i)]));
-    H[((((convert_int(get_group_id(0))) * 2048) + ((convert_int(get_local_id(0))) * 8)) + i)] = (convert_half(((g / (1.000000e+00f + exp((g * -1.000000e+00f)))) * (convert_float(U[((((convert_int(get_group_id(0))) * 2048) + ((convert_int(get_local_id(0))) * 8)) + i)])))));
+    float g = (convert_float(G[((tl_wi_aff0 + tl_wi_aff1) + i)]));
+    H[((tl_wi_aff0 + tl_wi_aff1) + i)] = (convert_half(((g / (1.000000e+00f + exp((g * -1.000000e+00f)))) * (convert_float(U[((tl_wi_aff0 + tl_wi_aff1) + i)])))));
   }
 }
 

@@ -13,8 +13,10 @@
 //   LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64 ./ffn_chain_test out/ffn_gate.cl out/silu_mul.cl out/ffn_down.cl
 //   LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64 ./ffn_chain_test gate.cl up.cl silu.cl down.cl
 //
-// Env: TL_M TL_K TL_FF TL_N2 TL_THREADS TL_ITERS TL_CHECK_SAMPLES (256)
+// Env: TL_M TL_K TL_FF TL_N2 TL_THREADS TL_ITERS TL_CHECK_SAMPLES (256; 0=all)
 //      TL_{GATE,UP,DOWN}_{BM,BN,THREADS} override per-stage launch shapes.
+//      Full fp64 FFN reference is very slow; for routine validation prefer a
+//      large sample (e.g. TL_CHECK_SAMPLES=8192) over TL_CHECK_SAMPLES=0.
 
 #include <dlfcn.h>
 #include <math.h>
@@ -117,6 +119,14 @@ static int env_i(const char *name, int def) {
     return (end && *end == 0 && v > 0) ? (int)v : def;
 }
 
+static int env_i_allow_zero(const char *name, int def) {
+    const char *s = getenv(name);
+    if (!s || !s[0]) return def;
+    char *end = NULL;
+    long v = strtol(s, &end, 10);
+    return (end && *end == 0 && v >= 0) ? (int)v : def;
+}
+
 static cl_platform_id g_pf;
 static cl_device_id g_dev;
 
@@ -146,12 +156,14 @@ static double ev_ms(cl_event ev) {
 
 static void check_stage(const char *tag, const _Float16 *got_buf, size_t total,
                         double (*ref_fn)(size_t, void *), void *ctx, int nsamp) {
+    int full_check = (nsamp == 0);
+    if (full_check) nsamp = (int)total;
     double *ref = (double *)malloc((size_t)nsamp * sizeof(double));
     _Float16 *got = (_Float16 *)malloc((size_t)nsamp * sizeof(_Float16));
     uint32_t sidx = 4242;
     size_t *idxs = (size_t *)malloc((size_t)nsamp * sizeof(size_t));
     for (int t = 0; t < nsamp; ++t) {
-        size_t idx = (size_t)(lcg_next(&sidx) % (uint32_t)total);
+        size_t idx = full_check ? (size_t)t : (size_t)(lcg_next(&sidx) % (uint32_t)total);
         idxs[t] = idx;
         ref[t] = ref_fn(idx, ctx);
         got[t] = got_buf[idx];
@@ -167,8 +179,8 @@ static void check_stage(const char *tag, const _Float16 *got_buf, size_t total,
         if (r > max_rel) { max_rel = r; max_i = t; }
         if (r > 0.1) ++bad;
     }
-    printf("%s max_rel %.6g rms %.6g bad %zu/%d sample[%zu] got %.9g ref %.9g %s\n",
-           tag, max_rel, rms, bad, nsamp, idxs[max_i], (double)(float)got[max_i], ref[max_i],
+    printf("%s max_rel %.6g rms %.6g bad %zu/%d %s[%zu] got %.9g ref %.9g %s\n",
+           tag, max_rel, rms, bad, nsamp, full_check ? "full" : "sample", idxs[max_i], (double)(float)got[max_i], ref[max_i],
            bad == 0 ? "PASS" : "FAIL");
     free(ref); free(got); free(idxs);
 }
@@ -235,7 +247,7 @@ int main(int argc, char **argv) {
     const int UP_THREADS = env_i("TL_UP_THREADS", GATE_THREADS);
     const int DOWN_THREADS = env_i("TL_DOWN_THREADS", THREADS);
     const int iters = env_i("TL_ITERS", 10);
-    const int nsamp = env_i("TL_CHECK_SAMPLES", 256);
+    const int nsamp = env_i_allow_zero("TL_CHECK_SAMPLES", 256);
 
     load_cl();
     cl_uint np = 0, nd = 0;
