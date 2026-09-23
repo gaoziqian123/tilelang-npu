@@ -241,13 +241,16 @@ int main(int argc, char **argv) {
 
     const int M = env_i("TL_M", 960), K = env_i("TL_K", 2560);
     const int FF = env_i("TL_FF", 9216), N2 = env_i("TL_N2", 2560);
-    const int THREADS = env_i("TL_THREADS", 64);
-    const int GATE_BM = env_i("TL_GATE_BM", 32), GATE_BN = env_i("TL_GATE_BN", 128);
+    /* These launch defaults must match the tile emitted by ffn.py.  If env
+       overrides are used, they must match the .cl files being loaded; a grid /
+       local-size mismatch both corrupts kernel output and makes the run slower. */
+    const int THREADS = env_i("TL_THREADS", 256);
+    const int GATE_BM = env_i("TL_GATE_BM", 64), GATE_BN = env_i("TL_GATE_BN", 256);
     const int UP_BM = env_i("TL_UP_BM", GATE_BM), UP_BN = env_i("TL_UP_BN", GATE_BN);
     const int DOWN_BM = env_i("TL_DOWN_BM", 32), DOWN_BN = env_i("TL_DOWN_BN", 128);
     const int GATE_THREADS = env_i("TL_GATE_THREADS", THREADS);
     const int UP_THREADS = env_i("TL_UP_THREADS", GATE_THREADS);
-    const int DOWN_THREADS = env_i("TL_DOWN_THREADS", THREADS);
+    const int DOWN_THREADS = env_i("TL_DOWN_THREADS", 64);
     const int iters = env_i("TL_ITERS", 10);
     const int nsamp = env_i_allow_zero("TL_CHECK_SAMPLES", 256);
     const int fused_gate_up = env_i_allow_zero("TL_FUSED_GATE_UP", 0);
@@ -347,8 +350,10 @@ int main(int argc, char **argv) {
     const double ms_total = ms_gate + ms_up + ms_silu + ms_down;
     const double tflops = (4.0 * (double)M * (double)FF * (double)K +
                            2.0 * (double)M * (double)FF * (double)N2) / (ms_total * 1.0e9);
-    printf("FFN_CHAIN M=%d FF=%d K=%d iters=%d%s gate %.3f up %.3f silu %.3f down %.3f total %.3f ms tflops %.3f\n",
-           M, FF, K, iters, fused_gate_up ? " fused_gate_up" : "", ms_gate, ms_up, ms_silu, ms_down, ms_total, tflops);
+    printf("FFN_CHAIN M=%d FF=%d K=%d iters=%d%s gate_bm=%d gate_bn=%d gate_th=%d up_bm=%d up_bn=%d up_th=%d down_bm=%d down_bn=%d down_th=%d gate %.3f up %.3f silu %.3f down %.3f total %.3f ms tflops %.3f\n",
+           M, FF, K, iters, fused_gate_up ? " fused_gate_up" : "",
+           GATE_BM, GATE_BN, GATE_THREADS, UP_BM, UP_BN, UP_THREADS, DOWN_BM, DOWN_BN, DOWN_THREADS,
+           ms_gate, ms_up, ms_silu, ms_down, ms_total, tflops);
 
     CK(my_clEnqueueReadBuffer(q, bG, CL_TRUE, 0, nH * 2, G, 0, NULL, NULL));
     CK(my_clEnqueueReadBuffer(q, bU, CL_TRUE, 0, nH * 2, U, 0, NULL, NULL));
