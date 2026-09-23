@@ -153,17 +153,17 @@ def lower_gr(b_layout: str, accum: str = "float16") -> str:
 def assert_lowered_gr_fp16_shape(src: str, b_layout: str) -> None:
     """Shape gate for the GR (global-read) fp16 lowering: direct global vector
     loads + mad inner chain + rolled K loop, matching the 1.35T anchor form."""
-    if "half8 acc[8]" not in src:
+    if "half8 acc[8]" not in src and "half8 acc_1[8]" not in src:
         raise AssertionError("GR: missing float16x8 accumulator shape")
     if "mad(" not in src:
         raise AssertionError("GR: fp16 inner loop must use mad() (mul+add does not fuse on Adreno)")
-    if "vload4(0, A +" not in src:
+    if "vload4(0, A +" not in src and "vload4(0, tl_Ap" not in src:
         raise AssertionError("GR: missing direct global half4 A load")
     if b_layout == "kn":
-        if "vload8(0, B +" not in src:
+        if "vload8(0, B +" not in src and "vload8(0, tl_Bp" not in src:
             raise AssertionError("GR: missing direct global half8 B load")
     else:
-        if "vload4(0, B +" not in src:
+        if "vload4(0, B +" not in src and "vload4(0, tl_Bp" not in src:
             raise AssertionError("GR: missing nk B half4 gather load")
     if "A_frag" in src or "B_frag" in src:
         raise AssertionError("GR: A/B must not be staged into fragments")

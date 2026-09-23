@@ -576,9 +576,398 @@ def _patch_opencl_typed_shared(source: str) -> str:
     return out
 
 
+def _patch_opencl_workitem_id_hoist(source: str) -> str:
+    """Hoist repeated OpenCL work-item id builtins into kernel-local consts.
+
+    TileLang's generated address expressions can repeat
+    ``convert_int(get_group_id(N))`` / ``convert_int(get_local_id(N))`` in every
+    vector load.  Adreno does not reliably CSE those builtin calls inside large
+    unrolled GEMM loops, so keep this intentionally small textual peephole: one
+    const int per used id at kernel entry, then replace exact occurrences.
+    """
+
+    gid_re = re.compile(r"\(convert_int\(get_(group|local)_id\(([0-2])\)\)\)")
+    kernel_re = re.compile(r"(?m)^(__kernel\s+void\s+\w+\s*\([^\n]*\)\s*)\{")
+
+    pieces: list[str] = []
+    pos = 0
+    while True:
+        km = kernel_re.search(source, pos)
+        if not km:
+            pieces.append(source[pos:])
+            break
+        next_km = kernel_re.search(source, km.end())
+        end = next_km.start() if next_km else len(source)
+        chunk = source[km.start():end]
+        used = sorted({(kind, axis) for kind, axis in gid_re.findall(chunk)})
+        pieces.append(source[pos:km.start()])
+        if not used:
+            pieces.append(chunk)
+        else:
+            decls = " ".join(
+                f"const int tl_{'gid' if kind == 'group' else 'lid'}{axis} = convert_int(get_{kind}_id({axis}));"
+                for kind, axis in used
+            )
+            patched = chunk[: km.end() - km.start()] + " " + decls + chunk[km.end() - km.start():]
+            for kind, axis in used:
+                name = f"tl_{'gid' if kind == 'group' else 'lid'}{axis}"
+                patched = patched.replace(f"(convert_int(get_{kind}_id({axis})))", name)
+            pieces.append(patched)
+        pos = end
+    return "".join(pieces)
+
+
+def _patch_opencl_workitem_affine_hoist(source: str) -> str:
+    """Hoist repeated affine work-item address bases.
+
+    The id-only hoist above removes repeated builtin calls, but GR GEMM still
+    prints the same workgroup/lane affine bases in every unrolled vector load,
+    e.g. ``((tl_gid1 * 81920) + ((tl_lid0 >> 4) * 20480))``.  Keep this pass
+    textual and conservative: only exact integer expressions composed of the
+    already-hoisted ``tl_gid*``/``tl_lid*`` variables are considered, and only
+    if they occur at least twice within one kernel.
+    """
+
+    kernel_re = re.compile(r"(?m)^(__kernel\s+void\s+\w+\s*\([^\n]*\)\s*)\{")
+    # Longest/most valuable forms first; shorter subterms are then counted on
+    # the already-rewritten body.  The patterns intentionally match the legacy
+    # OpenCL printer's spaced form instead of trying to parse C.
+    patterns = [
+        re.compile(r"\(\(tl_gid\d+ \* \d+\) \+ \(\(tl_lid\d+ >> \d+\) \* \d+\)\)"),
+        re.compile(r"\(\(tl_wi_aff\d+ \+ \(tl_gid\d+ \* \d+\)\) \+ \(\(tl_lid\d+ & \d+\) \* \d+\)\)"),
+        re.compile(r"\(\(tl_lid\d+ >> \d+\) \* \d+\)"),
+        re.compile(r"\(\(tl_lid\d+ & \d+\) \* \d+\)"),
+        re.compile(r"\(tl_gid\d+ \* \d+\)"),
+        re.compile(r"\(tl_lid\d+ \* \d+\)"),
+    ]
+
+    pieces: list[str] = []
+    pos = 0
+    while True:
+        km = kernel_re.search(source, pos)
+        if not km:
+            pieces.append(source[pos:])
+            break
+        next_km = kernel_re.search(source, km.end())
+        end = next_km.start() if next_km else len(source)
+        chunk = source[km.start():end]
+        pieces.append(source[pos:km.start()])
+
+        insert = km.end() - km.start()
+        id_decls = re.match(
+            r"(?:\s*const int tl_(?:g|l)id[0-2] = convert_int\(get_(?:group|local)_id\([0-2]\)\);)*",
+            chunk[insert:],
+        )
+        if id_decls is not None:
+            insert += id_decls.end()
+        prefix, body = chunk[:insert], chunk[insert:]
+        decls: list[str] = []
+        cse_idx = 0
+        for pat in patterns:
+            exprs = sorted(set(pat.findall(body)), key=len, reverse=True)
+            for expr in exprs:
+                if body.count(expr) < 2:
+                    continue
+                name = f"tl_wi_aff{cse_idx}"
+                cse_idx += 1
+                decls.append(f" const int {name} = {expr};")
+                body = body.replace(expr, name)
+        if decls:
+            pieces.append(prefix + "".join(decls) + body)
+        else:
+            pieces.append(chunk)
+        pos = end
+    return "".join(pieces)
+
+
+def _patch_opencl_loop_affine_hoist(source: str) -> str:
+    """Hoist repeated induction-variable address bases inside simple loops."""
+
+    loop_re = re.compile(r"(?ms)(?P<head>^\s*for \(int (?P<iv>\w+) = [^\n]+\) \{\n)(?P<body>.*?)(?P<tail>^\s*\})")
+    out: list[str] = []
+    pos = 0
+    for lm in loop_re.finditer(source):
+        out.append(source[pos:lm.start()])
+        iv = lm.group("iv")
+        body = lm.group("body")
+        patterns = [
+            re.compile(r"\(tl_wi_aff\d+ \+ \(" + re.escape(iv) + r" \* \d+\)\)"),
+            re.compile(r"\(\(\(" + re.escape(iv) + r" \* \d+\) \+ tl_wi_aff\d+\) \+ tl_wi_aff\d+\)"),
+            re.compile(r"\(" + re.escape(iv) + r" \* \d+\)"),
+        ]
+        decls: list[str] = []
+        cse_idx = 0
+        for pat in patterns:
+            exprs = sorted(set(pat.findall(body)), key=len, reverse=True)
+            for expr in exprs:
+                if body.count(expr) < 2:
+                    continue
+                name = f"tl_loop_aff{cse_idx}"
+                cse_idx += 1
+                decls.append(f" const int {name} = {expr};")
+                body = body.replace(expr, name)
+        if decls:
+            head = lm.group("head")
+            head = head[:-1] + "".join(decls) + "\n"
+            out.append(head + body + lm.group("tail"))
+        else:
+            out.append(lm.group(0))
+        pos = lm.end()
+    out.append(source[pos:])
+    return "".join(out)
+
+
+def _patch_opencl_grgemm_base_pointers(source: str) -> str:
+    """Rewrite GR GEMM address expressions through per-work-item base pointers."""
+
+    if "tl_wi_aff0" not in source or "tl_wi_aff1" not in source or "A_frag" in source or "B_frag" in source:
+        return source
+    kernel_re = re.compile(r"(?m)^(__kernel\s+void\s+\w+\s*\([^\n]*\)\s*)\{")
+    pieces: list[str] = []
+    pos = 0
+    while True:
+        km = kernel_re.search(source, pos)
+        if not km:
+            pieces.append(source[pos:])
+            break
+        next_km = kernel_re.search(source, km.end())
+        end = next_km.start() if next_km else len(source)
+        chunk = source[km.start():end]
+        pieces.append(source[pos:km.start()])
+
+        insert = km.end() - km.start()
+        decl_match = re.match(r"(?:\s*const int tl_[A-Za-z0-9_]+ = [^;]+;)*", chunk[insert:])
+        if decl_match is not None:
+            insert += decl_match.end()
+        prefix, body = chunk[:insert], chunk[insert:]
+        decls: list[str] = []
+        if "A + (tl_wi_aff0 +" in body:
+            decls.append(" __global half* tl_A_base = A + tl_wi_aff0;")
+            body = body.replace("A + (tl_wi_aff0 +", "tl_A_base + (")
+        if "A + tl_loop_aff0" in body:
+            body = re.sub(
+                r"(const int tl_loop_aff1 = [^;]+;)",
+                r"\1 __global half* tl_Ap = A + tl_loop_aff0; __global half* tl_Bp = B + (tl_loop_aff1 - tl_wi_aff2);",
+                body,
+                count=1,
+            )
+            body = body.replace("A + tl_loop_aff0", "tl_Ap")
+            body = body.replace("A + (tl_loop_aff0 +", "tl_Ap + (")
+            body = body.replace("B + (tl_loop_aff1 - tl_wi_aff2)", "tl_Bp")
+            body = re.sub(r"B \+ \(\(tl_loop_aff1 \+ (\d+)\) - tl_wi_aff2\)", r"tl_Bp + \1", body)
+            body = body.replace("__global half* tl_Ap = tl_Ap;", "__global half* tl_Ap = A + tl_loop_aff0;")
+            body = body.replace("__global half* tl_Bp = tl_Bp;", "__global half* tl_Bp = B + (tl_loop_aff1 - tl_wi_aff2);")
+        b_base_expr = "((tl_wi_aff3 + tl_wi_aff4) - tl_wi_aff2)"
+        if re.search(r"B \+ \(\(\(\(pos4 \* \d+\) \+ tl_wi_aff3\) \+ tl_wi_aff4\)", body):
+            decls.append(f" __global half* tl_B_base = B + {b_base_expr};")
+            body = re.sub(
+                r"B \+ \(\(\(\((pos4 \* \d+)\) \+ tl_wi_aff3\) \+ tl_wi_aff4\)\) - tl_wi_aff2\)",
+                r"tl_B_base + (\1)",
+                body,
+            )
+            body = re.sub(
+                r"B \+ \(\(\(\(\((pos4 \* \d+)\) \+ tl_wi_aff3\) \+ tl_wi_aff4\) \+ (\d+)\) - tl_wi_aff2\)",
+                r"tl_B_base + ((\1) + \2)",
+                body,
+            )
+        if "C + (tl_wi_aff1" in body:
+            decls.append(" __global half* tl_C_base = C + tl_wi_aff1;")
+            body = body.replace("C + (tl_wi_aff1", "tl_C_base + (")
+        if decls:
+            pieces.append(prefix + "".join(decls) + body)
+        else:
+            pieces.append(chunk)
+        pos = end
+    return "".join(pieces)
+
+
+def _patch_opencl_grgemm_epilogue_direct_store(source: str) -> str:
+    """Bypass GR-GEMM private C fragment arrays in the writeback epilogue.
+
+    GR GEMM lowering already keeps one vector accumulator per output row in
+    private SSA form, but the generic T.copy epilogue may spill those vectors
+    lane-by-lane into a private ``C_frag_*[64]`` and immediately read them back
+    for the final global ``vstore8``.  On Adreno that private-memory round trip
+    is expensive.  Fold only the exact, fully-unrolled pattern
+
+        C_frag[k*8+lane] = (acc).sL;
+        ... optional half C_local_cast + convert_half4(float4 C_frag) ...
+        vstore8(..., 0, C + row_addr);
+
+    into ``vstore8(convert_half8(acc), 0, addr)`` for fp32 accumulators or
+    ``vstore8(acc, 0, addr)`` for fp16 accumulators.
+
+    Guards are intentionally strict: this pass is limited to the GR GEMM
+    scaffold, requires all 64 fragment lanes to be written exactly once from
+    ordered vector accumulator lanes, accepts only the two known readback
+    shapes, and reverts unless the fragment/cast arrays have no other uses once
+    the replacement is applied.  Dead declarations are removed later by
+    _patch_opencl_unused_local_decls.
+    """
+
+    if "tl_wi_aff" not in source or "tl_loop_aff" not in source or "A_frag" in source or "B_frag" in source:
+        return source
+
+    frag_decls = re.findall(r"(?m)^\s*(float|half)\s+(C_frag_\w*)\[64\];\s*$", source)
+    if len(frag_decls) != 1:
+        return source
+    frag_ty, frag = frag_decls[0]
+
+    write_re = re.compile(
+        r"(?m)^(?P<line>\s*" + re.escape(frag) +
+        r"\[(?P<idx>\d+)\]\s*=\s*\((?P<acc>[^;]+)\)\.s(?P<lane>[0-7]);\s*)$"
+    )
+    writes = list(write_re.finditer(source))
+    if len(writes) != 64:
+        return source
+    by_idx: dict[int, tuple[str, int, str]] = {}
+    for m in writes:
+        idx = int(m.group("idx"))
+        lane = int(m.group("lane"))
+        acc = m.group("acc").strip()
+        if idx in by_idx:
+            return source
+        by_idx[idx] = (acc, lane, m.group("line"))
+    if set(by_idx) != set(range(64)):
+        return source
+
+    acc_by_off: dict[int, str] = {}
+    for off in range(0, 64, 8):
+        acc0 = by_idx[off][0]
+        for lane in range(8):
+            acc, lane_seen, _ = by_idx[off + lane]
+            if acc != acc0 or lane_seen != lane:
+                return source
+        acc_by_off[off] = acc0
+
+    used_offsets: set[int] = set()
+    replacements: list[tuple[str, str]] = []
+
+    if frag_ty == "half":
+        store_re = re.compile(
+            r"(?m)^(?P<line>\s*vstore8\(\(\*\(half8\*\)\(" + re.escape(frag) +
+            r" \+ (?P<off>\d+)\)\), 0, (?P<addr>[^;]+)\);\s*)$"
+        )
+        stores = list(store_re.finditer(source))
+        if len(stores) != 8:
+            return source
+        for m in stores:
+            off = int(m.group("off"))
+            if off not in acc_by_off or off in used_offsets:
+                return source
+            used_offsets.add(off)
+            replacements.append((m.group("line"), f"  vstore8({acc_by_off[off]}, 0, {m.group('addr')});"))
+    else:
+        # float fragment: each output row is converted through a short-lived
+        # half[8] cast array written by two convert_half4 stores then vstore8'd.
+        cast_re = re.compile(
+            r"(?ms)^(?P<block>\s*half\s+(?P<cast>C_local_cast\w*)\[8\];\s*\n"
+            r"\s*\(\*\(half4\*\)\((?P=cast) \+ 0\)\) = \(convert_half4\(\(\*\(float4\*\)\(" + re.escape(frag) + r" \+ (?P<off0>\d+)\)\)\)\);\s*\n"
+            r"\s*\(\*\(half4\*\)\((?P=cast) \+ 4\)\) = \(convert_half4\(\(\*\(float4\*\)\(" + re.escape(frag) + r" \+ (?P<off4>\d+)\)\)\)\);\s*\n"
+            r"\s*vstore8\(\(\*\(half8\*\)\((?P=cast) \+ 0\)\), 0, (?P<addr>[^;]+)\);\s*)$"
+        )
+        blocks = list(cast_re.finditer(source))
+        if len(blocks) != 8:
+            return source
+        for m in blocks:
+            off0 = int(m.group("off0"))
+            off4 = int(m.group("off4"))
+            cast = m.group("cast")
+            if off4 != off0 + 4 or off0 not in acc_by_off or off0 in used_offsets:
+                return source
+            # The cast array must appear only inside this recognized block.
+            if len(re.findall(r"\b" + re.escape(cast) + r"\b", source)) != 4:
+                return source
+            used_offsets.add(off0)
+            replacements.append((m.group("block"), f"  vstore8(convert_half8({acc_by_off[off0]}), 0, {m.group('addr')});"))
+
+    if used_offsets != set(range(0, 64, 8)):
+        return source
+
+    out = source
+    for _, _, line in by_idx.values():
+        out = out.replace(line + "\n", "", 1)
+    for old, new in replacements:
+        out = out.replace(old, new + "\n", 1)
+
+    scrub = out
+    scrub = re.sub(r"(?m)^\s*(?:float|half)\s+" + re.escape(frag) + r"\[64\];\s*$", "", scrub)
+    if re.search(r"\b" + re.escape(frag) + r"\b", scrub):
+        return source
+    if frag_ty == "float" and re.search(r"\bC_local_cast\w*\b", scrub):
+        return source
+    return out
+
+
+def _patch_opencl_unused_local_decls(source: str) -> str:
+    """Drop simple function-local declarations whose name is never referenced.
+
+    TVM/OpenCL lowering can leave behind dead private declarations after earlier
+    peepholes scalar-replace fragments (e.g. ``float C_frag[64];`` or
+    ``float8 acc_0;``).  Keep this deliberately textual and conservative:
+
+    - only one declarator per line, with an indented function-body style;
+    - only plain private scalar/vector types and constant-size arrays;
+    - no initializer (so deleting the line cannot drop side effects);
+    - delete only when the declared identifier has zero references elsewhere in
+      the whole source.
+    """
+
+    # Limit the experimental pass to the GR-GEMM lowering shape that emits the
+    # tl_wi_aff/tl_loop_aff address bases.  This keeps unrelated RR/FA kernels
+    # stable unless they later grow the same GR scaffold.
+    if "tl_wi_aff" not in source or "tl_loop_aff" not in source or "A_frag" in source or "B_frag" in source:
+        return source
+
+    decl_re = re.compile(
+        r"(?m)^(?P<indent>[ \t]+)"
+        r"(?P<type>(?:half|float|double|char|uchar|short|ushort|int|uint|long|ulong)(?:[2348]|16)?)"
+        r"\s+(?P<name>[A-Za-z_]\w*)"
+        r"(?:\s*\[\s*\d+\s*\])?\s*;\s*$"
+    )
+
+    out_parts: list[str] = []
+    pos = 0
+    for m in decl_re.finditer(source):
+        name = m.group("name")
+        # Exclude the declaration itself, then require no whole-token use.
+        rest = source[: m.start()] + source[m.end():]
+        if re.search(r"\b" + re.escape(name) + r"\b", rest):
+            continue
+        out_parts.append(source[pos:m.start()])
+        # Preserve the line break by skipping only the declaration text; the
+        # matched line includes no trailing newline under (?m)^...$, so consume
+        # one if present to avoid leaving blank lines.
+        pos = m.end()
+        if pos < len(source) and source[pos] == "\n":
+            pos += 1
+    if not out_parts:
+        return source
+    out_parts.append(source[pos:])
+    return "".join(out_parts)
+
+
 def build_opencl(mod, target):
     built = _raw_build_opencl(mod, target)
     source = built.inspect_source()
+    patched = _patch_opencl_workitem_id_hoist(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_workitem_affine_hoist(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_loop_affine_hoist(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_grgemm_base_pointers(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_grgemm_epilogue_direct_store(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_unused_local_decls(source)
+    if patched != source:
+        source = patched
     patched = _patch_opencl_private_accumulators(source)
     if patched != source:
         source = patched
@@ -601,6 +990,9 @@ def build_opencl(mod, target):
     if patched != source:
         source = patched
     patched = _patch_opencl_splat_mul(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_unused_local_decls(source)
     if patched != source:
         source = patched
     if source != built.inspect_source():
