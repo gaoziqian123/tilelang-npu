@@ -607,7 +607,7 @@ AutoTuner 的测量半边,而是把 OpenCL/手机测量流程工程化。
 - down 保持 `bm=32 bn=128`。
 
 结论:写回修复后 FFN 链已经贴近 per-gemm GR 速率上限(约 1.34T),tile 配置空间
-基本耗尽;继续下降只能靠结构手段,例如 gate+up 融合或 texture/image 路径。
+基本耗尽;后续结构手段(gate+up 融合、texture/image 路径)见 §14.6,均为阴性。
 `ffn.py` 默认值已写回。`ffn_chain_test` 的 `TL_CHECK_SAMPLES=0` 语义已修复:
 FFN 全量 fp64 参考在手机上太慢,实用深检使用 8192 抽样。
 
@@ -641,3 +641,25 @@ kernel、其中 **29** 个独立计分;`skipped_family=41`,全局 `early_stopped
 canary 漂移仅 **+1.0%**(9.842→9.940ms)。最优 config 仍是
 `bm=32 bn=256 bk=16 layout=kn`,新带 `explicit_unroll=true`,归一化
 **9.824ms**,略优于一期 9.864ms,全量校验 PASS。
+
+### 14.6 FFN 结构手段终审:融合与 texture 均阴性(cfc8e71)
+
+commit `cfc8e71` 对 tile 空间耗尽后的两个结构方向做了终审复测,结论都是阴性;
+排除掉的路线也作为资产保留。
+
+- **gate+up 融合关闭**:写回修复后重测双累加器融合 kernel,最佳形态
+  (`bm=64 bn=256 threads=256`)为 **92.7ms**,而 split gate+up 为 **67.6ms**,
+  融合慢 **37%**。更小 tile 组合更慢(228ms 级)。根因是每线程 fp32
+  累加器翻倍导致寄存器压力 / spill,吃掉 A 重读收益。结论:保持 split,
+  双累加器融合路线关闭。`ffn.py` 里保留 `make_ffn_gate_up_kernel` 和
+  `--fused-*` 参数,`ffn_chain_test` 保留 `TL_FUSED_GATE_UP=1`,仅作为实验遗迹。
+- **texture-B 路径关闭默认**:GR gemm 的 B 侧实现了 `read_imageh` 路径
+  (`_patch_opencl_grgemm_b_texture`,`TL_PATCH_B_TEX=1` 或
+  `gemm_nt.py --texture-b`,仅 `kn`;`B[K,N]` 直接当 RGBA image2d 上传,
+  免转置)。功能正确(全量 cos PASS)但慢:anchor tile **12.25ms** vs buffer
+  **9.83ms**;texture 最优 tile(`bm=64 bn=128`)**10.73ms**,仍慢于 buffer
+  最优。手写 image 的 **7.8ms** 优势来自其特定线程映射,不能迁移到 GR
+  scaffold。该路径保留为实验开关,不写回默认值。
+
+最终 FFN 链状态:**103.0ms**。tile 空间耗尽 + gate/up 融合阴性 + texture-B
+阴性后,链已处 per-gemm 速率上限(约 1.34T);FFN 侧暂无已知下一步手段。
