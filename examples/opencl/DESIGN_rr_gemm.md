@@ -554,3 +554,67 @@ shared staging 是负收益:
 | FFN 链 | 345ms | 103.7ms |
 | 标准写法 std(shared staging) | — | 51.3ms / 0.26T(barrier 已修,正确但 staging 负收益) |
 | 手写锚点 | image 7.8ms / 1.72T,buffer 13.1ms / 1.02T | 不变 |
+
+## 14. 远程 auto-tuning(2026-09-22)
+
+本轮提交 `1294f88` / `c268701` / `b3430bb` 建成 kernel 无关的远程调优
+orchestrator:`examples/opencl/tuner/tune.py`。目标不是复用 TileLang 自带
+AutoTuner 的测量半边,而是把 OpenCL/手机测量流程工程化。
+
+### 14.1 设施架构与设计判断
+
+调优流程:
+
+1. 输入 config dict 列表;
+2. `ThreadPoolExecutor` 在服务器侧并行 lower(纯 CPU 工作);
+3. 一次 tar 部署到手机;
+4. 手机侧 detach 后批量串行测量;
+5. 产出 `<tag>_results.json`(全量结果)和 `<tag>_best.json`(最优结果 +
+   sha256 cache key)。cache key 覆盖 git rev、工厂源码、config 和 probe 规格。
+
+测量策略:cosine 抽样快检,冠军 config 再做全量校验;每个 config 跑 2 轮取 min,
+对抗 OnePlus 13 时钟方差。
+
+没有直接使用现成搜索器的原因:
+
+- TileLang 自带 AutoTuner 的测量部分绑定本地 torch/CUDA,无法复用到
+  OpenCL/远程手机;本轮只借鉴其持久化格式、cache key 和 config 校验思路。
+- meta-schedule 搜的是 s_tir schedule,与 TileLang 当前"Python 写死调度 + layout
+  推断"的模型正交,不采用。
+- carver 暂无 Adreno arch 支持,列为后续三期候选。
+
+### 14.2 试点 1:GR gemm fp32
+
+搜索 54 个 config,全部 PASS。新冠军:
+
+- `bm=32 bn=256 bk=16 layout=kn`
+- **9.864ms / 1.361T**
+- 相比手工冠军 `bm=32 bn=128 bk=64` 的 **10.35ms / 1.297T** 快 **4.7%**
+
+规律:
+
+- `bn=256` 优于 `bn=128`;
+- `bk` 在最优 tile 族里影响很小;
+- `nk` 布局整体病态,最差 **147.8ms**。
+
+### 14.3 试点 2:FFN 链坐标下降
+
+`tune_ffn.py` 配合 `ffn_chain_test` 支持 gate/up/down 三个 GEMM 独立替换,参数
+通过 `TL_{GATE,UP,DOWN}_{BM,BN,THREADS}` 传入。坐标下降结果:
+
+- 链总耗时 **103.6 → 103.0ms**(+0.5%);
+- gate/up 最优 `bm=64 bn=256 threads=256`;
+- down 保持 `bm=32 bn=128`。
+
+结论:写回修复后 FFN 链已经贴近 per-gemm GR 速率上限(约 1.34T),tile 配置空间
+基本耗尽;继续下降只能靠结构手段,例如 gate+up 融合或 texture/image 路径。
+`ffn.py` 默认值已写回。`ffn_chain_test` 的 `TL_CHECK_SAMPLES=0` 语义已修复:
+FFN 全量 fp64 参考在手机上太慢,实用深检使用 8192 抽样。
+
+### 14.4 当前 best config
+
+| kernel | best config | 性能 | 备注 |
+|---|---|---|---|
+| GR gemm fp32 | `bm=32 bn=256 bk=16 layout=kn` | 9.864ms / 1.361T | 54 config 全 PASS |
+| FFN gate/up | `bm=64 bn=256 threads=256` | 链 103.0ms | 坐标下降最优 |
+| FFN down | `bm=32 bn=128` | 链 103.0ms | 保持旧默认 |
