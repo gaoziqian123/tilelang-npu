@@ -18,6 +18,7 @@ from gemm_nt import make_grgemm_kernel  # noqa: E402
 from examples.opencl.tuner.tune import (  # noqa: E402
     DeviceSpec,
     ProbeSpec,
+    TuneSpec,
     default_parse_output,
     run,
     tune,
@@ -27,11 +28,14 @@ from examples.opencl.tuner.tune import (  # noqa: E402
 M = 1024
 N = 2560
 K = 2560
-CHAMPION = {"bm": 32, "bn": 128, "bk": 64, "b_layout": "kn"}
-CHAMPION_MS = 10.35
+PASS_TRUE = {"tl.UnrollLoop": {"explicit_unroll": True, "unroll_local_access": True}}
+PASS_FALSE = {"tl.UnrollLoop": {"explicit_unroll": False, "unroll_local_access": True}}
+CHAMPION = {"bm": 32, "bn": 256, "bk": 16, "b_layout": "kn"}
+RUNNER_UP = {"bm": 32, "bn": 256, "bk": 32, "b_layout": "kn"}
+CHAMPION_MS = 9.864
 
 
-def valid_config(bm: int, bn: int, bk: int, b_layout: str) -> dict[str, Any] | None:
+def valid_config(bm: int, bn: int, bk: int, b_layout: str, pass_configs: dict[str, Any] | None = None) -> dict[str, Any] | None:
     if bm % 8 or bn % 8 or bk % 4:
         return None
     if M % bm or N % bn or K % bk:
@@ -50,6 +54,7 @@ def valid_config(bm: int, bn: int, bk: int, b_layout: str) -> dict[str, Any] | N
         "b_layout": b_layout,
         "accum_dtype": "float32",
         "chunk_k": 256,
+        "pass_configs": pass_configs or PASS_TRUE,
     }
 
 
@@ -60,17 +65,25 @@ def search_space() -> list[dict[str, Any]]:
         for bn in (64, 128, 256):
             for bk in (16, 32, 64):
                 for b_layout in ("kn", "nk"):
-                    cfg = valid_config(bm, bn, bk, b_layout)
-                    if cfg is None:
-                        continue
-                    key = (bm, bn, bk, b_layout)
-                    if key not in seen:
-                        seen.add(key)
-                        configs.append(cfg)
+                    for pass_cfg in (PASS_TRUE, PASS_FALSE):
+                        cfg = valid_config(bm, bn, bk, b_layout, pass_cfg)
+                        if cfg is None:
+                            continue
+                        key = (bm, bn, bk, b_layout, json.dumps(pass_cfg, sort_keys=True))
+                        if key not in seen:
+                            seen.add(key)
+                            configs.append(cfg)
     return configs
 
 
+def prior_config(spec: dict[str, Any]) -> dict[str, Any]:
+    cfg = valid_config(spec["bm"], spec["bn"], spec["bk"], spec["b_layout"])
+    assert cfg is not None
+    return cfg
+
+
 def kernel_factory(config: dict[str, Any]):
+    pass_configs = config.pop("pass_configs", {})
     return make_grgemm_kernel(
         config["M"],
         config["N"],
@@ -82,7 +95,7 @@ def kernel_factory(config: dict[str, Any]):
         config["b_layout"],
         config["accum_dtype"],
         config["chunk_k"],
-    )
+    ), pass_configs
 
 
 def gemm_env(config: dict[str, Any]) -> dict[str, Any]:
@@ -106,10 +119,10 @@ def summarize(out_dir: Path, tag: str) -> None:
         if row.get("emit_error"):
             failures.append((row["config_id"], "emit_error", row["config"]))
             continue
-        good = [m for m in row.get("measurements", []) if m.get("rc") == 0 and m.get("status") == "PASS" and m.get("ms") is not None]
+        good = [m for m in row.get("measurements", []) if m.get("kind") == "measure" and m.get("rc") == 0 and m.get("status") == "PASS" and m.get("norm_ms") is not None]
         if good:
-            best = min(good, key=lambda m: m["ms"])
-            scored.append((best["ms"], best.get("cos"), row["config_id"], row["config"]))
+            best = min(good, key=lambda m: m["norm_ms"])
+            scored.append((best["norm_ms"], best.get("cos"), row["config_id"], row["config"]))
         else:
             failures.append((row["config_id"], "measure_fail", row["config"]))
     scored.sort(key=lambda x: x[0])
@@ -119,7 +132,7 @@ def summarize(out_dir: Path, tag: str) -> None:
         best = scored[0]
         tflops = 2 * M * N * K / (best[0] * 1e-3) / 1e12
         summary.append(f"best={best[2]} ms={best[0]:.4f} tflops={tflops:.3f} cos={best[1]} cfg={best[3]}")
-        summary.append(f"champion_reference bm=32 bn=128 bk=64 kn ms={CHAMPION_MS:.2f} tflops={2*M*N*K/(CHAMPION_MS*1e-3)/1e12:.3f}")
+        summary.append(f"champion_reference bm=32 bn=256 bk=16 kn ms={CHAMPION_MS:.3f} tflops={2*M*N*K/(CHAMPION_MS*1e-3)/1e12:.3f}")
         summary.append("top5:")
         for ms, cos, cid, cfg in scored[:5]:
             summary.append(f"  {cid} ms={ms:.4f} cos={cos} cfg={cfg}")
@@ -195,7 +208,8 @@ def main() -> int:
         cos_min=None,
     )
     device = DeviceSpec(ssh=args.ssh, remote_dir=args.remote_dir, timeout_s=args.timeout_s)
-    result = tune(factory=kernel_factory, configs=configs, probe=probe, device=device, tag=args.tag, jobs=args.jobs, deploy_only=args.deploy_only)
+    spec = TuneSpec(priors=[prior_config(CHAMPION), prior_config(RUNNER_UP)])
+    result = tune(factory=kernel_factory, configs=configs, probe=probe, device=device, tag=args.tag, jobs=args.jobs, deploy_only=args.deploy_only, spec=spec)
     summarize(result.out_dir, args.tag)
     if not args.deploy_only and not args.skip_full_check:
         full_check(result.out_dir / f"{args.tag}_best.json", device, args.tag)

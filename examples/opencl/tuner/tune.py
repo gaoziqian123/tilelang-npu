@@ -23,6 +23,10 @@ from tilelang import tvm
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 OUT_ROOT = Path(__file__).resolve().parent / "out"
+DEFAULT_FAMILY_SLOWDOWN = 2.0
+DEFAULT_GLOBAL_NO_TOP3_LIMIT = 12
+DEFAULT_CANARY_INTERVAL = 10
+DEFAULT_TUNE_ROUNDS = 2
 
 
 KernelFactory = Callable[[dict[str, Any]], Any]
@@ -61,6 +65,15 @@ class DeviceSpec:
     timeout_s: float = 1800.0
 
 
+@dataclass(frozen=True)
+class TuneSpec:
+    priors: list[dict[str, Any]] = field(default_factory=list)
+    family_slowdown: float = DEFAULT_FAMILY_SLOWDOWN
+    global_no_top3_limit: int = DEFAULT_GLOBAL_NO_TOP3_LIMIT
+    canary_interval: int = DEFAULT_CANARY_INTERVAL
+    rounds: int = DEFAULT_TUNE_ROUNDS
+
+
 @dataclass
 class EmitResult:
     config_id: str
@@ -78,6 +91,7 @@ class TuneResult:
     emits: list[EmitResult]
     measurements: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     best: dict[str, Any] | None = None
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 def run(cmd: list[str], *, timeout: float | None = None, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -111,11 +125,50 @@ def cache_key(factory_src: str, config: dict[str, Any], probe: ProbeSpec) -> str
 
 
 def lower_opencl(factory: KernelFactory, config: dict[str, Any]) -> str:
+    pass_configs = config.get("pass_configs", {})
+    if pass_configs is None:
+        pass_configs = {}
+    if not isinstance(pass_configs, dict):
+        raise TypeError("config['pass_configs'] must be a dict when present")
+    pcfg = {"tl.UnrollLoop": {"explicit_unroll": True, "unroll_local_access": True}}
+    for k, v in pass_configs.items():
+        pcfg[k] = v
+    built = factory(dict(config))
+    if isinstance(built, tuple) and len(built) == 2:
+        func, extra_pass_configs = built
+        if extra_pass_configs:
+            if not isinstance(extra_pass_configs, dict):
+                raise TypeError("kernel factory pass_configs return must be a dict")
+            for k, v in extra_pass_configs.items():
+                pcfg[k] = v
+    else:
+        func = built
     with tvm.target.Target("opencl"), tvm.transform.PassContext(
-        config={"tl.UnrollLoop": {"explicit_unroll": True, "unroll_local_access": True}}
+        config=pcfg
     ):
-        artifact = tilelang.lower(factory(config), target="opencl", enable_device_compile=False)
+        artifact = tilelang.lower(func, target="opencl", enable_device_compile=False)
     return artifact.kernel_source
+
+
+def family_key(config: dict[str, Any]) -> str:
+    drop = {"bk", "threads", "pass_configs"}
+    return stable_json({k: v for k, v in config.items() if k not in drop})
+
+
+def config_match(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    return stable_json(a) == stable_json(b)
+
+
+def order_configs(configs: Iterable[dict[str, Any]], spec: TuneSpec) -> list[dict[str, Any]]:
+    remaining = [dict(c) for c in configs]
+    ordered: list[dict[str, Any]] = []
+    for prior in spec.priors:
+        for i, cfg in enumerate(remaining):
+            if config_match(cfg, prior):
+                ordered.append(remaining.pop(i))
+                break
+    ordered.extend(remaining)
+    return ordered
 
 
 def emit_one(
@@ -168,7 +221,7 @@ def emit_all(
     return results
 
 
-def write_manifest(out_dir: Path, emits: list[EmitResult], probe: ProbeSpec) -> None:
+def write_manifest(out_dir: Path, emits: list[EmitResult], probe: ProbeSpec, spec: TuneSpec) -> None:
     manifest = []
     for e in emits:
         if e.cl_path is None or e.emit_error:
@@ -179,42 +232,102 @@ def write_manifest(out_dir: Path, emits: list[EmitResult], probe: ProbeSpec) -> 
             env["TL_CHECK_SAMPLES"] = str(probe.check_samples)
         if probe.cos_min is not None:
             env["TL_COS_MIN"] = str(probe.cos_min)
-        manifest.append({"id": e.config_id, "file": e.cl_path.name, "env": env})
+        manifest.append({"id": e.config_id, "file": e.cl_path.name, "env": env, "config": e.config, "family_key": family_key(e.config)})
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+    (out_dir / "tune_spec.json").write_text(json.dumps({
+        "priors": spec.priors,
+        "family_slowdown": spec.family_slowdown,
+        "global_no_top3_limit": spec.global_no_top3_limit,
+        "canary_interval": spec.canary_interval,
+        "rounds": spec.rounds,
+    }, indent=2, sort_keys=True), encoding="utf-8")
 
 
-def make_batch_script(probe: ProbeSpec, device: DeviceSpec, manifest_name: str = "manifest.json") -> str:
-    # Keep phone-side dependencies minimal: parse manifest with python if present,
-    # otherwise fall back to a line-oriented manifest is intentionally not supported.
+def make_batch_script(probe: ProbeSpec, device: DeviceSpec, spec: TuneSpec, manifest_name: str = "manifest.json") -> str:
     return f'''#!/system/bin/sh
 set -u
 cd "$(dirname "$0")"
-rm -f results.csv
-printf 'id,round,rc,log\n' > results.csv
-rm -rf logs
-mkdir -p logs
-python3 - <<'PY' > run_items.sh
-import json, shlex
+python3 - <<'PY'
+import csv, json, os, re, shutil, subprocess
+from pathlib import Path
+
 items = json.load(open({manifest_name!r}))
 binary = {probe.binary!r}
 kernel_name = {probe.kernel_name!r}
-for item in items:
-    env = dict(item['env'])
-    env['LD_LIBRARY_PATH'] = {device.ld_library_path!r}
-    exports = ' '.join(f"{{k}}={{shlex.quote(str(v))}}" for k, v in env.items())
-    for r in range({probe.rounds}):
-        log = f"logs/{{item['id']}}_r{{r}}.log"
-        cmd = f"{{exports}} ./{{shlex.quote(binary)}} {{shlex.quote(item['file'])}} {{shlex.quote(kernel_name)}} > {{shlex.quote(log)}} 2>&1"
-        print(f"{{cmd}}; rc=$?; printf '%s,%s,%s,%s\\n' {{shlex.quote(item['id'])}} {{r}} $rc {{shlex.quote(log)}} >> results.csv")
+family_slowdown = {spec.family_slowdown!r}
+no_top3_limit = {spec.global_no_top3_limit!r}
+canary_interval = {spec.canary_interval!r}
+rounds = {spec.rounds!r}
+ld = {device.ld_library_path!r}
+
+ms_re = re.compile("ms_iter\\s*[=:]?\\s*([0-9]+(?:\\.[0-9]+)?)")
+logs = Path('logs'); shutil.rmtree(logs, ignore_errors=True); logs.mkdir()
+rows = []
+state = {{'best_ms': None, 'best_id': '', 'top3': [], 'family_seen': set(), 'family_skip': set(), 'measured': 0, 'no_top3': 0, 'early': False, 'canaries': 0}}
+
+def run_item(item, r, kind):
+    env = os.environ.copy(); env.update({{k: str(v) for k, v in item['env'].items()}}); env['LD_LIBRARY_PATH'] = ld
+    log = logs / f"{{len(rows):04d}}_{{item['id']}}_r{{r}}_{{kind}}.log"
+    with log.open('w') as f:
+        rc = subprocess.run([f"./{{binary}}", item['file'], kernel_name], env=env, stdout=f, stderr=subprocess.STDOUT).returncode
+    txt = log.read_text(errors='replace')
+    m = ms_re.search(txt)
+    status = 'PASS' if 'PASS' in txt and 'FAIL' not in txt else ('FAIL' if 'FAIL' in txt else 'UNKNOWN')
+    row = {{'id': item['id'], 'round': r, 'kind': kind, 'rc': rc, 'log': str(log), 'skipped_reason': '', 'ms': float(m.group(1)) if m else None, 'status': status}}
+    rows.append(row)
+    return row
+
+def add_skip(item, r, reason):
+    rows.append({{'id': item['id'], 'round': r, 'kind': 'skipped', 'rc': '', 'log': '', 'skipped_reason': reason, 'ms': None, 'status': 'SKIPPED'}})
+
+def update_state(item, row):
+    if row['kind'] != 'measure':
+        return
+    state['measured'] += 1
+    fam = item['family_key']; cid = item['id']; ms = row['ms']
+    entered = False
+    if ms is not None and row['status'] == 'PASS' and row['rc'] == 0:
+        old = list(state['top3'])
+        state['top3'] = sorted(old + [{{'id': cid, 'ms': ms}}], key=lambda x: x['ms'])[:3]
+        entered = any(x['id'] == cid and x['ms'] == ms for x in state['top3'])
+        if state['best_ms'] is None or ms < state['best_ms']:
+            state['best_ms'] = ms; state['best_id'] = cid
+        if fam not in state['family_seen']:
+            state['family_seen'].add(fam)
+            if state['best_ms'] is not None and ms > state['best_ms'] * family_slowdown:
+                state['family_skip'].add(fam)
+    state['no_top3'] = 0 if entered else state['no_top3'] + 1
+    if state['no_top3'] >= no_top3_limit:
+        state['early'] = True
+
+for r in range(rounds):
+    seq = items if (r % 2 == 0) else list(reversed(items))
+    for item in seq:
+        if state['early']:
+            add_skip(item, r, 'early_stopped'); continue
+        if item['family_key'] in state['family_skip']:
+            add_skip(item, r, 'skipped_family'); continue
+        row = run_item(item, r, 'measure')
+        update_state(item, row)
+        if state['best_id'] and state['measured'] % canary_interval == 0:
+            best = next(it for it in items if it['id'] == state['best_id'])
+            can = run_item(best, r, 'canary')
+            state['canaries'] += 1
+
+with open('results.csv', 'w', newline='') as f:
+    w = csv.DictWriter(f, fieldnames=['id','round','kind','rc','log','skipped_reason','ms','status'])
+    w.writeheader(); w.writerows(rows)
+meta = dict(state)
+meta['family_seen'] = sorted(meta['family_seen']); meta['family_skip'] = sorted(meta['family_skip'])
+json.dump(meta, open('run_meta.json','w'), indent=2, sort_keys=True)
 PY
-sh run_items.sh
 '''
 
 
-def deploy(out_dir: Path, tag: str, emits: list[EmitResult], probe: ProbeSpec, device: DeviceSpec) -> str:
-    write_manifest(out_dir, emits, probe)
-    (out_dir / "run_batch.sh").write_text(make_batch_script(probe, device), encoding="utf-8")
-    files = [p for p in out_dir.glob("*.cl")] + [out_dir / "manifest.json", out_dir / "run_batch.sh"]
+def deploy(out_dir: Path, tag: str, emits: list[EmitResult], probe: ProbeSpec, device: DeviceSpec, spec: TuneSpec) -> str:
+    write_manifest(out_dir, emits, probe, spec)
+    (out_dir / "run_batch.sh").write_text(make_batch_script(probe, device, spec), encoding="utf-8")
+    files = [p for p in out_dir.glob("*.cl")] + [out_dir / "manifest.json", out_dir / "tune_spec.json", out_dir / "run_batch.sh"]
     md5_lines = []
     for p in files:
         md5_lines.append(f"{hashlib.md5(p.read_bytes()).hexdigest()}  {p.name}\n")
@@ -272,7 +385,7 @@ def start_and_wait(tag: str, remote_base: str, device: DeviceSpec) -> None:
 
 def collect(out_dir: Path, tag: str, remote_base: str, device: DeviceSpec) -> Path:
     remote_tar = f"{remote_base}/{tag}_results.tar"
-    pack = f"cd {shlex.quote(remote_base)} && tar cf {shlex.quote(remote_tar)} results.csv logs {tag}.driver.log"
+    pack = f"cd {shlex.quote(remote_base)} && tar cf {shlex.quote(remote_tar)} results.csv run_meta.json logs {tag}.driver.log"
     res = run(["ssh", device.ssh, pack], timeout=120)
     if res.returncode != 0:
         raise RuntimeError(f"remote result pack failed:\n{res.stdout}")
@@ -303,14 +416,43 @@ def default_parse_output(text: str) -> dict[str, Any]:
 
 
 def parse_measurements(extract_dir: Path, probe: ProbeSpec) -> dict[str, list[dict[str, Any]]]:
-    measurements: dict[str, list[dict[str, Any]]] = {}
+    flat: list[dict[str, Any]] = []
     with (extract_dir / "results.csv").open(newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
+        for seq, row in enumerate(csv.DictReader(f)):
             log_rel = row["log"]
-            text = (extract_dir / log_rel).read_text(encoding="utf-8", errors="replace")
-            parsed = probe.parse(text)
-            parsed.update({"round": int(row["round"]), "rc": int(row["rc"]), "log": log_rel})
-            measurements.setdefault(row["id"], []).append(parsed)
+            if log_rel:
+                text = (extract_dir / log_rel).read_text(encoding="utf-8", errors="replace")
+                parsed = probe.parse(text)
+            else:
+                parsed = {"status": row.get("status", "SKIPPED")}
+            if row.get("ms"):
+                parsed["ms"] = float(row["ms"])
+            if row.get("status"):
+                parsed["status"] = row["status"]
+            parsed.update({
+                "seq": seq,
+                "round": int(row["round"]) if row["round"] not in ("", None) else None,
+                "kind": row.get("kind", "measure"),
+                "rc": int(row["rc"]) if row.get("rc") not in ("", None) else None,
+                "log": log_rel,
+                "skipped_reason": row.get("skipped_reason", ""),
+                "raw_ms": parsed.get("ms"),
+            })
+            flat.append((row["id"], parsed))
+    canaries = [p for _, p in flat if p.get("kind") == "canary" and p.get("raw_ms") is not None and p.get("rc") == 0]
+    can_ms = sorted(p["raw_ms"] for p in canaries)
+    median = can_ms[len(can_ms)//2] if can_ms else None
+    last_canary = None
+    measurements: dict[str, list[dict[str, Any]]] = {}
+    for cid, parsed in flat:
+        if parsed.get("kind") == "canary" and parsed.get("raw_ms") is not None and parsed.get("rc") == 0:
+            last_canary = parsed["raw_ms"]
+        if parsed.get("raw_ms") is not None:
+            if median is not None and last_canary:
+                parsed["norm_ms"] = parsed["raw_ms"] / last_canary * median
+            else:
+                parsed["norm_ms"] = parsed["raw_ms"]
+        measurements.setdefault(cid, []).append(parsed)
     return measurements
 
 
@@ -318,19 +460,19 @@ def choose_best(emits: list[EmitResult], measurements: dict[str, list[dict[str, 
     emit_by_id = {e.config_id: e for e in emits}
     candidates = []
     for cid, rows in measurements.items():
-        good = [r for r in rows if r.get("rc") == 0 and r.get("status") == "PASS" and r.get("ms") is not None]
+        good = [r for r in rows if r.get("kind") == "measure" and r.get("rc") == 0 and r.get("status") == "PASS" and r.get("norm_ms") is not None]
         if not good:
             continue
-        best_row = min(good, key=lambda r: r["ms"])
+        best_row = min(good, key=lambda r: r["norm_ms"])
         emit = emit_by_id[cid]
-        candidates.append((best_row["ms"], cid, best_row, emit))
+        candidates.append((best_row["norm_ms"], cid, best_row, emit))
     if not candidates:
         return None
     _, cid, row, emit = min(candidates, key=lambda x: x[0])
-    return {"config_id": cid, "config": emit.config, "ms": row["ms"], "cos": row.get("cos"), "cache_key": emit.cache_key}
+    return {"config_id": cid, "config": emit.config, "ms": row["norm_ms"], "raw_ms": row.get("raw_ms"), "cos": row.get("cos"), "cache_key": emit.cache_key}
 
 
-def write_results(tag: str, out_dir: Path, emits: list[EmitResult], measurements: dict[str, list[dict[str, Any]]], best: dict[str, Any] | None) -> None:
+def write_results(tag: str, out_dir: Path, emits: list[EmitResult], measurements: dict[str, list[dict[str, Any]]], best: dict[str, Any] | None, meta: dict[str, Any] | None = None) -> None:
     all_rows = []
     for e in emits:
         all_rows.append({
@@ -343,6 +485,8 @@ def write_results(tag: str, out_dir: Path, emits: list[EmitResult], measurements
         })
     (out_dir / f"{tag}_results.json").write_text(json.dumps(all_rows, indent=2, sort_keys=True), encoding="utf-8")
     (out_dir / f"{tag}_best.json").write_text(json.dumps(best or {}, indent=2, sort_keys=True), encoding="utf-8")
+    if meta is not None:
+        (out_dir / f"{tag}_meta.json").write_text(json.dumps(meta, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def tune(
@@ -354,24 +498,32 @@ def tune(
     tag: str,
     jobs: int = 8,
     deploy_only: bool = False,
+    spec: TuneSpec | None = None,
 ) -> TuneResult:
+    spec = spec or TuneSpec()
     out_dir = OUT_ROOT / tag
     out_dir.mkdir(parents=True, exist_ok=True)
-    emits = emit_all(factory, configs, probe, out_dir, jobs=jobs)
+    ordered_configs = order_configs(configs, spec)
+    emits = emit_all(factory, ordered_configs, probe, out_dir, jobs=jobs)
     ok = sum(1 for e in emits if not e.emit_error)
     print(f"EMIT_DONE ok={ok} fail={len(emits)-ok} out={out_dir}")
     if deploy_only:
-        write_results(tag, out_dir, emits, {}, None)
+        write_results(tag, out_dir, emits, {}, None, {"priors": spec.priors})
         return TuneResult(tag=tag, out_dir=out_dir, emits=emits)
-    remote_base = deploy(out_dir, tag, emits, probe, device)
+    remote_base = deploy(out_dir, tag, emits, probe, device, spec)
     print(f"DEPLOY_DONE remote={remote_base}")
     start_and_wait(tag, remote_base, device)
     print("REMOTE_RUN_DONE")
     extract_dir = collect(out_dir, tag, remote_base, device)
     measurements = parse_measurements(extract_dir, probe)
     best = choose_best(emits, measurements)
-    write_results(tag, out_dir, emits, measurements, best)
+    meta = {}
+    meta_path = extract_dir / "run_meta.json"
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta.update({"priors": spec.priors})
+    write_results(tag, out_dir, emits, measurements, best, meta)
     print(f"RESULTS_WRITTEN {out_dir / (tag + '_results.json')}")
     if best:
         print(f"BEST {best['config_id']} ms={best['ms']} cos={best.get('cos')} config={best['config']}")
-    return TuneResult(tag=tag, out_dir=out_dir, emits=emits, measurements=measurements, best=best)
+    return TuneResult(tag=tag, out_dir=out_dir, emits=emits, measurements=measurements, best=best, meta=meta)

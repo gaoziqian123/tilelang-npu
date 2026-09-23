@@ -1,0 +1,89 @@
+{
+  "best_id": "c0000",
+  "best_ms": 9.824,
+  "canaries": 4,
+  "early": true,
+  "family_seen": [
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":64,\"chunk_k\":256}"
+  ],
+  "family_skip": [
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":64,\"chunk_k\":256}"
+  ],
+  "measured": 48,
+  "no_top3": 12,
+  "priors": [
+    {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    }
+  ],
+  "top3": [
+    {
+      "id": "c0000",
+      "ms": 9.824
+    },
+    {
+      "id": "c0001",
+      "ms": 9.828
+    },
+    {
+      "id": "c0068",
+      "ms": 9.848
+    }
+  ]
+}

@@ -1,0 +1,5166 @@
+[
+  {
+    "cache_key": "93fd056f917c840ed0de38915669cf3ea2b6212d4869348b3e98d8221cbab74b",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0000",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0000_c0000_r0_measure.log",
+        "ms": 9.824,
+        "norm_ms": 9.824,
+        "raw_ms": 9.824,
+        "rc": 0,
+        "round": 0,
+        "seq": 0,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "kind": "canary",
+        "log": "logs/0023_c0000_r0_canary.log",
+        "ms": 9.842,
+        "norm_ms": 9.846,
+        "raw_ms": 9.842,
+        "rc": 0,
+        "round": 0,
+        "seq": 23,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "kind": "canary",
+        "log": "logs/0041_c0000_r0_canary.log",
+        "ms": 9.846,
+        "norm_ms": 9.846,
+        "raw_ms": 9.846,
+        "rc": 0,
+        "round": 0,
+        "seq": 41,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "kind": "canary",
+        "log": "logs/0058_c0000_r0_canary.log",
+        "ms": 9.844,
+        "norm_ms": 9.846,
+        "raw_ms": 9.844,
+        "rc": 0,
+        "round": 0,
+        "seq": 58,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "cos": 0.999999979,
+        "kind": "canary",
+        "log": "logs/0078_c0000_r0_canary.log",
+        "ms": 9.94,
+        "norm_ms": 9.846,
+        "raw_ms": 9.94,
+        "rc": 0,
+        "round": 0,
+        "seq": 78,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 219,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "74e9370b6cca2bbbea1b4ae9063d5c89ae6a7488b7f9c62ab6758185eb71d1c1"
+  },
+  {
+    "cache_key": "6275b1ab24d664e1415d6eb15ca053cabb49c88ee52488601c98683c2e728c4a",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0001",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0001_c0001_r0_measure.log",
+        "ms": 9.828,
+        "norm_ms": 9.828,
+        "raw_ms": 9.828,
+        "rc": 0,
+        "round": 0,
+        "seq": 1,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 218,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "74e9370b6cca2bbbea1b4ae9063d5c89ae6a7488b7f9c62ab6758185eb71d1c1"
+  },
+  {
+    "cache_key": "5867df9682456872ac5e37b534d1c557b3468b754d5e526ee4909fb3c7117d55",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "config_id": "c0002",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0002_c0002_r0_measure.log",
+        "ms": 27.689,
+        "norm_ms": 27.689,
+        "raw_ms": 27.689,
+        "rc": 0,
+        "round": 0,
+        "seq": 2,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 217,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "40d55cb69c45cc436e82f7ac680289b1bc9d4de338f262ec322b75367cc6ff24"
+  },
+  {
+    "cache_key": "7c57ca54349f12a74fa32df3c0e565451b03f729d2c44c899f44ff26da5e74d9",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "config_id": "c0003",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 3,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 216,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "7ef55f1bd733961d404d1eda35a58455b9b96a47cbbc5a169fc7ff55ee8c726a"
+  },
+  {
+    "cache_key": "cefacf41343145d5f87670ef24d29dcc3e33122043ef9856a41e3871f642dafa",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "config_id": "c0004",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "kind": "measure",
+        "log": "logs/0004_c0004_r0_measure.log",
+        "ms": 49.94,
+        "norm_ms": 49.94,
+        "raw_ms": 49.94,
+        "rc": 0,
+        "round": 0,
+        "seq": 4,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 215,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "6a738dc4dba67434fbf477462e580867c4c86f9ce4444a61a29246d5bcd0bdae"
+  },
+  {
+    "cache_key": "572f87ef59f1f075434bcc1fb6d40e85d78d7209001644c74dd12fce52fc69f5",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "config_id": "c0005",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 5,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 214,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "dc33b82e510acc63d1f4c56671cbf2a7c9b2a12c29039337db5928afc183638f"
+  },
+  {
+    "cache_key": "6ab8aa757d64cee7b158aee8b972d5e1471036e66b2cfbfa9b923e95f7a19a98",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "config_id": "c0006",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 6,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 213,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "40d55cb69c45cc436e82f7ac680289b1bc9d4de338f262ec322b75367cc6ff24"
+  },
+  {
+    "cache_key": "5791302420620ea7ce0ee9e2cd0aba1fe52537ce24bf7e79a10bd0ac5948262a",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "config_id": "c0007",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 7,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 212,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "7ef55f1bd733961d404d1eda35a58455b9b96a47cbbc5a169fc7ff55ee8c726a"
+  },
+  {
+    "cache_key": "6deffe482d3fa6e27c44783acfe668a54bb48e6fb42006bef26754ff2409340e",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "config_id": "c0008",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 8,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 211,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "6a738dc4dba67434fbf477462e580867c4c86f9ce4444a61a29246d5bcd0bdae"
+  },
+  {
+    "cache_key": "822cd7f24ef383406e5d244c51e935a67dfe065860112e1710d8c6247ac9abbe",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "config_id": "c0009",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 9,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 210,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "dc33b82e510acc63d1f4c56671cbf2a7c9b2a12c29039337db5928afc183638f"
+  },
+  {
+    "cache_key": "2f4393f5fe8d8c3cf58507abef89e3cabed47811bf818f93441d0d2bf2637eee",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "config_id": "c0010",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 10,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 209,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "40d55cb69c45cc436e82f7ac680289b1bc9d4de338f262ec322b75367cc6ff24"
+  },
+  {
+    "cache_key": "c224f1b2b62b6555fd3c63564862a1baf1dbe53e5942b11260ac459de3c3a767",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "config_id": "c0011",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 11,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 208,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "7ef55f1bd733961d404d1eda35a58455b9b96a47cbbc5a169fc7ff55ee8c726a"
+  },
+  {
+    "cache_key": "7c8b1493885989e735ac4d0e04be834854e9a5dac964dc1bc77394d1bfb655c5",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "config_id": "c0012",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 12,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 207,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "6a738dc4dba67434fbf477462e580867c4c86f9ce4444a61a29246d5bcd0bdae"
+  },
+  {
+    "cache_key": "c2173484c28a6e57633e3da15652c8f3d6f1a745e8639aa9983367e5bbf45bed",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "config_id": "c0013",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 13,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 206,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "dc33b82e510acc63d1f4c56671cbf2a7c9b2a12c29039337db5928afc183638f"
+  },
+  {
+    "cache_key": "36c8da59ad61830fadbb39b976574b03b4675c66a306cdd41fcf18477852469f",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0014",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0014_c0014_r0_measure.log",
+        "ms": 15.402,
+        "norm_ms": 15.402,
+        "raw_ms": 15.402,
+        "rc": 0,
+        "round": 0,
+        "seq": 14,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 205,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "3cfafd1f79c23b0258bfc6ea34b8204bb958c6ec29bd9676f0814079f1ccddab"
+  },
+  {
+    "cache_key": "dac18a6b2df5800fc5c5c343c110e7a1a737b2484d00f788544329a777b0dad4",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0015",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0015_c0015_r0_measure.log",
+        "ms": 23.52,
+        "norm_ms": 23.52,
+        "raw_ms": 23.52,
+        "rc": 1,
+        "round": 0,
+        "seq": 15,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 204,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "f90ad5a9d4e4baa5d6e37f0e6bc0d8d2bc7d29ba09f014f1dc3ec784ad4a1b86"
+  },
+  {
+    "cache_key": "740d33f647d93b46fedc81a7169782ebe5e89b1d6922e69a50efd057b267bdfc",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0016",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "kind": "measure",
+        "log": "logs/0016_c0016_r0_measure.log",
+        "ms": 120.846,
+        "norm_ms": 120.846,
+        "raw_ms": 120.846,
+        "rc": 0,
+        "round": 0,
+        "seq": 16,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 203,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "a21f24b403155de6218ac285a2d406605fa331e12f7478046a0d0b1e0e535547"
+  },
+  {
+    "cache_key": "fc95970cb139d204311c335a2ceaa723cafb4a0680678db6ff2415fb82c90e7b",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0017",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 17,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 202,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "943d06886fbce93320afd4edc6c7eb527a6d0963fbb9feff788da8fca0ffa6a6"
+  },
+  {
+    "cache_key": "8e78870a9aac651f0928b36b59fbec97c554616202ed28c7faf8ffb728965891",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0018",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0018_c0018_r0_measure.log",
+        "ms": 15.333,
+        "norm_ms": 15.333,
+        "raw_ms": 15.333,
+        "rc": 0,
+        "round": 0,
+        "seq": 18,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 201,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "3cfafd1f79c23b0258bfc6ea34b8204bb958c6ec29bd9676f0814079f1ccddab"
+  },
+  {
+    "cache_key": "63059f7461f20f3c979ef597fc9c228e4bf833cba11b09d18ac10bedb44169fa",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0019",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0019_c0019_r0_measure.log",
+        "ms": 23.422,
+        "norm_ms": 23.422,
+        "raw_ms": 23.422,
+        "rc": 1,
+        "round": 0,
+        "seq": 19,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 200,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "f90ad5a9d4e4baa5d6e37f0e6bc0d8d2bc7d29ba09f014f1dc3ec784ad4a1b86"
+  },
+  {
+    "cache_key": "0d1d540f87a9f735038cdc64d097beb8500dfa2336343870d60997b9541f6707",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0020",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 20,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 199,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "a21f24b403155de6218ac285a2d406605fa331e12f7478046a0d0b1e0e535547"
+  },
+  {
+    "cache_key": "24ccd30565d83659bd6a98cb69481b7019ebfad648282f4a293a65bbe1a40e5c",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0021",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 21,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 198,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "943d06886fbce93320afd4edc6c7eb527a6d0963fbb9feff788da8fca0ffa6a6"
+  },
+  {
+    "cache_key": "19f38e6a15567908a22b7a6e716223340dcbb0108b47fbaad5e9049b60cb5dd7",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0022",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0022_c0022_r0_measure.log",
+        "ms": 15.331,
+        "norm_ms": 15.331,
+        "raw_ms": 15.331,
+        "rc": 0,
+        "round": 0,
+        "seq": 22,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 197,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "3cfafd1f79c23b0258bfc6ea34b8204bb958c6ec29bd9676f0814079f1ccddab"
+  },
+  {
+    "cache_key": "c0f649a945f1f610b2cf2bd0027dce94b38e9c87c0555ba7c5392c4f482ffe9b",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0023",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0024_c0023_r0_measure.log",
+        "ms": 23.506,
+        "norm_ms": 23.5155533428165,
+        "raw_ms": 23.506,
+        "rc": 1,
+        "round": 0,
+        "seq": 24,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 196,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "f90ad5a9d4e4baa5d6e37f0e6bc0d8d2bc7d29ba09f014f1dc3ec784ad4a1b86"
+  },
+  {
+    "cache_key": "dfcae38b96f20eb3b0075ce2a8581a3b2843f3eaa935fc76eb3469d9672e68df",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0024",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 25,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 195,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "a21f24b403155de6218ac285a2d406605fa331e12f7478046a0d0b1e0e535547"
+  },
+  {
+    "cache_key": "b298921e2eabfd19de56503c132d17a243afb290b45338fe9320fc709763b8f7",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0025",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 26,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 194,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "943d06886fbce93320afd4edc6c7eb527a6d0963fbb9feff788da8fca0ffa6a6"
+  },
+  {
+    "cache_key": "9c7d71794678b60907b84b968c4fe1c2c48f24dda850c252faadfc740a92e592",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0026",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0027_c0026_r0_measure.log",
+        "ms": 10.363,
+        "norm_ms": 10.367211745580166,
+        "raw_ms": 10.363,
+        "rc": 0,
+        "round": 0,
+        "seq": 27,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 193,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "3169e84337872134de1720f318f387a146b8e809e1a25b605a8c00ffa801024d"
+  },
+  {
+    "cache_key": "a519c9ee11a1e93d4a640183a5e137595b1a836dab290c6cd02ad96270dacaff",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0027",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0028_c0027_r0_measure.log",
+        "ms": 14.093,
+        "norm_ms": 14.098727697622433,
+        "raw_ms": 14.093,
+        "rc": 1,
+        "round": 0,
+        "seq": 28,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 192,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "25dc576f5cae9b63126b64ffc3e41b01460b063f9efecd63681918ec23d5e5cb"
+  },
+  {
+    "cache_key": "5a292539f6c7291a5381bc914756b807f020b9baae3270cde1855987415bf360",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0028",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "kind": "measure",
+        "log": "logs/0029_c0028_r0_measure.log",
+        "ms": 146.502,
+        "norm_ms": 146.5615415565942,
+        "raw_ms": 146.502,
+        "rc": 0,
+        "round": 0,
+        "seq": 29,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 191,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "fbf6472b26ff00eeb2e40ba96e111d34f1c591fe017528dd4d2acf65b478ab6f"
+  },
+  {
+    "cache_key": "2f6c1b27ca9db1810d2e2904dd59938147a1b554ca9907e1c3d60c92dc1ade57",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0029",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 30,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 190,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "b055846f2e58ec576ff0c525a1a57a3d31b53f676a865ccad571eb1e21a7ec19"
+  },
+  {
+    "cache_key": "2bd04907bb986bd7876838d03308fc9fffee899c11b897b8f96529fa0f6337df",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0030",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0031_c0030_r0_measure.log",
+        "ms": 10.369,
+        "norm_ms": 10.373214184108921,
+        "raw_ms": 10.369,
+        "rc": 0,
+        "round": 0,
+        "seq": 31,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 189,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "3169e84337872134de1720f318f387a146b8e809e1a25b605a8c00ffa801024d"
+  },
+  {
+    "cache_key": "2738e3c4b92c046e5d8c62ea8533de9096859b5db9020a542fcdec3441fd559b",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0031",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0032_c0031_r0_measure.log",
+        "ms": 14.068,
+        "norm_ms": 14.073717537085958,
+        "raw_ms": 14.068,
+        "rc": 1,
+        "round": 0,
+        "seq": 32,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 188,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "25dc576f5cae9b63126b64ffc3e41b01460b063f9efecd63681918ec23d5e5cb"
+  },
+  {
+    "cache_key": "945dd256c6f41ddf61ab9a1ef4eb49b7a4fb82761ef83d428fb096fcc44d5fa4",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0032",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 33,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 187,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "fbf6472b26ff00eeb2e40ba96e111d34f1c591fe017528dd4d2acf65b478ab6f"
+  },
+  {
+    "cache_key": "1997dc710e505608dbb3c1609679256fc480873a225e2d21b3e0963cde3470d3",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0033",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 34,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 186,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "b055846f2e58ec576ff0c525a1a57a3d31b53f676a865ccad571eb1e21a7ec19"
+  },
+  {
+    "cache_key": "042404a81246fc8e156548f39849df56ab73edc5e5076e7d2fc5518dedb95a7e",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0034",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0035_c0034_r0_measure.log",
+        "ms": 10.354,
+        "norm_ms": 10.358208087787034,
+        "raw_ms": 10.354,
+        "rc": 0,
+        "round": 0,
+        "seq": 35,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 185,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "3169e84337872134de1720f318f387a146b8e809e1a25b605a8c00ffa801024d"
+  },
+  {
+    "cache_key": "b174e76b1f793da5463cb11500adea6208d7d0310c017e3749b92a954af32139",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0035",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0036_c0035_r0_measure.log",
+        "ms": 14.077,
+        "norm_ms": 14.08272119487909,
+        "raw_ms": 14.077,
+        "rc": 1,
+        "round": 0,
+        "seq": 36,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 184,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "25dc576f5cae9b63126b64ffc3e41b01460b063f9efecd63681918ec23d5e5cb"
+  },
+  {
+    "cache_key": "4b06453b05e843aaea8232b25636fe082877f28511de24fd97fef6e73b0dca84",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0036",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 37,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 183,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "fbf6472b26ff00eeb2e40ba96e111d34f1c591fe017528dd4d2acf65b478ab6f"
+  },
+  {
+    "cache_key": "8221c32bae3280b306d9019d0b252900f6316cf7377fa35ab699f7613ce2f902",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0037",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 38,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 182,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "b055846f2e58ec576ff0c525a1a57a3d31b53f676a865ccad571eb1e21a7ec19"
+  },
+  {
+    "cache_key": "1ea7018fba313193bf7c8fc4b9abcf506466222988ccf0f3fe19ecb6a0526891",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0038",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0039_c0038_r0_measure.log",
+        "ms": 14.611,
+        "norm_ms": 14.616938223938224,
+        "raw_ms": 14.611,
+        "rc": 0,
+        "round": 0,
+        "seq": 39,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 181,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "302e57a39e1eb5d88a41615b8ce13e1074b16fcceb658501a87d836ef19b2ab7"
+  },
+  {
+    "cache_key": "5ec188bf5748ac6848df810221ddc122604f1e527238901f1bcf3996d5eabf42",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0039",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0040_c0039_r0_measure.log",
+        "ms": 48.587,
+        "norm_ms": 48.60674679943101,
+        "raw_ms": 48.587,
+        "rc": 1,
+        "round": 0,
+        "seq": 40,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 180,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "f1ac5fdee035202e47bfa7473fc5fb1f056885743f7c4c575192130c6ac1af7c"
+  },
+  {
+    "cache_key": "5fe2f042a83b0cd7469a891634ac42030be38794a1e366eaa39203fd13809432",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0040",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "kind": "measure",
+        "log": "logs/0042_c0040_r0_measure.log",
+        "ms": 35.399,
+        "norm_ms": 35.399,
+        "raw_ms": 35.399,
+        "rc": 0,
+        "round": 0,
+        "seq": 42,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 179,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "ba0485e0a06c937eefb0cdcda646f528599dc7b2f9412ff5fc4d344cc3e883de"
+  },
+  {
+    "cache_key": "33de63e3416b70818c8305c71ea50cef5efcd8d130d3a00223900ea9138dc6c4",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0041",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 43,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 178,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "36bf6091e3408ebd37284686f5b80d1ce18ce88d884450cc5c83ca3f1e76c4f2"
+  },
+  {
+    "cache_key": "6888ef4dc87d83082e56b28a20baa9016adbddf8d562093a71dc5fed5a5d30b0",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0042",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0044_c0042_r0_measure.log",
+        "ms": 14.611,
+        "norm_ms": 14.611000000000002,
+        "raw_ms": 14.611,
+        "rc": 0,
+        "round": 0,
+        "seq": 44,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 177,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "302e57a39e1eb5d88a41615b8ce13e1074b16fcceb658501a87d836ef19b2ab7"
+  },
+  {
+    "cache_key": "81a2299b9061ab7ba984daba5de990d646c6969ce78046bfae8162fc8403e928",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0043",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0045_c0043_r0_measure.log",
+        "ms": 48.636,
+        "norm_ms": 48.636,
+        "raw_ms": 48.636,
+        "rc": 1,
+        "round": 0,
+        "seq": 45,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 176,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "f1ac5fdee035202e47bfa7473fc5fb1f056885743f7c4c575192130c6ac1af7c"
+  },
+  {
+    "cache_key": "20d356131a43aa0d238bfcf53c9d93887876802444854a166319f7970e858d0d",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0044",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 46,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 175,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "ba0485e0a06c937eefb0cdcda646f528599dc7b2f9412ff5fc4d344cc3e883de"
+  },
+  {
+    "cache_key": "ee55cca14a61367a53df820f05342367298cd23df54da1226b6931c5d81fe31d",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0045",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 47,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 174,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "36bf6091e3408ebd37284686f5b80d1ce18ce88d884450cc5c83ca3f1e76c4f2"
+  },
+  {
+    "cache_key": "98d6c4ff853fd47e8035ac94ab68a468db1fe214caa5da019115427fd35b0379",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0046",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0048_c0046_r0_measure.log",
+        "ms": 14.611,
+        "norm_ms": 14.611000000000002,
+        "raw_ms": 14.611,
+        "rc": 0,
+        "round": 0,
+        "seq": 48,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 173,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "302e57a39e1eb5d88a41615b8ce13e1074b16fcceb658501a87d836ef19b2ab7"
+  },
+  {
+    "cache_key": "ec5695a39931d8fcb9b0dbcff9e69333ef2ce2234d4ca8491355bd23a2d89e78",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0047",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0049_c0047_r0_measure.log",
+        "ms": 48.682,
+        "norm_ms": 48.682,
+        "raw_ms": 48.682,
+        "rc": 1,
+        "round": 0,
+        "seq": 49,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 172,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "f1ac5fdee035202e47bfa7473fc5fb1f056885743f7c4c575192130c6ac1af7c"
+  },
+  {
+    "cache_key": "a1fe8580eb0a86712e9108bacc9f881ba3f4025b01ae0ec2e51fb0ba1c5cf7ee",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0048",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 50,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 171,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "ba0485e0a06c937eefb0cdcda646f528599dc7b2f9412ff5fc4d344cc3e883de"
+  },
+  {
+    "cache_key": "8e6aa640de254f66c707464306ac196e213cc43683c148243f72d3d4dd0e03db",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "config_id": "c0049",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 51,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 170,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "36bf6091e3408ebd37284686f5b80d1ce18ce88d884450cc5c83ca3f1e76c4f2"
+  },
+  {
+    "cache_key": "e540e098a1277feda7f2a7dda46d3532ca5d60d25ef1a74779478c109428f3f8",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0050",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0052_c0050_r0_measure.log",
+        "ms": 10.352,
+        "norm_ms": 10.352,
+        "raw_ms": 10.352,
+        "rc": 0,
+        "round": 0,
+        "seq": 52,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 169,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "a7e7c27b069eb83fdf7c38626195b674598196706bc0f035d3fa3edb2de1c5f7"
+  },
+  {
+    "cache_key": "865ae08cc77a939efbd56d9d0cc48a73790a97cb25d5af0cbcadf16cf3dca821",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0051",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0053_c0051_r0_measure.log",
+        "ms": 28.753,
+        "norm_ms": 28.752999999999997,
+        "raw_ms": 28.753,
+        "rc": 1,
+        "round": 0,
+        "seq": 53,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 168,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "11b672b5188841e2848a46efeab2e8cd865417ab6d819b021bd0f51d58a61d3f"
+  },
+  {
+    "cache_key": "ad73c63f34af204524d2038b7880e6fba81d90195f7f99433c745178bb9d1164",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0052",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "kind": "measure",
+        "log": "logs/0054_c0052_r0_measure.log",
+        "ms": 69.976,
+        "norm_ms": 69.976,
+        "raw_ms": 69.976,
+        "rc": 0,
+        "round": 0,
+        "seq": 54,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 167,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "533cdef9d7181ba7e65175d0e2a63c220184e91fc1422137c7e7bbd4982fb0c5"
+  },
+  {
+    "cache_key": "fa72ec42d4a4803db6abfad75b6723f2c3cd49bd94ae98bd12a6e5c9c2a66d91",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0053",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 55,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 166,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "726c31a68c1e2bf322123a90713ff6dd2380d6dc9a1634aa5f1c79e913f35512"
+  },
+  {
+    "cache_key": "fdeded2ddc2fdaa0544981cb9087e14ab02de638d535ae5c34f5581452069283",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0054",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0056_c0054_r0_measure.log",
+        "ms": 10.357,
+        "norm_ms": 10.357,
+        "raw_ms": 10.357,
+        "rc": 0,
+        "round": 0,
+        "seq": 56,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 165,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "a7e7c27b069eb83fdf7c38626195b674598196706bc0f035d3fa3edb2de1c5f7"
+  },
+  {
+    "cache_key": "0ec4f21272bcd29eb050ea4eedaa4b70bc75c93e6a32a9ec5cfb6739001b1b51",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0055",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0057_c0055_r0_measure.log",
+        "ms": 28.864,
+        "norm_ms": 28.864,
+        "raw_ms": 28.864,
+        "rc": 1,
+        "round": 0,
+        "seq": 57,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 164,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "11b672b5188841e2848a46efeab2e8cd865417ab6d819b021bd0f51d58a61d3f"
+  },
+  {
+    "cache_key": "c51a3e58a3ba6b09c10f42158e8641c464476b0c652a1b313464db90d1bd3893",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0056",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 59,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 163,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "533cdef9d7181ba7e65175d0e2a63c220184e91fc1422137c7e7bbd4982fb0c5"
+  },
+  {
+    "cache_key": "28d473cdeb16bbda6c4b5319c8bcd66a52eeaeb0f160405b535d611615b7f147",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0057",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 60,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 162,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "726c31a68c1e2bf322123a90713ff6dd2380d6dc9a1634aa5f1c79e913f35512"
+  },
+  {
+    "cache_key": "cc092f1635cf357e50dba26c0239798adc277dcebe41fe1fe42e6ad709b83223",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0058",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0061_c0058_r0_measure.log",
+        "ms": 10.355,
+        "norm_ms": 10.357103819585536,
+        "raw_ms": 10.355,
+        "rc": 0,
+        "round": 0,
+        "seq": 61,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 161,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "a7e7c27b069eb83fdf7c38626195b674598196706bc0f035d3fa3edb2de1c5f7"
+  },
+  {
+    "cache_key": "c0380b14fac7825b20a5804906d38f2b8885481f9d0f0a1e2991518a42d1bfdb",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0059",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0062_c0059_r0_measure.log",
+        "ms": 28.796,
+        "norm_ms": 28.80185046728972,
+        "raw_ms": 28.796,
+        "rc": 1,
+        "round": 0,
+        "seq": 62,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 160,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "11b672b5188841e2848a46efeab2e8cd865417ab6d819b021bd0f51d58a61d3f"
+  },
+  {
+    "cache_key": "ff6553cb29226a9a86d1e282c123ee8d6a43d04dd3d6e0101a6f7461b76cbc3c",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0060",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 63,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 159,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "533cdef9d7181ba7e65175d0e2a63c220184e91fc1422137c7e7bbd4982fb0c5"
+  },
+  {
+    "cache_key": "37a9f602652a31b016f2285258b7b3c4bbb6b7296f82d31b6b3acfe9e3a33007",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0061",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 64,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 158,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "726c31a68c1e2bf322123a90713ff6dd2380d6dc9a1634aa5f1c79e913f35512"
+  },
+  {
+    "cache_key": "4c07fae815f25878181e8e88642aab37c80f23aaffb6a88ace8d847b004efb46",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0062",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0065_c0062_r0_measure.log",
+        "ms": 13.519,
+        "norm_ms": 13.521746647704187,
+        "raw_ms": 13.519,
+        "rc": 1,
+        "round": 0,
+        "seq": 65,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 157,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "3b20ed7486a8bd278fcecbfeb772d7f742a4896c401b116752da267c00cfb2e6"
+  },
+  {
+    "cache_key": "04501ef052873b21975049e86e70de34bcf14cfd805869f9532ee22d5d37efda",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0063",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "kind": "measure",
+        "log": "logs/0066_c0063_r0_measure.log",
+        "ms": 81.814,
+        "norm_ms": 81.83062210483543,
+        "raw_ms": 81.814,
+        "rc": 0,
+        "round": 0,
+        "seq": 66,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 156,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "296583aedd67bbbcf0e9681b1a58b6b4d12ba01013f23bfe2b146a4660a26d2b"
+  },
+  {
+    "cache_key": "7069ed1962f919c52f4ac1f5a3ff2655932acea028dd229496ae8970481ae7de",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0064",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 67,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 155,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "2179366beab27efc59c79c6c1e5237c38f369ebf5816830a14ed448cd0119a5c"
+  },
+  {
+    "cache_key": "360557b22e5271901e88cf71cf3fc05a160f6d67d344d1ada36ddd2fa77bbad2",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0065",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0068_c0065_r0_measure.log",
+        "ms": 13.399,
+        "norm_ms": 13.401722267370987,
+        "raw_ms": 13.399,
+        "rc": 1,
+        "round": 0,
+        "seq": 68,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 154,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "3b20ed7486a8bd278fcecbfeb772d7f742a4896c401b116752da267c00cfb2e6"
+  },
+  {
+    "cache_key": "3c9a9883a3192fcf903aaa330fbdb5ca6cc10d1de22b0d4106927ce2332685d8",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0066",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 69,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 153,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "296583aedd67bbbcf0e9681b1a58b6b4d12ba01013f23bfe2b146a4660a26d2b"
+  },
+  {
+    "cache_key": "21c9f24c4db08ff3bee01925ed85bdc80c740efb2a601e8c39fff49c4ed41463",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0067",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 70,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 152,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "2179366beab27efc59c79c6c1e5237c38f369ebf5816830a14ed448cd0119a5c"
+  },
+  {
+    "cache_key": "241a0c8cb3276be6ee8511e67709b4c73289cc59c9275e4414d7038d746e5cb9",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0068",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0071_c0068_r0_measure.log",
+        "ms": 9.848,
+        "norm_ms": 9.850000812677774,
+        "raw_ms": 9.848,
+        "rc": 0,
+        "round": 0,
+        "seq": 71,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 151,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "74e9370b6cca2bbbea1b4ae9063d5c89ae6a7488b7f9c62ab6758185eb71d1c1"
+  },
+  {
+    "cache_key": "f5ab9903a4b206d62790a8fe24fdb4285d2015dd06a5c34874ee42012525f2ae",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0069",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0072_c0069_r0_measure.log",
+        "ms": 13.472,
+        "norm_ms": 13.47473709874035,
+        "raw_ms": 13.472,
+        "rc": 1,
+        "round": 0,
+        "seq": 72,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 150,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "3b20ed7486a8bd278fcecbfeb772d7f742a4896c401b116752da267c00cfb2e6"
+  },
+  {
+    "cache_key": "3efe662310355768aef8b7f960f9f7b714c5187724c532c962631ffa11fb506b",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0070",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 73,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 149,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "296583aedd67bbbcf0e9681b1a58b6b4d12ba01013f23bfe2b146a4660a26d2b"
+  },
+  {
+    "cache_key": "475cdaea8b7603cf5703b579498507773392a0af40ace8cc9f44e5c4cd9d7b7c",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0071",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 74,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 148,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "2179366beab27efc59c79c6c1e5237c38f369ebf5816830a14ed448cd0119a5c"
+  },
+  {
+    "cache_key": "fb7cc4b802257144a63e227f1a9040320a8b192a800f7ded66a0e0f407e79eb6",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0072",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0075_c0072_r0_measure.log",
+        "ms": 19.038,
+        "norm_ms": 19.041867939861845,
+        "raw_ms": 19.038,
+        "rc": 0,
+        "round": 0,
+        "seq": 75,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 147,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "33ce1649d2ef7d7e9929e39a2d14bf5cfb6f344bcefb71a935c7ab10459c9619"
+  },
+  {
+    "cache_key": "1dc952dc1203cdd663199cd4b5edc23840a26ee8b3b0a11fbdba13c50fa28e0f",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0073",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0076_c0073_r0_measure.log",
+        "ms": 33.414,
+        "norm_ms": 33.42078870377895,
+        "raw_ms": 33.414,
+        "rc": 1,
+        "round": 0,
+        "seq": 76,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 146,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "01ddbc38c898e9a3ed1de3e75ca35a1bcbfebf3551d2c4bf534f75c75e9ddd1a"
+  },
+  {
+    "cache_key": "c0abb83ff418cf3b6cd42a8133c423c4a5aa4b37b630bc8fb79314f6aed5173f",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0074",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "kind": "measure",
+        "log": "logs/0077_c0074_r0_measure.log",
+        "ms": 29.981,
+        "norm_ms": 29.987091223080053,
+        "raw_ms": 29.981,
+        "rc": 0,
+        "round": 0,
+        "seq": 77,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 145,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "f19cec7eef66f8e02509716b62b2bbe90c115d116d7d2d0ddd81c6062914ce97"
+  },
+  {
+    "cache_key": "6b674f4c0bb47cba04618cb6b5104264b523c77dff3ae12ed4535224307cc74f",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0075",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 79,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 144,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "63c280b2a62e7d5ca8f021a0ba4095f3ac4074ff39399edfb91b3f88db268f78"
+  },
+  {
+    "cache_key": "5e1f920164548091292a84c1b0a4075dd312cc3b22a209b719e9ae173a70199e",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0076",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0080_c0076_r0_measure.log",
+        "ms": 19.584,
+        "norm_ms": 19.398799195171026,
+        "raw_ms": 19.584,
+        "rc": 0,
+        "round": 0,
+        "seq": 80,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 143,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "33ce1649d2ef7d7e9929e39a2d14bf5cfb6f344bcefb71a935c7ab10459c9619"
+  },
+  {
+    "cache_key": "150b844c59c60d4981d9e98eeb184232bb03d4ce2715f32cf41f5759a31625e0",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0077",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0081_c0077_r0_measure.log",
+        "ms": 33.409,
+        "norm_ms": 33.09305975855131,
+        "raw_ms": 33.409,
+        "rc": 1,
+        "round": 0,
+        "seq": 81,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 142,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "01ddbc38c898e9a3ed1de3e75ca35a1bcbfebf3551d2c4bf534f75c75e9ddd1a"
+  },
+  {
+    "cache_key": "8eb14d55a93569cc4be5ab813925fbfea3e0297547f9abd73412896a55a90b75",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0078",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 82,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 141,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "f19cec7eef66f8e02509716b62b2bbe90c115d116d7d2d0ddd81c6062914ce97"
+  },
+  {
+    "cache_key": "1c34e4e667f4328feca72d786d55847da999ed8710128838a424dbf1bf6b0a53",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0079",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 83,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 140,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "63c280b2a62e7d5ca8f021a0ba4095f3ac4074ff39399edfb91b3f88db268f78"
+  },
+  {
+    "cache_key": "ddc4dd239c2ce9c5d967923968dbe5709762e4be07cd42439bb06148024a0b9d",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0080",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0084_c0080_r0_measure.log",
+        "ms": 19.371,
+        "norm_ms": 19.18781348088531,
+        "raw_ms": 19.371,
+        "rc": 0,
+        "round": 0,
+        "seq": 84,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 139,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "33ce1649d2ef7d7e9929e39a2d14bf5cfb6f344bcefb71a935c7ab10459c9619"
+  },
+  {
+    "cache_key": "22628975f9e167aaf4b57452269e695b1a4d3ecc38f853af19ddb275f7113df4",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0081",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0085_c0081_r0_measure.log",
+        "ms": 33.458,
+        "norm_ms": 33.14159637826962,
+        "raw_ms": 33.458,
+        "rc": 1,
+        "round": 0,
+        "seq": 85,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 138,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "01ddbc38c898e9a3ed1de3e75ca35a1bcbfebf3551d2c4bf534f75c75e9ddd1a"
+  },
+  {
+    "cache_key": "95e09ec17ef7a0736aa675a9e4dcb8d727a8aee92f61d2b3e581428b67e9dee2",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0082",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 86,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 137,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "f19cec7eef66f8e02509716b62b2bbe90c115d116d7d2d0ddd81c6062914ce97"
+  },
+  {
+    "cache_key": "043c216a961e103cf2f163b86e3d9679f926f91819f93a92a5445716920ba630",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "config_id": "c0083",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 87,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 136,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "63c280b2a62e7d5ca8f021a0ba4095f3ac4074ff39399edfb91b3f88db268f78"
+  },
+  {
+    "cache_key": "b64487c8170204dbfa6d763c3dc595ce67cbfb10fa5814123d3e00386d2ab81a",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0084",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0088_c0084_r0_measure.log",
+        "ms": 12.002,
+        "norm_ms": 11.888500201207245,
+        "raw_ms": 12.002,
+        "rc": 0,
+        "round": 0,
+        "seq": 88,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 135,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "df46097d39daeaf8b0e0d47c6e0bcb3bb90f87386362929052b3211aa33cfeaa"
+  },
+  {
+    "cache_key": "a0018f2b9b76bf9067160c2fecc9580098d09a704f49f66f6c8ec85753eb06de",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0085",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.269858705,
+        "kind": "measure",
+        "log": "logs/0089_c0085_r0_measure.log",
+        "ms": 20.025,
+        "norm_ms": 19.835628772635815,
+        "raw_ms": 20.025,
+        "rc": 1,
+        "round": 0,
+        "seq": 89,
+        "skipped_reason": "",
+        "status": "FAIL"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 134,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "8bcc279dbfbec8177ee5542e697a4cbdfe538e3aacea0eb91072dd3528669925"
+  },
+  {
+    "cache_key": "99bd5be8b7d9aa0ef5132fc5a66be46902db8728101cc123311bf5930b520441",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0086",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999978,
+        "kind": "measure",
+        "log": "logs/0090_c0086_r0_measure.log",
+        "ms": 31.914,
+        "norm_ms": 31.61219758551308,
+        "raw_ms": 31.914,
+        "rc": 0,
+        "round": 0,
+        "seq": 90,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 133,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "8d7eb24484f955c3663029b862d2208ba745989c0d5ec1dc31b215c54545e7ab"
+  },
+  {
+    "cache_key": "d00d1a97b477de909c5d9768fab3892af1598676d961ece225c391a47ceb42e9",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0087",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 91,
+        "skipped_reason": "skipped_family",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 132,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "73f339b01c6a916011cad3c9ea662f5a7e162f11b19536bb69ada83be550859c"
+  },
+  {
+    "cache_key": "c308ab8482f8702d8c6c1a95d85d8ff676270df0d8584a0ff50174089fd441c3",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0088",
+    "emit_error": null,
+    "measurements": [
+      {
+        "cos": 0.999999979,
+        "kind": "measure",
+        "log": "logs/0092_c0088_r0_measure.log",
+        "ms": 11.813,
+        "norm_ms": 11.701287525150907,
+        "raw_ms": 11.813,
+        "rc": 0,
+        "round": 0,
+        "seq": 92,
+        "skipped_reason": "",
+        "status": "PASS"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 131,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "df46097d39daeaf8b0e0d47c6e0bcb3bb90f87386362929052b3211aa33cfeaa"
+  },
+  {
+    "cache_key": "be60adb5024e25c0a0d84dc66f265c7bc702cfb07f6409e75c6cf3963e09d236",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0089",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 93,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 130,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "8bcc279dbfbec8177ee5542e697a4cbdfe538e3aacea0eb91072dd3528669925"
+  },
+  {
+    "cache_key": "85cdac4b1c438de4105afe4292dbf747bdd3b3b6f36d54ef7a883e0172b949cb",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0090",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 94,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 129,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "8d7eb24484f955c3663029b862d2208ba745989c0d5ec1dc31b215c54545e7ab"
+  },
+  {
+    "cache_key": "34eef35e472612bca8e7d22302764e830270cf49aa477512114ff1c44406ea51",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0091",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 95,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 128,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "73f339b01c6a916011cad3c9ea662f5a7e162f11b19536bb69ada83be550859c"
+  },
+  {
+    "cache_key": "e46b28d21617200bb9f8517fee4feda0770376be7f07ecd19ec3d5fc9dda03a7",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0092",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 96,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 127,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "df46097d39daeaf8b0e0d47c6e0bcb3bb90f87386362929052b3211aa33cfeaa"
+  },
+  {
+    "cache_key": "b1e0daf93ec805ee9300755f1d71ad5e21a1f74c8624e0e803d7a9ecb39ae71a",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0093",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 97,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 126,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "8bcc279dbfbec8177ee5542e697a4cbdfe538e3aacea0eb91072dd3528669925"
+  },
+  {
+    "cache_key": "bfc8640ca0cf402d2b271b3eeb3b637be2209568387a5a5ca39eb84162feca7d",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0094",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 98,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 125,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "8d7eb24484f955c3663029b862d2208ba745989c0d5ec1dc31b215c54545e7ab"
+  },
+  {
+    "cache_key": "f4aad6fddaa08b967378f82ce3993ea25e0441b51d1d7f976cacbf05e74223e5",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "config_id": "c0095",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 99,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 124,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "73f339b01c6a916011cad3c9ea662f5a7e162f11b19536bb69ada83be550859c"
+  },
+  {
+    "cache_key": "9850baa50bc1191f88c40daa56c06dd773faf5adbbd627cdcb0a4cfa692fe961",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "config_id": "c0096",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 100,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 123,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "db8b15394e633696a158feb283557191c058d6f75289b8f0d90289a57f46eca7"
+  },
+  {
+    "cache_key": "e858f5e8ab8859def9607f31fbb3038230290fa63dace24b110b52150ffba551",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "config_id": "c0097",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 101,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 122,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "ffc3c4d6f55fe9abfdb3bc774e99ceba3ec205ae098fd25775134f266c19088c"
+  },
+  {
+    "cache_key": "dabb68d57bb85528c5bd2eb905fc47bcb5236a2ab8b35303d377c0ec0cac95db",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "config_id": "c0098",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 102,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 121,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "30b6ab12456fd92edde30b91232dcc19ad5612d8f7db2a43f07671c9aeb96954"
+  },
+  {
+    "cache_key": "670028d7de682dedb10154a32b5f0b80d012fadf7abcd77d739530d798bc3864",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "config_id": "c0099",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 103,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 120,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "4eda87f5b8b171d9595a7990ad4d4acb45cbca32d99b23f3c418b783a2fc4cb0"
+  },
+  {
+    "cache_key": "b52662bf0921c792cf8db7ef571cf3273112512d14e59a40ce51746a2692bebb",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "config_id": "c0100",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 104,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 119,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "db8b15394e633696a158feb283557191c058d6f75289b8f0d90289a57f46eca7"
+  },
+  {
+    "cache_key": "0a1262a51678f4b9bb96f369396429aef28b64fe19f97aa913aec77aec8cb3bf",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "config_id": "c0101",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 105,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 118,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "ffc3c4d6f55fe9abfdb3bc774e99ceba3ec205ae098fd25775134f266c19088c"
+  },
+  {
+    "cache_key": "939da8f8cb061839134066a1c50bce359e859daa420629a8625b3674a1bfac76",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "config_id": "c0102",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 106,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 117,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "30b6ab12456fd92edde30b91232dcc19ad5612d8f7db2a43f07671c9aeb96954"
+  },
+  {
+    "cache_key": "fd4d42e5ef2a7d8a45246b7aeb927f0f3bd0c347b82d08f3744de0aa19fd7790",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "config_id": "c0103",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 107,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 116,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "4eda87f5b8b171d9595a7990ad4d4acb45cbca32d99b23f3c418b783a2fc4cb0"
+  },
+  {
+    "cache_key": "b449b5b1920731e3c1ba27d70753ca615e88b19fe9d62f2e0a0631695666aa03",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "config_id": "c0104",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 108,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 115,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "db8b15394e633696a158feb283557191c058d6f75289b8f0d90289a57f46eca7"
+  },
+  {
+    "cache_key": "1028c450b709aa22abbeeb4064a08b5a183ce2b03757df6472d54d2ee92380e7",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "config_id": "c0105",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 109,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 114,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "ffc3c4d6f55fe9abfdb3bc774e99ceba3ec205ae098fd25775134f266c19088c"
+  },
+  {
+    "cache_key": "c8cb933edaa26ee4dc0157a29531847d083caff08b3705a04cd012df8de5dcec",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "config_id": "c0106",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 110,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 113,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "30b6ab12456fd92edde30b91232dcc19ad5612d8f7db2a43f07671c9aeb96954"
+  },
+  {
+    "cache_key": "d004c8fbf1c66e91cd22e97c14a7bd5337744af7db11e3a59674d8d07ec63bbf",
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "config_id": "c0107",
+    "emit_error": null,
+    "measurements": [
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 0,
+        "seq": 111,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      },
+      {
+        "kind": "skipped",
+        "log": "",
+        "raw_ms": null,
+        "rc": null,
+        "round": 1,
+        "seq": 112,
+        "skipped_reason": "early_stopped",
+        "status": "SKIPPED"
+      }
+    ],
+    "source_sha256": "4eda87f5b8b171d9595a7990ad4d4acb45cbca32d99b23f3c418b783a2fc4cb0"
+  }
+]

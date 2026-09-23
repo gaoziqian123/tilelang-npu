@@ -36,3 +36,25 @@ The generic orchestrator is `tune.py`.  It accepts a Python kernel factory
 `config -> T.prim_func`, a config list, `ProbeSpec` (binary/kernel/env/parser),
 `DeviceSpec` (ssh alias/remote dir), and a tag.  Cache keys are sha256 over the
 TileLang git revision, kernel factory source, config, and probe spec.
+
+## Phase-2 scheduler features
+
+`tune.py` also has a kernel-independent `TuneSpec` used by `tune_gemm.py`:
+
+- **Priors**: known-good config dicts are moved to the front before emit/run;
+  the GR GEMM pilot seeds `bm=32,bn=256,bk=16,kn` and `bk=32`.
+- **Early stop**: configs are grouped by a family key that drops `bk`,
+  `threads`, and `pass_configs`.  If the first measured member of a family is
+  slower than `2.0x` current best, the rest of the family is marked
+  `skipped_family`; after 12 measured configs fail to enter top-3, the sweep is
+  marked `early_stopped`.
+- **Pass configs in the search space**: configs may carry a `pass_configs` dict;
+  it is validated, recorded in results/cache keys, and merged into the
+  TileLang `PassContext`.  The GEMM pilot demonstrates
+  `{"tl.UnrollLoop": {"explicit_unroll": true|false, ...}}`.
+- **Canary normalization**: rounds are interleaved forward/reverse, and every 10
+  measured configs the current best is re-run as a canary.  Results keep both
+  raw `ms` and canary-normalized `norm_ms`; ranking uses `norm_ms`.
+
+Each run writes `<tag>_meta.json` with `measured`, `canaries`, `family_skip`,
+`early`, `top3`, and `priors`.

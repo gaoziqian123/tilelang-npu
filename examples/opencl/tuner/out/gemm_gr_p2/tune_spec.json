@@ -1,0 +1,44 @@
+{
+  "canary_interval": 10,
+  "family_slowdown": 2.0,
+  "global_no_top3_limit": 12,
+  "priors": [
+    {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    }
+  ],
+  "rounds": 2
+}

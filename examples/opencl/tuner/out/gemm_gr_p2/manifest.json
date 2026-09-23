@@ -1,0 +1,3782 @@
+[
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0000.cl",
+    "id": "c0000"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0001.cl",
+    "id": "c0001"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0002.cl",
+    "id": "c0002"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0003.cl",
+    "id": "c0003"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0004.cl",
+    "id": "c0004"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0005.cl",
+    "id": "c0005"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0006.cl",
+    "id": "c0006"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0007.cl",
+    "id": "c0007"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0008.cl",
+    "id": "c0008"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0009.cl",
+    "id": "c0009"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0010.cl",
+    "id": "c0010"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0011.cl",
+    "id": "c0011"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0012.cl",
+    "id": "c0012"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 16
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 16
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0013.cl",
+    "id": "c0013"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0014.cl",
+    "id": "c0014"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0015.cl",
+    "id": "c0015"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0016.cl",
+    "id": "c0016"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0017.cl",
+    "id": "c0017"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0018.cl",
+    "id": "c0018"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0019.cl",
+    "id": "c0019"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0020.cl",
+    "id": "c0020"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0021.cl",
+    "id": "c0021"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0022.cl",
+    "id": "c0022"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0023.cl",
+    "id": "c0023"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0024.cl",
+    "id": "c0024"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0025.cl",
+    "id": "c0025"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0026.cl",
+    "id": "c0026"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0027.cl",
+    "id": "c0027"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0028.cl",
+    "id": "c0028"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0029.cl",
+    "id": "c0029"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0030.cl",
+    "id": "c0030"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0031.cl",
+    "id": "c0031"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0032.cl",
+    "id": "c0032"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0033.cl",
+    "id": "c0033"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0034.cl",
+    "id": "c0034"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0035.cl",
+    "id": "c0035"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0036.cl",
+    "id": "c0036"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 16,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":16,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0037.cl",
+    "id": "c0037"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0038.cl",
+    "id": "c0038"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0039.cl",
+    "id": "c0039"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0040.cl",
+    "id": "c0040"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0041.cl",
+    "id": "c0041"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0042.cl",
+    "id": "c0042"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0043.cl",
+    "id": "c0043"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0044.cl",
+    "id": "c0044"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0045.cl",
+    "id": "c0045"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0046.cl",
+    "id": "c0046"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0047.cl",
+    "id": "c0047"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0048.cl",
+    "id": "c0048"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 32
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 32
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0049.cl",
+    "id": "c0049"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0050.cl",
+    "id": "c0050"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0051.cl",
+    "id": "c0051"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0052.cl",
+    "id": "c0052"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0053.cl",
+    "id": "c0053"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0054.cl",
+    "id": "c0054"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0055.cl",
+    "id": "c0055"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0056.cl",
+    "id": "c0056"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0057.cl",
+    "id": "c0057"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0058.cl",
+    "id": "c0058"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0059.cl",
+    "id": "c0059"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0060.cl",
+    "id": "c0060"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0061.cl",
+    "id": "c0061"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0062.cl",
+    "id": "c0062"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0063.cl",
+    "id": "c0063"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0064.cl",
+    "id": "c0064"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0065.cl",
+    "id": "c0065"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0066.cl",
+    "id": "c0066"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0067.cl",
+    "id": "c0067"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0068.cl",
+    "id": "c0068"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0069.cl",
+    "id": "c0069"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0070.cl",
+    "id": "c0070"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 32,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":32,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0071.cl",
+    "id": "c0071"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0072.cl",
+    "id": "c0072"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0073.cl",
+    "id": "c0073"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0074.cl",
+    "id": "c0074"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0075.cl",
+    "id": "c0075"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0076.cl",
+    "id": "c0076"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0077.cl",
+    "id": "c0077"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0078.cl",
+    "id": "c0078"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0079.cl",
+    "id": "c0079"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0080.cl",
+    "id": "c0080"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0081.cl",
+    "id": "c0081"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0082.cl",
+    "id": "c0082"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 64,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 64
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 64,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 64
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":64,\"chunk_k\":256}",
+    "file": "c0083.cl",
+    "id": "c0083"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0084.cl",
+    "id": "c0084"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0085.cl",
+    "id": "c0085"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0086.cl",
+    "id": "c0086"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0087.cl",
+    "id": "c0087"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0088.cl",
+    "id": "c0088"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0089.cl",
+    "id": "c0089"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0090.cl",
+    "id": "c0090"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0091.cl",
+    "id": "c0091"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0092.cl",
+    "id": "c0092"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0093.cl",
+    "id": "c0093"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0094.cl",
+    "id": "c0094"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 128
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 128,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 128
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":128,\"chunk_k\":256}",
+    "file": "c0095.cl",
+    "id": "c0095"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0096.cl",
+    "id": "c0096"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0097.cl",
+    "id": "c0097"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0098.cl",
+    "id": "c0098"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 16,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0099.cl",
+    "id": "c0099"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0100.cl",
+    "id": "c0100"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0101.cl",
+    "id": "c0101"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0102.cl",
+    "id": "c0102"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 32,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0103.cl",
+    "id": "c0103"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0104.cl",
+    "id": "c0104"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "kn",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"kn\",\"bm\":64,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0105.cl",
+    "id": "c0105"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": true,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0106.cl",
+    "id": "c0106"
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 1024,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "nk",
+      "bk": 64,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "pass_configs": {
+        "tl.UnrollLoop": {
+          "explicit_unroll": false,
+          "unroll_local_access": true
+        }
+      },
+      "threads": 256
+    },
+    "env": {
+      "TL_BM": 64,
+      "TL_BN": 256,
+      "TL_B_LAYOUT": "nk",
+      "TL_CHECK": "cosine",
+      "TL_CHECK_SAMPLES": "2048",
+      "TL_ITERS": "10",
+      "TL_K": 2560,
+      "TL_M": 1024,
+      "TL_N": 2560,
+      "TL_THREADS": 256
+    },
+    "family_key": "{\"K\":2560,\"M\":1024,\"N\":2560,\"accum_dtype\":\"float32\",\"b_layout\":\"nk\",\"bm\":64,\"bn\":256,\"chunk_k\":256}",
+    "file": "c0107.cl",
+    "id": "c0107"
+  }
+]

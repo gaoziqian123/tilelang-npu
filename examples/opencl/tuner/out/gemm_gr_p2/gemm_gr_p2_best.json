@@ -1,0 +1,25 @@
+{
+  "cache_key": "93fd056f917c840ed0de38915669cf3ea2b6212d4869348b3e98d8221cbab74b",
+  "config": {
+    "K": 2560,
+    "M": 1024,
+    "N": 2560,
+    "accum_dtype": "float32",
+    "b_layout": "kn",
+    "bk": 16,
+    "bm": 32,
+    "bn": 256,
+    "chunk_k": 256,
+    "pass_configs": {
+      "tl.UnrollLoop": {
+        "explicit_unroll": true,
+        "unroll_local_access": true
+      }
+    },
+    "threads": 128
+  },
+  "config_id": "c0000",
+  "cos": 0.999999979,
+  "ms": 9.824,
+  "raw_ms": 9.824
+}
