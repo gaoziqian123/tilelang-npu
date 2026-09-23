@@ -134,6 +134,7 @@ class GemmFMA(GemmBase):
         b_layout = self._rr_b_layout()
         clear_accum = self.clear_accum
         tid = thread_var - thread_bounds.min
+        shared_operands = is_shared(self.A) or is_shared(self.B)
 
         # Full-fp16 mode: when the C fragment is fp16 the whole inner chain
         # stays in half (no Convert nodes anywhere): half4 A loads, half8 B
@@ -157,6 +158,14 @@ class GemmFMA(GemmBase):
         # rolled like the 1.35T anchor kernel.
         @T.prim_func
         def _gemm_rr_fma() -> None:
+            if shared_operands:
+                # Shared operands are commonly filled by a preceding T.copy in
+                # the caller.  All work-items consume the full staged tile, so
+                # fence copy->gemm RAW before the first read.  A matching fence
+                # at the end protects loop-carried reuse: no work-item may
+                # start the next T.copy and overwrite local memory while a peer
+                # is still reading this tile.
+                T.sync_threads()
             acc = T.alloc_local((8,), v8_dtype)
             tm = tid // tiles_n
             tn = tid - tm * tiles_n
@@ -225,6 +234,8 @@ class GemmFMA(GemmBase):
             for ii in T.unroll(8, explicit=True):
                 for jj in T.unroll(8, explicit=True):
                     C_buf[cr + ii, cc + jj] = T.Shuffle([acc[ii]], [jj])
+            if shared_operands:
+                T.sync_threads()
 
         return _Simplify(_gemm_rr_fma, inline_let=True)
 
@@ -270,9 +281,14 @@ class GemmFMA(GemmBase):
         clear_accum = self.clear_accum
         accum_dtype = self.accum_dtype
         thread_nums = thread_bounds.extent
+        shared_operands = is_shared(self.A) or is_shared(self.B)
 
         @T.prim_func
         def _gemm_fma() -> None:
+            if shared_operands:
+                # See the RR lower above: fence producer T.copy -> shared GEMM
+                # reads, and fence GEMM reads -> next producer overwrite.
+                T.sync_threads()
             accum = T.alloc_local((1,), accum_dtype)
 
             for c_flat in T.serial(thread_var, M * N, thread_nums):
@@ -291,5 +307,7 @@ class GemmFMA(GemmBase):
                         B_buf[tuple(B_other) + (b0 + b_i, b1 + b_j)], accum_dtype
                     )
                 C_buf[tuple(C_other) + (c0 + i, c1 + j)] = accum[0]
+            if shared_operands:
+                T.sync_threads()
 
         return _Simplify(_gemm_fma, inline_let=True)
