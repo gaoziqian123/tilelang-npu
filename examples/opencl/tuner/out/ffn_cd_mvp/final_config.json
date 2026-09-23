@@ -1,0 +1,41 @@
+{
+  "down": {
+    "K": 9216,
+    "M": 960,
+    "N": 2560,
+    "accum_dtype": "float32",
+    "b_layout": "kn",
+    "bk": 16,
+    "bm": 32,
+    "bn": 128,
+    "chunk_k": 256,
+    "stage": "down",
+    "threads": 64
+  },
+  "gate": {
+    "K": 2560,
+    "M": 960,
+    "N": 9216,
+    "accum_dtype": "float32",
+    "b_layout": "kn",
+    "bk": 16,
+    "bm": 64,
+    "bn": 256,
+    "chunk_k": 256,
+    "stage": "gate",
+    "threads": 256
+  },
+  "up": {
+    "K": 2560,
+    "M": 960,
+    "N": 9216,
+    "accum_dtype": "float32",
+    "b_layout": "kn",
+    "bk": 64,
+    "bm": 64,
+    "bn": 256,
+    "chunk_k": 256,
+    "stage": "up",
+    "threads": 256
+  }
+}

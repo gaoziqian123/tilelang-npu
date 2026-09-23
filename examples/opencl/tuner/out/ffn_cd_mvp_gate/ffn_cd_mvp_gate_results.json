@@ -1,0 +1,1034 @@
+[
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 32
+    },
+    "config_id": "c0000",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.301,
+        "gate": 51.981,
+        "log": "logs/c0000_r0.log",
+        "ms": 51.981,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.859,
+        "status": "PASS",
+        "total": 279.575,
+        "up": 115.434
+      },
+      {
+        "down": 111.381,
+        "gate": 52.006,
+        "log": "logs/c0000_r1.log",
+        "ms": 52.006,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.864,
+        "status": "PASS",
+        "total": 279.677,
+        "up": 115.426
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 32
+    },
+    "config_id": "c0001",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.291,
+        "gate": 52.011,
+        "log": "logs/c0001_r0.log",
+        "ms": 52.011,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.861,
+        "status": "PASS",
+        "total": 279.555,
+        "up": 115.393
+      },
+      {
+        "down": 111.258,
+        "gate": 52.007,
+        "log": "logs/c0001_r1.log",
+        "ms": 52.007,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.859,
+        "status": "PASS",
+        "total": 279.551,
+        "up": 115.427
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 128,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 32
+    },
+    "config_id": "c0002",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.296,
+        "gate": 52.131,
+        "log": "logs/c0002_r0.log",
+        "ms": 52.131,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 279.678,
+        "up": 115.391
+      },
+      {
+        "down": 111.139,
+        "gate": 52.131,
+        "log": "logs/c0002_r1.log",
+        "ms": 52.131,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 279.486,
+        "up": 115.356
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 64
+    },
+    "config_id": "c0003",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.176,
+        "gate": 47.448,
+        "log": "logs/c0003_r0.log",
+        "ms": 47.448,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.865,
+        "status": "PASS",
+        "total": 274.884,
+        "up": 115.395
+      },
+      {
+        "down": 111.344,
+        "gate": 47.367,
+        "log": "logs/c0003_r1.log",
+        "ms": 47.367,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.863,
+        "status": "PASS",
+        "total": 274.944,
+        "up": 115.371
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 64
+    },
+    "config_id": "c0004",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.053,
+        "gate": 47.556,
+        "log": "logs/c0004_r0.log",
+        "ms": 47.556,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.865,
+        "status": "PASS",
+        "total": 274.855,
+        "up": 115.381
+      },
+      {
+        "down": 111.095,
+        "gate": 47.374,
+        "log": "logs/c0004_r1.log",
+        "ms": 47.374,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 274.675,
+        "up": 115.347
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 256,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 64
+    },
+    "config_id": "c0005",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.274,
+        "gate": 47.483,
+        "log": "logs/c0005_r0.log",
+        "ms": 47.483,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.861,
+        "status": "PASS",
+        "total": 274.976,
+        "up": 115.358
+      },
+      {
+        "down": 111.228,
+        "gate": 47.389,
+        "log": "logs/c0005_r1.log",
+        "ms": 47.389,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 274.821,
+        "up": 115.343
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 16,
+      "bn": 512,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 128
+    },
+    "config_id": "c0006",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.081,
+        "gate": 65.982,
+        "log": "logs/c0006_r0.log",
+        "ms": 65.982,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.862,
+        "status": "PASS",
+        "total": 293.271,
+        "up": 115.347
+      },
+      {
+        "down": 111.209,
+        "gate": 65.916,
+        "log": "logs/c0006_r1.log",
+        "ms": 65.916,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.859,
+        "status": "PASS",
+        "total": 293.34,
+        "up": 115.355
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 16,
+      "bn": 512,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 128
+    },
+    "config_id": "c0007",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.317,
+        "gate": 64.153,
+        "log": "logs/c0007_r0.log",
+        "ms": 64.153,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.863,
+        "status": "PASS",
+        "total": 291.677,
+        "up": 115.344
+      },
+      {
+        "down": 111.227,
+        "gate": 65.318,
+        "log": "logs/c0007_r1.log",
+        "ms": 65.318,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.861,
+        "status": "PASS",
+        "total": 292.768,
+        "up": 115.361
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 16,
+      "bn": 512,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 128
+    },
+    "config_id": "c0008",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.185,
+        "gate": 56.803,
+        "log": "logs/c0008_r0.log",
+        "ms": 56.803,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.862,
+        "status": "PASS",
+        "total": 284.145,
+        "up": 115.295
+      },
+      {
+        "down": 111.32,
+        "gate": 59.401,
+        "log": "logs/c0008_r1.log",
+        "ms": 59.401,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.862,
+        "status": "PASS",
+        "total": 286.884,
+        "up": 115.3
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 64
+    },
+    "config_id": "c0009",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.168,
+        "gate": 34.239,
+        "log": "logs/c0009_r0.log",
+        "ms": 34.239,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.867,
+        "status": "PASS",
+        "total": 261.611,
+        "up": 115.337
+      },
+      {
+        "down": 111.189,
+        "gate": 34.259,
+        "log": "logs/c0009_r1.log",
+        "ms": 34.259,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 261.64,
+        "up": 115.331
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 64
+    },
+    "config_id": "c0010",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.184,
+        "gate": 34.274,
+        "log": "logs/c0010_r0.log",
+        "ms": 34.274,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 261.646,
+        "up": 115.328
+      },
+      {
+        "down": 111.243,
+        "gate": 34.231,
+        "log": "logs/c0010_r1.log",
+        "ms": 34.231,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.859,
+        "status": "PASS",
+        "total": 261.655,
+        "up": 115.32
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 64
+    },
+    "config_id": "c0011",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.177,
+        "gate": 34.286,
+        "log": "logs/c0011_r0.log",
+        "ms": 34.286,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.861,
+        "status": "PASS",
+        "total": 261.639,
+        "up": 115.315
+      },
+      {
+        "down": 111.179,
+        "gate": 34.288,
+        "log": "logs/c0011_r1.log",
+        "ms": 34.288,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 261.653,
+        "up": 115.325
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 128
+    },
+    "config_id": "c0012",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.308,
+        "gate": 35.872,
+        "log": "logs/c0012_r0.log",
+        "ms": 35.872,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.867,
+        "status": "PASS",
+        "total": 263.366,
+        "up": 115.319
+      },
+      {
+        "down": 111.222,
+        "gate": 35.461,
+        "log": "logs/c0012_r1.log",
+        "ms": 35.461,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 262.811,
+        "up": 115.268
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 128
+    },
+    "config_id": "c0013",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.204,
+        "gate": 35.743,
+        "log": "logs/c0013_r0.log",
+        "ms": 35.743,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.861,
+        "status": "PASS",
+        "total": 263.07,
+        "up": 115.263
+      },
+      {
+        "down": 111.187,
+        "gate": 35.807,
+        "log": "logs/c0013_r1.log",
+        "ms": 35.807,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 263.156,
+        "up": 115.303
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 256,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 128
+    },
+    "config_id": "c0014",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.161,
+        "gate": 35.609,
+        "log": "logs/c0014_r0.log",
+        "ms": 35.609,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.862,
+        "status": "PASS",
+        "total": 262.915,
+        "up": 115.283
+      },
+      {
+        "down": 111.256,
+        "gate": 35.536,
+        "log": "logs/c0014_r1.log",
+        "ms": 35.536,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.863,
+        "status": "PASS",
+        "total": 262.938,
+        "up": 115.283
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 512,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 256
+    },
+    "config_id": "c0015",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.238,
+        "gate": 40.501,
+        "log": "logs/c0015_r0.log",
+        "ms": 40.501,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.862,
+        "status": "PASS",
+        "total": 267.89,
+        "up": 115.289
+      },
+      {
+        "down": 111.177,
+        "gate": 40.925,
+        "log": "logs/c0015_r1.log",
+        "ms": 40.925,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 268.254,
+        "up": 115.291
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 32,
+      "bn": 512,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 256
+    },
+    "config_id": "c0016",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.12,
+        "gate": 43.311,
+        "log": "logs/c0016_r0.log",
+        "ms": 43.311,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.863,
+        "status": "PASS",
+        "total": 270.599,
+        "up": 115.306
+      },
+      {
+        "down": 111.242,
+        "gate": 46.274,
+        "log": "logs/c0016_r1.log",
+        "ms": 46.274,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.862,
+        "status": "PASS",
+        "total": 273.704,
+        "up": 115.326
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 32,
+      "bn": 512,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 256
+    },
+    "config_id": "c0017",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.128,
+        "gate": 42.647,
+        "log": "logs/c0017_r0.log",
+        "ms": 42.647,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.868,
+        "status": "PASS",
+        "total": 269.921,
+        "up": 115.279
+      },
+      {
+        "down": 111.21,
+        "gate": 42.588,
+        "log": "logs/c0017_r1.log",
+        "ms": 42.588,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.861,
+        "status": "PASS",
+        "total": 269.945,
+        "up": 115.286
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 128
+    },
+    "config_id": "c0018",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.221,
+        "gate": 44.27,
+        "log": "logs/c0018_r0.log",
+        "ms": 44.27,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.861,
+        "status": "PASS",
+        "total": 271.679,
+        "up": 115.326
+      },
+      {
+        "down": 111.144,
+        "gate": 44.559,
+        "log": "logs/c0018_r1.log",
+        "ms": 44.559,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.863,
+        "status": "PASS",
+        "total": 271.843,
+        "up": 115.277
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 128
+    },
+    "config_id": "c0019",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.305,
+        "gate": 44.568,
+        "log": "logs/c0019_r0.log",
+        "ms": 44.568,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.862,
+        "status": "PASS",
+        "total": 272.025,
+        "up": 115.289
+      },
+      {
+        "down": 111.276,
+        "gate": 44.375,
+        "log": "logs/c0019_r1.log",
+        "ms": 44.375,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.862,
+        "status": "PASS",
+        "total": 271.816,
+        "up": 115.303
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 128,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 128
+    },
+    "config_id": "c0020",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.229,
+        "gate": 44.387,
+        "log": "logs/c0020_r0.log",
+        "ms": 44.387,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 271.775,
+        "up": 115.299
+      },
+      {
+        "down": 111.239,
+        "gate": 44.397,
+        "log": "logs/c0020_r1.log",
+        "ms": 44.397,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.861,
+        "status": "PASS",
+        "total": 271.782,
+        "up": 115.285
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 256
+    },
+    "config_id": "c0021",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.32,
+        "gate": 34.13,
+        "log": "logs/c0021_r0.log",
+        "ms": 34.13,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 261.597,
+        "up": 115.286
+      },
+      {
+        "down": 111.297,
+        "gate": 34.115,
+        "log": "logs/c0021_r1.log",
+        "ms": 34.115,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.86,
+        "status": "PASS",
+        "total": 261.567,
+        "up": 115.296
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 32,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 256
+    },
+    "config_id": "c0022",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.159,
+        "gate": 34.261,
+        "log": "logs/c0022_r0.log",
+        "ms": 34.261,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.861,
+        "status": "PASS",
+        "total": 261.58,
+        "up": 115.3
+      },
+      {
+        "down": 111.194,
+        "gate": 34.182,
+        "log": "logs/c0022_r1.log",
+        "ms": 34.182,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.866,
+        "status": "PASS",
+        "total": 261.521,
+        "up": 115.279
+      }
+    ]
+  },
+  {
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "stage": "gate",
+      "threads": 256
+    },
+    "config_id": "c0023",
+    "emit_error": null,
+    "measurements": [
+      {
+        "down": 111.238,
+        "gate": 34.454,
+        "log": "logs/c0023_r0.log",
+        "ms": 34.454,
+        "rc": 0,
+        "round": 0,
+        "silu": 0.862,
+        "status": "PASS",
+        "total": 261.886,
+        "up": 115.332
+      },
+      {
+        "down": 111.287,
+        "gate": 34.261,
+        "log": "logs/c0023_r1.log",
+        "ms": 34.261,
+        "rc": 0,
+        "round": 1,
+        "silu": 0.862,
+        "status": "PASS",
+        "total": 261.729,
+        "up": 115.318
+      }
+    ]
+  }
+]

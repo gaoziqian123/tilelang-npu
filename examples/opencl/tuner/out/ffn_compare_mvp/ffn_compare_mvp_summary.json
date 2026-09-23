@@ -1,0 +1,50 @@
+{
+  "baseline": [
+    {
+      "down": 34.386,
+      "gate": 34.192,
+      "log": "logs/baseline_r0.log",
+      "ms": 103.599,
+      "round": 0,
+      "silu": 0.863,
+      "status": "PASS",
+      "total": 103.599,
+      "up": 34.158
+    },
+    {
+      "down": 34.422,
+      "gate": 34.218,
+      "log": "logs/baseline_r1.log",
+      "ms": 103.663,
+      "round": 1,
+      "silu": 0.859,
+      "status": "PASS",
+      "total": 103.663,
+      "up": 34.164
+    }
+  ],
+  "best": [
+    {
+      "down": 34.443,
+      "gate": 33.913,
+      "log": "logs/best_r0.log",
+      "ms": 102.992,
+      "round": 0,
+      "silu": 0.865,
+      "status": "PASS",
+      "total": 102.992,
+      "up": 33.77
+    },
+    {
+      "down": 34.467,
+      "gate": 34.024,
+      "log": "logs/best_r1.log",
+      "ms": 103.123,
+      "round": 1,
+      "silu": 0.86,
+      "status": "PASS",
+      "total": 103.123,
+      "up": 33.772
+    }
+  ]
+}

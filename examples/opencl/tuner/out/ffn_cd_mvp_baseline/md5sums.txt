@@ -1,0 +1,6 @@
+3a931aca42e05afa4450f2e2b8ef8dd9  fixed_gate.cl
+3a931aca42e05afa4450f2e2b8ef8dd9  fixed_up.cl
+4f043d56daa70aa1bc6f1107506cc1fc  fixed_down.cl
+7a1cc9d547ef752735de339d91a34c98  fixed_silu.cl
+ab419399608ad5c9d30d87e8e83e9ac6  manifest.json
+194067a145f417fa169bc0458372d686  run_batch.sh

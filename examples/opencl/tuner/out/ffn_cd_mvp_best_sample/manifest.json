@@ -1,0 +1,27 @@
+[
+  {
+    "down": "fixed_down.cl",
+    "env": {
+      "TL_CHECK_SAMPLES": 256,
+      "TL_DOWN_BM": 32,
+      "TL_DOWN_BN": 128,
+      "TL_DOWN_THREADS": 64,
+      "TL_FF": 9216,
+      "TL_GATE_BM": 64,
+      "TL_GATE_BN": 256,
+      "TL_GATE_THREADS": 256,
+      "TL_ITERS": 10,
+      "TL_K": 2560,
+      "TL_M": 960,
+      "TL_N2": 2560,
+      "TL_UP_BM": 64,
+      "TL_UP_BN": 256,
+      "TL_UP_THREADS": 256
+    },
+    "gate": "fixed_gate.cl",
+    "id": "combo",
+    "silu": "fixed_silu.cl",
+    "stage": "total",
+    "up": "fixed_up.cl"
+  }
+]

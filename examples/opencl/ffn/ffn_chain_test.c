@@ -11,8 +11,10 @@
 //     -I/root/project/backend/gpu/OpenCL-Headers ffn_chain_test.c -ldl -lm -o ffn_chain_test
 // Run:
 //   LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64 ./ffn_chain_test out/ffn_gate.cl out/silu_mul.cl out/ffn_down.cl
+//   LD_LIBRARY_PATH=.:/system/lib64:/vendor/lib64 ./ffn_chain_test gate.cl up.cl silu.cl down.cl
 //
 // Env: TL_M TL_K TL_FF TL_N2 TL_THREADS TL_ITERS TL_CHECK_SAMPLES (256)
+//      TL_{GATE,UP,DOWN}_{BM,BN,THREADS} override per-stage launch shapes.
 
 #include <dlfcn.h>
 #include <math.h>
@@ -217,13 +219,21 @@ static double ref_OUT(size_t idx, void *ctx_) {
 }
 
 int main(int argc, char **argv) {
-    const char *gemm_cl = argc > 1 ? argv[1] : "out/ffn_gate.cl";
+    const char *gate_cl = argc > 1 ? argv[1] : "out/ffn_gate.cl";
+    const char *up_cl = gate_cl;
     const char *silu_cl = argc > 2 ? argv[2] : "out/silu_mul.cl";
     const char *down_cl = argc > 3 ? argv[3] : "out/ffn_down.cl";
+    if (argc > 4) { up_cl = argv[2]; silu_cl = argv[3]; down_cl = argv[4]; }
 
     const int M = env_i("TL_M", 960), K = env_i("TL_K", 2560);
     const int FF = env_i("TL_FF", 9216), N2 = env_i("TL_N2", 2560);
     const int THREADS = env_i("TL_THREADS", 64);
+    const int GATE_BM = env_i("TL_GATE_BM", 32), GATE_BN = env_i("TL_GATE_BN", 128);
+    const int UP_BM = env_i("TL_UP_BM", GATE_BM), UP_BN = env_i("TL_UP_BN", GATE_BN);
+    const int DOWN_BM = env_i("TL_DOWN_BM", 32), DOWN_BN = env_i("TL_DOWN_BN", 128);
+    const int GATE_THREADS = env_i("TL_GATE_THREADS", THREADS);
+    const int UP_THREADS = env_i("TL_UP_THREADS", GATE_THREADS);
+    const int DOWN_THREADS = env_i("TL_DOWN_THREADS", THREADS);
     const int iters = env_i("TL_ITERS", 10);
     const int nsamp = env_i("TL_CHECK_SAMPLES", 256);
 
@@ -262,32 +272,38 @@ int main(int argc, char **argv) {
     CK(my_clEnqueueWriteBuffer(q, bWu, CL_TRUE, 0, nW * 2, Wu, 0, NULL, NULL));
     CK(my_clEnqueueWriteBuffer(q, bWd, CL_TRUE, 0, nWd * 2, Wd, 0, NULL, NULL));
 
-    cl_program pGemm = build_prog(ctx, gemm_cl, "gemm");
+    cl_program pGate = build_prog(ctx, gate_cl, "gate");
+    cl_program pUp = (strcmp(up_cl, gate_cl) == 0) ? pGate : build_prog(ctx, up_cl, "up");
     cl_program pSilu = build_prog(ctx, silu_cl, "silu");
     cl_program pDown = build_prog(ctx, down_cl, "down");
-    cl_kernel kGemm = my_clCreateKernel(pGemm, "gemm_nt_kernel_kernel", &err); CK(err);
+    cl_kernel kGate = my_clCreateKernel(pGate, "gemm_nt_kernel_kernel", &err); CK(err);
+    cl_kernel kUp = my_clCreateKernel(pUp, "gemm_nt_kernel_kernel", &err); CK(err);
     cl_kernel kSilu = my_clCreateKernel(pSilu, "silu_mul_kernel_kernel", &err); CK(err);
     cl_kernel kDown = my_clCreateKernel(pDown, "gemm_nt_kernel_kernel", &err); CK(err);
 
-    // gemm grids: dim0 = ceil(N/bn)*threads, dim1 = ceil(M/bm); bn=128, bm=32
-    const size_t lg[2] = {(size_t)THREADS, 1};
-    const size_t gg[2] = {(size_t)(FF / 128) * THREADS, (size_t)(M / 32)};
-    const size_t gd[2] = {(size_t)(N2 / 128) * THREADS, (size_t)(M / 32)};
+    // gemm grids: dim0 = ceil(N/bn)*threads, dim1 = ceil(M/bm)
+    const size_t lgate[2] = {(size_t)GATE_THREADS, 1};
+    const size_t lup[2] = {(size_t)UP_THREADS, 1};
+    const size_t ldown[2] = {(size_t)DOWN_THREADS, 1};
+    const size_t gg[2] = {(size_t)(FF / GATE_BN) * GATE_THREADS, (size_t)(M / GATE_BM)};
+    const size_t gu[2] = {(size_t)(FF / UP_BN) * UP_THREADS, (size_t)(M / UP_BM)};
+    const size_t gd[2] = {(size_t)(N2 / DOWN_BN) * DOWN_THREADS, (size_t)(M / DOWN_BM)};
     const size_t ls[1] = {256};
     const size_t gs[1] = {nH / 8};  /* work-items: 2048 elems per wg = 256 thr * 8 */
 
     double ms_gate = 0, ms_up = 0, ms_silu = 0, ms_down = 0;
     for (int it = 0; it < iters; ++it) {
         cl_event e;
-        CK(my_clSetKernelArg(kGemm, 0, sizeof(bA), &bA));
-        CK(my_clSetKernelArg(kGemm, 1, sizeof(bWg), &bWg));
-        CK(my_clSetKernelArg(kGemm, 2, sizeof(bG), &bG));
-        CK(my_clEnqueueNDRangeKernel(q, kGemm, 2, NULL, gg, lg, 0, NULL, &e));
+        CK(my_clSetKernelArg(kGate, 0, sizeof(bA), &bA));
+        CK(my_clSetKernelArg(kGate, 1, sizeof(bWg), &bWg));
+        CK(my_clSetKernelArg(kGate, 2, sizeof(bG), &bG));
+        CK(my_clEnqueueNDRangeKernel(q, kGate, 2, NULL, gg, lgate, 0, NULL, &e));
         CK(my_clFinish(q)); ms_gate += ev_ms(e); my_clReleaseEvent(e);
 
-        CK(my_clSetKernelArg(kGemm, 1, sizeof(bWu), &bWu));
-        CK(my_clSetKernelArg(kGemm, 2, sizeof(bU), &bU));
-        CK(my_clEnqueueNDRangeKernel(q, kGemm, 2, NULL, gg, lg, 0, NULL, &e));
+        CK(my_clSetKernelArg(kUp, 0, sizeof(bA), &bA));
+        CK(my_clSetKernelArg(kUp, 1, sizeof(bWu), &bWu));
+        CK(my_clSetKernelArg(kUp, 2, sizeof(bU), &bU));
+        CK(my_clEnqueueNDRangeKernel(q, kUp, 2, NULL, gu, lup, 0, NULL, &e));
         CK(my_clFinish(q)); ms_up += ev_ms(e); my_clReleaseEvent(e);
 
         CK(my_clSetKernelArg(kSilu, 0, sizeof(bG), &bG));
@@ -299,7 +315,7 @@ int main(int argc, char **argv) {
         CK(my_clSetKernelArg(kDown, 0, sizeof(bH), &bH));
         CK(my_clSetKernelArg(kDown, 1, sizeof(bWd), &bWd));
         CK(my_clSetKernelArg(kDown, 2, sizeof(bO), &bO));
-        CK(my_clEnqueueNDRangeKernel(q, kDown, 2, NULL, gd, lg, 0, NULL, &e));
+        CK(my_clEnqueueNDRangeKernel(q, kDown, 2, NULL, gd, ldown, 0, NULL, &e));
         CK(my_clFinish(q)); ms_down += ev_ms(e); my_clReleaseEvent(e);
     }
     ms_gate /= iters; ms_up /= iters; ms_silu /= iters; ms_down /= iters;
@@ -324,8 +340,8 @@ int main(int argc, char **argv) {
     my_clReleaseMemObject(bA); my_clReleaseMemObject(bWg); my_clReleaseMemObject(bWu);
     my_clReleaseMemObject(bWd); my_clReleaseMemObject(bG); my_clReleaseMemObject(bU);
     my_clReleaseMemObject(bH); my_clReleaseMemObject(bO);
-    my_clReleaseKernel(kGemm); my_clReleaseKernel(kSilu); my_clReleaseKernel(kDown);
-    my_clReleaseProgram(pGemm); my_clReleaseProgram(pSilu); my_clReleaseProgram(pDown);
+    my_clReleaseKernel(kGate); my_clReleaseKernel(kUp); my_clReleaseKernel(kSilu); my_clReleaseKernel(kDown);
+    my_clReleaseProgram(pGate); if (pUp != pGate) my_clReleaseProgram(pUp); my_clReleaseProgram(pSilu); my_clReleaseProgram(pDown);
     my_clReleaseCommandQueue(q); my_clReleaseContext(ctx);
     free(A); free(Wg); free(Wu); free(Wd); free(G); free(U); free(H); free(out);
     return 0;

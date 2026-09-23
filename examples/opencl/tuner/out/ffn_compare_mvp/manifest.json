@@ -1,0 +1,52 @@
+[
+  {
+    "down": "c0002.cl",
+    "env": {
+      "TL_CHECK_SAMPLES": 256,
+      "TL_DOWN_BM": 32,
+      "TL_DOWN_BN": 128,
+      "TL_DOWN_THREADS": 64,
+      "TL_FF": 9216,
+      "TL_GATE_BM": 32,
+      "TL_GATE_BN": 128,
+      "TL_GATE_THREADS": 64,
+      "TL_ITERS": 10,
+      "TL_K": 2560,
+      "TL_M": 960,
+      "TL_N2": 2560,
+      "TL_UP_BM": 32,
+      "TL_UP_BN": 128,
+      "TL_UP_THREADS": 64
+    },
+    "gate": "c0000.cl",
+    "id": "baseline",
+    "silu": "silu.cl",
+    "stage": "total",
+    "up": "c0001.cl"
+  },
+  {
+    "down": "c0005.cl",
+    "env": {
+      "TL_CHECK_SAMPLES": 256,
+      "TL_DOWN_BM": 32,
+      "TL_DOWN_BN": 128,
+      "TL_DOWN_THREADS": 64,
+      "TL_FF": 9216,
+      "TL_GATE_BM": 64,
+      "TL_GATE_BN": 256,
+      "TL_GATE_THREADS": 256,
+      "TL_ITERS": 10,
+      "TL_K": 2560,
+      "TL_M": 960,
+      "TL_N2": 2560,
+      "TL_UP_BM": 64,
+      "TL_UP_BN": 256,
+      "TL_UP_THREADS": 256
+    },
+    "gate": "c0003.cl",
+    "id": "best",
+    "silu": "silu.cl",
+    "stage": "total",
+    "up": "c0004.cl"
+  }
+]

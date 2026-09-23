@@ -1,0 +1,208 @@
+{
+  "best": {
+    "chain": {
+      "down": 34.633,
+      "gate": 34.364,
+      "log": "logs/c0006_r1.log",
+      "ms": 34.633,
+      "rc": 0,
+      "round": 1,
+      "silu": 0.865,
+      "status": "PASS",
+      "total": 103.772,
+      "up": 33.909
+    },
+    "config": {
+      "K": 9216,
+      "M": 960,
+      "N": 2560,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 16,
+      "bm": 32,
+      "bn": 128,
+      "chunk_k": 256,
+      "stage": "down",
+      "threads": 64
+    },
+    "config_id": "c0006",
+    "ms": 34.633
+  },
+  "bottom5": [
+    {
+      "config": {
+        "K": 9216,
+        "M": 960,
+        "N": 2560,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 32,
+        "bm": 64,
+        "bn": 256,
+        "chunk_k": 256,
+        "stage": "down",
+        "threads": 256
+      },
+      "config_id": "c0016",
+      "ms": 83.046
+    },
+    {
+      "config": {
+        "K": 9216,
+        "M": 960,
+        "N": 2560,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 64,
+        "bm": 64,
+        "bn": 256,
+        "chunk_k": 256,
+        "stage": "down",
+        "threads": 256
+      },
+      "config_id": "c0017",
+      "ms": 83.326
+    },
+    {
+      "config": {
+        "K": 9216,
+        "M": 960,
+        "N": 2560,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 64,
+        "bm": 64,
+        "bn": 128,
+        "chunk_k": 256,
+        "stage": "down",
+        "threads": 128
+      },
+      "config_id": "c0014",
+      "ms": 101.415
+    },
+    {
+      "config": {
+        "K": 9216,
+        "M": 960,
+        "N": 2560,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 32,
+        "bm": 64,
+        "bn": 128,
+        "chunk_k": 256,
+        "stage": "down",
+        "threads": 128
+      },
+      "config_id": "c0013",
+      "ms": 102.609
+    },
+    {
+      "config": {
+        "K": 9216,
+        "M": 960,
+        "N": 2560,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 16,
+        "bm": 64,
+        "bn": 128,
+        "chunk_k": 256,
+        "stage": "down",
+        "threads": 128
+      },
+      "config_id": "c0012",
+      "ms": 102.663
+    }
+  ],
+  "count": 18,
+  "scored": 18,
+  "stage": "down",
+  "top5": [
+    {
+      "config": {
+        "K": 9216,
+        "M": 960,
+        "N": 2560,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 16,
+        "bm": 32,
+        "bn": 128,
+        "chunk_k": 256,
+        "stage": "down",
+        "threads": 64
+      },
+      "config_id": "c0006",
+      "ms": 34.633
+    },
+    {
+      "config": {
+        "K": 9216,
+        "M": 960,
+        "N": 2560,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 32,
+        "bm": 32,
+        "bn": 128,
+        "chunk_k": 256,
+        "stage": "down",
+        "threads": 64
+      },
+      "config_id": "c0007",
+      "ms": 34.641
+    },
+    {
+      "config": {
+        "K": 9216,
+        "M": 960,
+        "N": 2560,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 64,
+        "bm": 16,
+        "bn": 256,
+        "chunk_k": 256,
+        "stage": "down",
+        "threads": 64
+      },
+      "config_id": "c0005",
+      "ms": 45.268
+    },
+    {
+      "config": {
+        "K": 9216,
+        "M": 960,
+        "N": 2560,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 16,
+        "bm": 16,
+        "bn": 256,
+        "chunk_k": 256,
+        "stage": "down",
+        "threads": 64
+      },
+      "config_id": "c0003",
+      "ms": 45.379
+    },
+    {
+      "config": {
+        "K": 9216,
+        "M": 960,
+        "N": 2560,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 32,
+        "bm": 16,
+        "bn": 256,
+        "chunk_k": 256,
+        "stage": "down",
+        "threads": 64
+      },
+      "config_id": "c0004",
+      "ms": 45.417
+    }
+  ]
+}

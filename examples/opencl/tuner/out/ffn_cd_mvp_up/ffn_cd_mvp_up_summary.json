@@ -1,0 +1,208 @@
+{
+  "best": {
+    "chain": {
+      "down": 111.155,
+      "gate": 34.359,
+      "log": "logs/c0023_r0.log",
+      "ms": 33.772,
+      "rc": 0,
+      "round": 0,
+      "silu": 0.861,
+      "status": "PASS",
+      "total": 180.147,
+      "up": 33.772
+    },
+    "config": {
+      "K": 2560,
+      "M": 960,
+      "N": 9216,
+      "accum_dtype": "float32",
+      "b_layout": "kn",
+      "bk": 64,
+      "bm": 64,
+      "bn": 256,
+      "chunk_k": 256,
+      "stage": "up",
+      "threads": 256
+    },
+    "config_id": "c0023",
+    "ms": 33.772
+  },
+  "bottom5": [
+    {
+      "config": {
+        "K": 2560,
+        "M": 960,
+        "N": 9216,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 16,
+        "bm": 64,
+        "bn": 128,
+        "chunk_k": 256,
+        "stage": "up",
+        "threads": 128
+      },
+      "config_id": "c0018",
+      "ms": 104.343
+    },
+    {
+      "config": {
+        "K": 2560,
+        "M": 960,
+        "N": 9216,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 32,
+        "bm": 64,
+        "bn": 128,
+        "chunk_k": 256,
+        "stage": "up",
+        "threads": 128
+      },
+      "config_id": "c0019",
+      "ms": 105.043
+    },
+    {
+      "config": {
+        "K": 2560,
+        "M": 960,
+        "N": 9216,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 16,
+        "bm": 32,
+        "bn": 512,
+        "chunk_k": 256,
+        "stage": "up",
+        "threads": 256
+      },
+      "config_id": "c0015",
+      "ms": 133.835
+    },
+    {
+      "config": {
+        "K": 2560,
+        "M": 960,
+        "N": 9216,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 32,
+        "bm": 32,
+        "bn": 512,
+        "chunk_k": 256,
+        "stage": "up",
+        "threads": 256
+      },
+      "config_id": "c0016",
+      "ms": 141.075
+    },
+    {
+      "config": {
+        "K": 2560,
+        "M": 960,
+        "N": 9216,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 64,
+        "bm": 32,
+        "bn": 512,
+        "chunk_k": 256,
+        "stage": "up",
+        "threads": 256
+      },
+      "config_id": "c0017",
+      "ms": 153.186
+    }
+  ],
+  "count": 24,
+  "scored": 24,
+  "stage": "up",
+  "top5": [
+    {
+      "config": {
+        "K": 2560,
+        "M": 960,
+        "N": 9216,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 64,
+        "bm": 64,
+        "bn": 256,
+        "chunk_k": 256,
+        "stage": "up",
+        "threads": 256
+      },
+      "config_id": "c0023",
+      "ms": 33.772
+    },
+    {
+      "config": {
+        "K": 2560,
+        "M": 960,
+        "N": 9216,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 32,
+        "bm": 64,
+        "bn": 256,
+        "chunk_k": 256,
+        "stage": "up",
+        "threads": 256
+      },
+      "config_id": "c0022",
+      "ms": 33.781
+    },
+    {
+      "config": {
+        "K": 2560,
+        "M": 960,
+        "N": 9216,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 16,
+        "bm": 32,
+        "bn": 128,
+        "chunk_k": 256,
+        "stage": "up",
+        "threads": 64
+      },
+      "config_id": "c0009",
+      "ms": 34.306
+    },
+    {
+      "config": {
+        "K": 2560,
+        "M": 960,
+        "N": 9216,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 64,
+        "bm": 32,
+        "bn": 128,
+        "chunk_k": 256,
+        "stage": "up",
+        "threads": 64
+      },
+      "config_id": "c0011",
+      "ms": 34.312
+    },
+    {
+      "config": {
+        "K": 2560,
+        "M": 960,
+        "N": 9216,
+        "accum_dtype": "float32",
+        "b_layout": "kn",
+        "bk": 32,
+        "bm": 32,
+        "bn": 128,
+        "chunk_k": 256,
+        "stage": "up",
+        "threads": 64
+      },
+      "config_id": "c0010",
+      "ms": 34.313
+    }
+  ]
+}
