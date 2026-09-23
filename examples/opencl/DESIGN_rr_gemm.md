@@ -661,8 +661,11 @@ commit `cfc8e71` 对 tile 空间耗尽后的两个结构方向做了终审复测
   最优。手写 image 的 **7.8ms** 优势来自其特定线程映射,不能迁移到 GR
   scaffold。该路径保留为实验开关,不写回默认值。
 
-最终 FFN 链状态:**103.0ms**。tile 空间耗尽 + gate/up 融合阴性 + texture-B
+最终 FFN 链状态:**103.0ms / 约 1.32T**。tile 空间耗尽 + gate/up 融合阴性 + texture-B
 阴性后,链已处 per-gemm 速率上限(约 1.34T);FFN 侧暂无已知下一步手段。
+注:此前 `ffn_chain_test` harness 的链路 TFLOPS 公式误把 silu 当成一个额外 GEMM,
+旧打印值虚高 4/3(约 1.76T);公式已修为 gate+up+down 的真实工作量。手写 harness
+公式是对的,2.66x 时间比结论不受影响。
 
 同形状同窗口两轮实测更新了 GPU 侧锚点:M=960 K=2560 FF=9216 N=2560,
 iters=10,两者均 fp16 I/O + fp32 累加且不含 host 上传/读回。TileLang 四

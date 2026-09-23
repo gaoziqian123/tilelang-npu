@@ -345,7 +345,7 @@ int main(int argc, char **argv) {
     }
     ms_gate /= iters; ms_up /= iters; ms_silu /= iters; ms_down /= iters;
     const double ms_total = ms_gate + ms_up + ms_silu + ms_down;
-    const double tflops = (6.0 * (double)M * (double)FF * (double)K +
+    const double tflops = (4.0 * (double)M * (double)FF * (double)K +
                            2.0 * (double)M * (double)FF * (double)N2) / (ms_total * 1.0e9);
     printf("FFN_CHAIN M=%d FF=%d K=%d iters=%d%s gate %.3f up %.3f silu %.3f down %.3f total %.3f ms tflops %.3f\n",
            M, FF, K, iters, fused_gate_up ? " fused_gate_up" : "", ms_gate, ms_up, ms_silu, ms_down, ms_total, tflops);
