@@ -315,10 +315,9 @@ nk 512³ 0.44T（gather 路径，符合 nk < kn 的预期）。
 
 ## 11. 事实库增补(2026-09 中,FABLE/FFN 战役实测)
 
-- **GR gemm fp32 累加只有 ~0.40T,fp16 累加 1.42T**(同形状 M=960 N=9216
-  K=2560;512³ fp32 同速 0.37T,与形状无关)。瓶颈不是 mad 嵌套形式
-  (改成 `acc+=a*b` 零差别),是 fp32 向量 FMA + convert 的结构性代价。
-  手写 gemm.cl 的 1.66T fp32 数字与本路径不同构,未复现。
+- **GR gemm fp32 累加曾测得 ~0.40T,现已证明是写回 epilogue 标量化的
+  codegen 假象,不是 Adreno fp32 硬件墙**(见 §13)。direct-store 修复后
+  同形状 M=960 N=9216 K=2560 为 **10.35ms / 1.30T**,fp16 累加 1.42T。
 - **fp16 全 K 累加精度不可接受**(K=2560 时 max_rel 1.4,bad 1.3%)。
 - **chunk16(fp16 内层 + fp32 外层提升)经 shared staging 实现正确
   (max_rel 0.07)但慢**(ck64 0.149T / ck32 0.323T):T.gemm 恒覆盖操作数
@@ -326,7 +325,8 @@ nk 512³ 0.44T（gather 路径，符合 nk < kn 的预期）。
   直接全局分块不可行(extent 取自 buffer 尾部形状)。
 - **FFN 结论**:split 链(gemm gate + gemm up + silu_mul + gemm down)
   是出货路径;融合双累加器 kernel 与 split 同速(234 vs 231ms),无收益。
-  链总耗时 343.9ms @ 0.53T(全部 fp64 对拍 PASS)。work-item 语义:
+  旧链总耗时 343.9ms @ 0.53T;§13 direct-store 修复后为 **103.7ms**
+  (全部 fp64 对拍 PASS)。work-item 语义:
   clEnqueueNDRangeKernel 的 global_work_size 以 work-item 计,不是 wg 数
   (踩过:silu 只覆盖 0.4% 数据,症状是下游 check 自洽地"假 PASS"——
   用被测数据自身算参考会掩盖上游错误)。
@@ -479,3 +479,78 @@ max_rel **0.0074**),与手写 fa.cl 锚点 **27.4-27.8ms** 持平。FFN 链
 
 harness 加固已提交:fa_gqa_test.c 全量校验 + NaN 投毒 + `TL_DATA` 对抗模式;
 fa_gpu_test.c denorm 模式 + f2h/h2f subnormal 修复 + cosine 判据。
+
+## 13. layout 基础设施战役:element mapping 与标准写法(2026-09-22)
+
+本轮基于 tilelang commit `47434e0`(前一关键修复 `d2ded5d`),全部数字为
+OnePlus 13 真机实测、全量校验 cos PASS。核心结论:此前 GR fp32 只有
+0.40T 不是 Adreno 0.5T 墙,而是 TileLang OpenCL 写回 epilogue 标量化导致
+向量累加器被编译器标量化 / spill 的 codegen 假象。
+
+### 13.1 GR fp32 0.40T 之谜:写回标量化往返
+
+差分替换实验从同负载对照开始:手写 buffer 版 **13.1ms**,TileLang fp32
+**34.3ms**。排查链如下:
+
+- **死声明假设**:删掉无用 private 声明后无效。
+- **索引外提假设**:检查 emit 发现索引本来已外提,不是瓶颈。
+- **FMA 数 / mad 链 / splat 构造假设**:逐项 morphing 后仍无法解释 3.3x。
+- **epilogue morphing 命中**:原写回把 8 个 float8 累加器拆成 64 个标量
+  lane 写入 `float C_frag[64]` private 数组,再 `convert_half4` 读入
+  `half C_local_cast[8]`,最后 `vstore8`。这个标量化往返让 Adreno 编译器
+  把向量累加器标量化 / spill,k 循环慢 **3.3x**。
+
+只把写回改成 `vstore8(convert_half8(acc))` 直通后,TileLang fp32 **34.3 →
+10.35ms**(**0.41 → 1.30T**),甚至快于手写 buffer 版 13.1ms。修法已固化为
+codegen.py peephole `_patch_opencl_grgemm_epilogue_direct_store`,严格守卫并覆盖
+fp32/fp16 两种形态。GR fp16 仍为 **9.4ms / 1.42T**;准确 fp32 路径现在只比
+fp16 慢约 10%,此前搁置的 fp16c32 寄存器分块提升从收益上已无必要。
+
+连带收益:**FFN 链 345ms → 103.7ms**(3.3x,全 PASS),因为链上每个 gemm 都有
+同样写回 bug。FA 不变(**27.9ms**),`gemm_std` 不变(**51.3ms**)。手写锚点不变:
+image 7.8ms / 1.72T,buffer 13.1ms / 1.02T。
+
+因此 runbook 里曾经的"Adreno OpenCL 有 ~0.5 TFLOPS 墙"只能用于描述当时的
+TileLang/集成 codegen 假象,不能作为硬件结论;手写 kernel 从来没有这个
+epilogue 问题。
+
+### 13.2 barrier bug 修复(d2ded5d)
+
+标准写法(shared staging)的 OpenCL emit 在 copy 写 shared 后、跨线程读之前漏了
+`barrier(CLK_LOCAL_MEM_FENCE)`,按 OpenCL 语义是未定义行为,真机只是碰巧对。
+CUDA 的 `gemm_fma` lowering 本来就有 `T.sync_threads()`,OpenCL 版漏加。
+`gemm_fma.py` 已按 `is_shared` 守卫补 barrier;GR direct-global 路径不加。
+`gemm_std` 因此多 2 个 barrier,性能 **51.35 → 51.35ms**,零影响。FA 的 staging
+sync 本来就在。
+
+### 13.3 标准写法与 annotate_layout 语义定论
+
+标准写法(`T.copy + T.gemm + annotate_layout`)机械上已跑通:emit 成功、真机
+全量校验 PASS、不触发 layout inference ICHECK。但在 Adreno 这个 GEMM 上,
+shared staging 是负收益:
+
+- copy 成本约 **16.9ms**;
+- shared 读只比 direct-global 多约 **2.5ms**;
+- Adreno 的 L2 全局读已经足够快,staging 买不到复用;
+- swizzle(`make_swizzled_layout`,NVIDIA bank 模型)在 Adreno 上负收益
+  (**0.262 → 0.239T**),且目前没有 Adreno 图案工厂。
+
+`T.annotate_layout` 的语义结论:
+
+- 它是 strict seed,不是 hint。
+- 只标 shared buffer 做 swizzle 是安全用法。
+- fragment 标注只有在与推断结果完全一致时安全(等于没标);不一致时要么
+  `LayoutConflict` 报错,要么 replicated 静默兜底。
+- FA 战役中 20x 劣化的机制就是 fully-replicated fragment 在
+  `ProveFragmentContains` 直接放行,物理工作量按 replicate 展开。
+
+### 13.4 当前性能全景
+
+| kernel | 之前 | 现在 |
+|---|---|---|
+| FA GQA | 27.8ms(持平 fa.cl) | 27.9ms 不变 |
+| GR gemm fp32 | 34.3ms / 0.41T | 10.35ms / 1.30T |
+| GR gemm fp16 | 9.4ms / 1.42T | 9.4ms 不变 |
+| FFN 链 | 345ms | 103.7ms |
+| 标准写法 std(shared staging) | — | 51.3ms / 0.26T(barrier 已修,正确但 staging 负收益) |
+| 手写锚点 | image 7.8ms / 1.72T,buffer 13.1ms / 1.02T | 不变 |
