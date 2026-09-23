@@ -663,3 +663,12 @@ commit `cfc8e71` 对 tile 空间耗尽后的两个结构方向做了终审复测
 
 最终 FFN 链状态:**103.0ms**。tile 空间耗尽 + gate/up 融合阴性 + texture-B
 阴性后,链已处 per-gemm 速率上限(约 1.34T);FFN 侧暂无已知下一步手段。
+
+同形状同窗口两轮实测更新了 GPU 侧锚点:M=960 K=2560 FF=9216 N=2560,
+iters=10,两者均 fp16 I/O + fp32 累加且不含 host 上传/读回。TileLang 四
+kernel split 链 **102.9ms**(全 PASS),手写 GPU FFN 两 kernel(fused gate+up +
+down,`ffn_gpu_test.c [M] [K] [H] [N] [iters] [check]`,要求 M%64==0)
+**273.8ms**(fp64 抽样 max_rel 0.0153),TileLang GPU 链快 **2.66x**。历史
+**294.8ms** 是 M=1024 且 WCache 修复前旧数字,不再作为同形状锚点。注意总冠军
+仍是 NPU HMX FFN 路径(**39.6ms / 3.3-3.7T**,见 runbook §7.2);这里的
+"超越手写"仅指 GPU 侧手写锚点。
