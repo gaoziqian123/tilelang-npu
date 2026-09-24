@@ -167,27 +167,17 @@ def make_gdn_seq_kernel(TOK: int, Hk: int, Hv: int, D: int, chunk: int, threads:
                             acco[lane] = acco[lane] + qv * sv
                     for lane in T.vectorized(8):
                         vn[t, dvg * 8 + lane] = T.Cast("float16", T.Cast("float32", Ubuf[h, c, t, dv0 + lane]) - acc[lane])
-                T.sync_threads()
-
-                for tid2 in T.Parallel(threads):
-                    t2 = tid2 // 4
-                    dvg2 = tid2 % 4
-                    dv02 = dvb * 32 + dvg2 * 8
+                    T.sync_threads()
                     out8 = T.alloc_local((8,), "float32")
                     for lane in T.vectorized(8):
                         out8[lane] = 0.0
                     for j in T.serial(chunk):
-                        if j <= t2:
-                            a2 = T.Cast("float32", A2buf[h, c, t2, j])
+                        if j <= t:
+                            a2 = T.Cast("float32", A2buf[h, c, t, j])
                             for lane in T.vectorized(8):
-                                out8[lane] = out8[lane] + a2 * T.Cast("float32", vn[j, dvg2 * 8 + lane])
-                    # Recompute inter output here to keep the first parallel loop simple.
-                    for dk in T.serial(D):
-                        qv = T.Cast("float32", Q[hk, c * chunk + t2, dk])
-                        for lane in T.vectorized(8):
-                            out8[lane] = out8[lane] + EgcBuf[h, c, t2] * qv * S[h, dk, dv02 + lane]
+                                out8[lane] = out8[lane] + a2 * T.Cast("float32", vn[j, dvg * 8 + lane])
                     for lane in T.vectorized(8):
-                        O[h, c * chunk + t2, dv02 + lane] = T.Cast("float16", out8[lane])
+                        O[h, c * chunk + t, dv0 + lane] = T.Cast("float16", out8[lane] + EgcBuf[h, c, t] * acco[lane])
                 T.sync_threads()
 
                 # pass2: update S.  Same mapping as gdn.cl, four 8-dk groups per dv column.

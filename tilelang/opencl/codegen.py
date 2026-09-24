@@ -733,12 +733,13 @@ def _patch_opencl_gdn_seq_output_vstore8(source: str) -> str:
         return source
     out = re.sub(
         r"    half O_local_cast_3\[8\];\n"
-        r"    \(\*\(half4\*\)\(O_local_cast_3 \+ 0\)\) = \(convert_half4\(out8_1_lo\)\);\n"
-        r"    \(\*\(half4\*\)\(O_local_cast_3 \+ 4\)\) = \(convert_half4\(out8_1_hi\)\);\n"
+        r"    \(\*\(half4\*\)\(O_local_cast_3 \+ 0\)\) = \(convert_half4\((.*?)\)\);\n"
+        r"    \(\*\(half4\*\)\(O_local_cast_3 \+ 4\)\) = \(convert_half4\((.*?)\)\);\n"
         r"    vstore8\(\(\*\(half8\*\)\(O_local_cast_3 \+ 0\)\), 0, O \+ ([^;]+)\);",
-        r"    vstore8(convert_half8((float8)(out8_1_lo, out8_1_hi)), 0, O + \1);",
+        r"    vstore8(convert_half8((float8)(\1, \2)), 0, O + \3);",
         source,
         count=1,
+        flags=re.S,
     )
     if out == source or "O_local_cast_3" in out:
         return source

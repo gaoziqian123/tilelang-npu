@@ -8,7 +8,7 @@
 #endif
 
 __kernel void gdn_prep_kernel_kernel(__global half* restrict A2buf, __global float* restrict B, __global float* restrict EgcBuf, __global float* restrict EglBuf, __global float* restrict G, __global half* restrict K, __global half* restrict KDbuf, __global half* restrict Q, __global half* restrict Ubuf, __global half* restrict V, __global half* restrict Wbuf);
-__kernel void gdn_prep_kernel_kernel(__global half* restrict A2buf, __global float* restrict B, __global float* restrict EgcBuf, __global float* restrict EglBuf, __global float* restrict G, __global half* restrict K, __global half* restrict KDbuf, __global half* restrict Q, __global half* restrict Ubuf, __global half* restrict V, __global half* restrict Wbuf) { const int tl_gid0 = convert_int(get_group_id(0)); const int tl_gid1 = convert_int(get_group_id(1)); const int tl_lid0 = convert_int(get_local_id(0)); const int tl_wi_aff0 = ((tl_lid0 >> 5) * 128); const int tl_wi_aff1 = ((tl_lid0 & 31) * 128); const int tl_wi_aff2 = (tl_gid1 * 131072); const int tl_wi_aff3 = (tl_gid1 * 32768); const int tl_wi_aff4 = (tl_gid0 * 4096); const int tl_wi_aff5 = (tl_gid0 * 1024); const int tl_wi_aff6 = (tl_gid1 * 1024); const int tl_wi_aff7 = (tl_gid0 * 32);
+__kernel void gdn_prep_kernel_kernel(__global half* restrict A2buf, __global float* restrict B, __global float* restrict EgcBuf, __global float* restrict EglBuf, __global float* restrict G, __global half* restrict K, __global half* restrict KDbuf, __global half* restrict Q, __global half* restrict Ubuf, __global half* restrict V, __global half* restrict Wbuf) { const int tl_gid0 = convert_int(get_group_id(0)); const int tl_gid1 = convert_int(get_group_id(1)); const int tl_lid0 = convert_int(get_local_id(0)); const int tl_wi_aff0 = ((tl_lid0 >> 5) * 128); const int tl_wi_aff1 = ((tl_lid0 & 31) * 128); const int tl_wi_aff2 = (tl_gid1 * 131072); const int tl_wi_aff3 = (tl_gid1 * 32768); const int tl_wi_aff4 = (tl_gid0 * 4096); const int tl_wi_aff5 = (tl_gid1 * 1024); const int tl_wi_aff6 = (tl_gid0 * 1024); const int tl_wi_aff7 = (tl_gid0 * 32);
 __local float gc[32];
 __local float bf[32];
 __local float gf[32];
@@ -16,8 +16,8 @@ __local float egc[32];
 __local float L[1024];
 __local half UW[4096];
   if (tl_lid0 < 32) {
-    gf[tl_lid0] = G[((tl_wi_aff6 + tl_wi_aff7) + tl_lid0)];
-    bf[tl_lid0] = B[((tl_wi_aff6 + tl_wi_aff7) + tl_lid0)];
+    gf[tl_lid0] = G[((tl_wi_aff5 + tl_wi_aff7) + tl_lid0)];
+    bf[tl_lid0] = B[((tl_wi_aff5 + tl_wi_aff7) + tl_lid0)];
   }
   barrier(CLK_LOCAL_MEM_FENCE);
   if (tl_lid0 < 32) {
@@ -29,7 +29,7 @@ __local half UW[4096];
     }
     gc[tl_lid0] = s_1;
     egc[tl_lid0] = native_exp(s_1);
-    EgcBuf[((tl_wi_aff6 + tl_wi_aff7) + tl_lid0)] = native_exp(s_1);
+    EgcBuf[((tl_wi_aff5 + tl_wi_aff7) + tl_lid0)] = native_exp(s_1);
   }
   barrier(CLK_LOCAL_MEM_FENCE);
   EglBuf[((tl_gid1 * 32) + tl_gid0)] = native_exp(gc[31]);
