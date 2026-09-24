@@ -584,13 +584,33 @@ def _patch_opencl_gdn_dot8(source: str) -> str:
     128-wide dot loops per work-item.  The production OpenCL GDN kernel uses a
     half8 accumulator for both K.K and Q.K and only horizontally reduces the
     final eight lanes; on Adreno this is much faster and still matches the
-    intended fp16-dot numerical envelope.  Keep the peephole narrowly guarded to
-    the generated GDN prep kernel shape.
+    intended fp16-dot numerical envelope.  Guard on the lowered prep-dot
+    structure instead of the TileLang kernel symbol: local gc/bf/L scratch, the
+    two scalar dot accumulators, and the scalar K.K / Q.K FMA stream that writes
+    L and A2buf.
     """
 
-    if "gdn_prep_kernel_kernel" not in source or "float kk_1[1];" not in source:
+    dot_shape = (
+        "__local float gc[32];" in source
+        and "__local float bf[32];" in source
+        and "__local float L[1024];" in source
+        and "A2buf" in source
+        and "__global half* restrict K" in source
+        and "__global half* restrict Q" in source
+        and re.search(r"float\s+kk(?:_\d+)?\[1\];", source) is not None
+        and re.search(r"float\s+qk(?:_\d+)?\[1\];", source) is not None
+        # The original T.Parallel(chunk*chunk) may be emitted either as a t-loop
+        # or unrolled in 4-row stripes; require the scalar dot-FMA structure, not
+        # a particular affine temp name or kernel symbol.
+        and re.search(r"for \(int kd(?:_\d+)? = 0; kd(?:_\d+)? < 128; \+\+kd(?:_\d+)?\).*?float\s+kj(?:_\d+)?.*?K\[.*?kk(?:_\d+)?\[0\].*?K\[.*?\*\s*kj(?:_\d+)?.*?qk(?:_\d+)?\[0\].*?Q\[.*?\*\s*kj(?:_\d+)?", source, re.S) is not None
+        and re.search(r"L\[.*?\].*?A2buf\[", source, re.S) is not None
+    )
+    if not dot_shape:
         return source
-    start = source.find("  float kk_1[1];\n")
+    m = re.search(r"(?m)^  float\s+kk(?:_\d+)?\[1\];\n", source)
+    if not m:
+        return source
+    start = m.start()
     end = source.find("  barrier(CLK_LOCAL_MEM_FENCE);\n", start)
     if start < 0 or end < 0:
         return source
@@ -601,7 +621,7 @@ def _patch_opencl_gdn_dot8(source: str) -> str:
     float lv = 0.000000e+00f;
     float av = 0.000000e+00f;
     if (j <= i) {
-      float decay = exp(gc[i] - gc[j]);
+      float decay = native_exp(gc[i] - gc[j]);
       half8 acc8 = (half8)(0.0h);
       half8 qacc = (half8)(0.0h);
       const int base_k = (((tl_gid1 & 15) * 131072) + (tl_gid0 * 4096));
@@ -635,11 +655,21 @@ def _patch_opencl_gdn_seq_state_stream(source: str) -> str:
     This folds the generic pass2 pattern from private ``float m8_1[8]`` plus two
     float4 reductions into the handwritten shape: one half8 accumulator, one
     float8 conversion, a chunk-level Egl load hoisted outside the lane stores,
-    and an explicit unroll hint.  Egl indexing is expressed from ``tl_gid1``
-    (value head) instead of relying on fragile ``tl_wi_affN`` numbering.
+    and an explicit unroll hint.  Guard on the state-stream structure: local
+    ``kdl``/``vn`` slabs, an sb loop with private ``m8[8]`` and tt loop, and
+    eight strided stores back to ``S``.  Egl indexing is expressed from
+    ``tl_gid1`` (value head) instead of relying on fragile ``tl_wi_affN``
+    numbering.
     """
 
-    if "gdn_seq_kernel_kernel" not in source or "float m8_1[8];" not in source:
+    if not (
+        "__local half kdl[4096];" in source
+        and "__local half vn[1024];" in source
+        and "__global float* restrict S" in source
+        and "__global float* restrict EglBuf" in source
+        and re.search(r"float\s+m8(?:_\d+)?\[8\];", source) is not None
+        and re.search(r"for \(int sb = 0; sb < 4; \+\+sb\) \{\n\s+float\s+m8(?:_\d+)?\[8\];.*?for \(int tt = 0; tt < 32; \+\+tt\).*?vn\[.*?\].*?kdl", source, re.S) is not None
+    ):
         return source
     pass2 = r'''    float egl = EglBuf[((tl_gid1 * 32) + c)];
     for (int sb = 0; sb < 4; ++sb) {
@@ -676,7 +706,14 @@ def _patch_opencl_gdn_seq_state_stream(source: str) -> str:
 def _patch_opencl_gdn_seq_out_private_arrays(source: str) -> str:
     """Promote the GDN seq output float[8] accumulator to two float4 regs."""
 
-    if "gdn_seq_kernel_kernel" not in source or "float out8_1[8];" not in source:
+    if not (
+        "__local half vn[1024];" in source
+        and "__global half* restrict A2buf" in source
+        and "__global half* restrict O" in source
+        and "float out8_1[8];" in source
+        and "(*(float4*)(out8_1 + 0))" in source
+        and "(*(float4*)(out8_1 + 4))" in source
+    ):
         return source
     out = source.replace("    float out8_1[8];", "    float4 out8_1_lo;\n    float4 out8_1_hi;", 1)
     out = out.replace("(*(float4*)(out8_1 + 0))", "out8_1_lo")
@@ -692,11 +729,25 @@ def _patch_opencl_gdn_seq_pass1_float8(source: str) -> str:
     Generic lowering (after float8 splitting) prints the pass1 state stream as
     two float4 accumulators, two vload4s from S, and explicit scalar splats for
     w/q.  The handwritten GDN kernel uses one float8 load and scalar*vector
-    FMAs per dk.  Keep this narrowly scoped to the current GDN seq lowering and
-    express addresses from group/local ids rather than tl_wi_affN meanings.
+    FMAs per dk.  Guard on the pass1 stream structure (local kdl/vn, S/Q/U/W
+    buffers, the dk loop, and a vn vstore) and express addresses from
+    group/local ids rather than tl_wi_affN meanings.  The replacement still
+    references ``tl_wi_aff10`` only for the final contiguous ``vn`` address;
+    that name is produced by the generic affine-hoist pass for ``tl_lid0 * 8``
+    and the regex requires the equivalent vstore shape before rewriting.
     """
 
-    if "gdn_seq_kernel_kernel" not in source or "float4 acc_1_0_lo" not in source:
+    if not (
+        "__local half kdl[4096];" in source
+        and "__local half vn[1024];" in source
+        and "__global float* restrict S" in source
+        and "__global half* restrict Q" in source
+        and "__global half* restrict Ubuf" in source
+        and "__global half* restrict Wbuf" in source
+        and "float4 acc_1_0_lo" in source
+        and re.search(r"for \(int dk = 0; dk < 128; \+\+dk\).*?Wbuf\[.*?\].*?Q\[.*?\].*?S\[", source, re.S) is not None
+        and re.search(r"vstore(?:4|8)\(.*?, 0, vn \+ (?:\(tl_wi_aff10 \+ 4\)|tl_wi_aff10)\);", source, re.S) is not None
+    ):
         return source
     repl = r'''    int t = (tl_lid0 >> 2);
     int dvg = (tl_lid0 & 3);
@@ -741,7 +792,12 @@ def _patch_opencl_gdn_seq_pass1_float8(source: str) -> str:
 def _patch_opencl_gdn_seq_output_vstore8(source: str) -> str:
     """Drop the half[8] staging array on the GDN seq output store."""
 
-    if "gdn_seq_kernel_kernel" not in source or "half O_local_cast_3[8];" not in source:
+    if not (
+        "__local half vn[1024];" in source
+        and "__global half* restrict O" in source
+        and "half O_local_cast_3[8];" in source
+        and "vstore8((*(half8*)(O_local_cast_3 + 0)), 0, O +" in source
+    ):
         return source
     out = re.sub(
         r"    half O_local_cast_3\[8\];\n"
@@ -761,7 +817,10 @@ def _patch_opencl_gdn_seq_output_vstore8(source: str) -> str:
 def _patch_opencl_gdn_native_exp(source: str) -> str:
     """Use OpenCL native_exp for GDN gate exponentials, matching gdn.cl."""
 
-    if "gdn_prep_kernel_kernel" not in source and "gdn_seq_kernel_kernel" not in source:
+    if not (
+        ("__local float gc[32];" in source and "__global float* restrict EgcBuf" in source and "__global float* restrict EglBuf" in source)
+        or ("__local half kdl[4096];" in source and "__global float* restrict EgcBuf" in source and "__global float* restrict EglBuf" in source)
+    ):
         return source
     return source.replace("exp(", "native_exp(")
 
@@ -769,7 +828,10 @@ def _patch_opencl_gdn_native_exp(source: str) -> str:
 def _patch_opencl_gdn_scalar1_arrays(source: str) -> str:
     """Scalar-replace GDN lowering's one-element private float arrays."""
 
-    if "gdn_prep_kernel_kernel" not in source and "gdn_seq_kernel_kernel" not in source:
+    if not (
+        ("__local float gc[32];" in source and "__local float L[1024];" in source)
+        or ("__local half kdl[4096];" in source and "__local half vn[1024];" in source)
+    ):
         return source
     out = source
     for m in list(re.finditer(r"(?m)^(\s*)float\s+([A-Za-z_]\w*)\[1\];\s*$", source)):
@@ -1281,6 +1343,13 @@ def build_opencl(mod, target):
     if patched != source:
         source = patched
     patched = _patch_opencl_gdn_scalar1_arrays(source)
+    if patched != source:
+        source = patched
+    # Scalar1 cleanup can expose the prep-dot shape in lowerings where the
+    # parallel 32x32 dot loop was printed as unrolled stripes.  Re-run the same
+    # structural peephole; it is idempotent because the half8 form removes kk/qk
+    # private arrays.
+    patched = _patch_opencl_gdn_dot8(source)
     if patched != source:
         source = patched
     patched = _patch_opencl_splat_convert(source)
