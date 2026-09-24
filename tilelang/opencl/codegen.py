@@ -692,13 +692,13 @@ def _patch_opencl_gdn_seq_state_stream(source: str) -> str:
     }
     barrier(CLK_LOCAL_MEM_FENCE);'''
     out = re.sub(
-        r"    for \(int sb = 0; sb < 4; \+\+sb\) \{\n      float m8_1\[8\];.*?\n    barrier\(CLK_LOCAL_MEM_FENCE\);",
+        r"    for \(int sb = 0; sb < 4; \+\+sb\) \{\n      float m8(?:_\d+)?\[8\];.*?\n    barrier\(CLK_LOCAL_MEM_FENCE\);",
         pass2,
         source,
         count=1,
         flags=re.S,
     )
-    if out == source or "float m8_1[8];" in out:
+    if out == source or re.search(r"float\s+m8(?:_\d+)?\[8\];", out):
         return source
     return out
 
@@ -710,15 +710,25 @@ def _patch_opencl_gdn_seq_out_private_arrays(source: str) -> str:
         "__local half vn[1024];" in source
         and "__global half* restrict A2buf" in source
         and "__global half* restrict O" in source
-        and "float out8_1[8];" in source
-        and "(*(float4*)(out8_1 + 0))" in source
-        and "(*(float4*)(out8_1 + 4))" in source
+        and re.search(r"for \(int j = 0; j < 32; \+\+j\).*?A2buf\[.*?vn", source, re.S) is not None
     ):
         return source
-    out = source.replace("    float out8_1[8];", "    float4 out8_1_lo;\n    float4 out8_1_hi;", 1)
-    out = out.replace("(*(float4*)(out8_1 + 0))", "out8_1_lo")
-    out = out.replace("(*(float4*)(out8_1 + 4))", "out8_1_hi")
-    if "out8_1[" in out or "out8_1 +" in out:
+    m = re.search(
+        r"(?m)^    float\s+([A-Za-z_]\w*)\[8\];\n"
+        r"(?=.*\(\*\(float4\*\)\(\1 \+ 0\)\))"
+        r"(?=.*\(\*\(float4\*\)\(\1 \+ 4\)\))",
+        source,
+        re.S,
+    )
+    if not m:
+        return source
+    name = m.group(1)
+    lo = f"{name}_lo"
+    hi = f"{name}_hi"
+    out = source.replace(f"    float {name}[8];", f"    float4 {lo};\n    float4 {hi};", 1)
+    out = out.replace(f"(*(float4*)({name} + 0))", lo)
+    out = out.replace(f"(*(float4*)({name} + 4))", hi)
+    if f"{name}[" in out or f"{name} +" in out:
         return source
     return out
 
@@ -731,10 +741,10 @@ def _patch_opencl_gdn_seq_pass1_float8(source: str) -> str:
     w/q.  The handwritten GDN kernel uses one float8 load and scalar*vector
     FMAs per dk.  Guard on the pass1 stream structure (local kdl/vn, S/Q/U/W
     buffers, the dk loop, and a vn vstore) and express addresses from
-    group/local ids rather than tl_wi_affN meanings.  The replacement still
-    references ``tl_wi_aff10`` only for the final contiguous ``vn`` address;
-    that name is produced by the generic affine-hoist pass for ``tl_lid0 * 8``
-    and the regex requires the equivalent vstore shape before rewriting.
+    group/local ids rather than tl_wi_affN meanings.  The matcher deliberately
+    treats the final ``vn`` address as an opaque expression and relies on the
+    surrounding vstore/cast structure, because affine-hoist numbering changes
+    across lowering revisions.
     """
 
     if not (
@@ -744,9 +754,9 @@ def _patch_opencl_gdn_seq_pass1_float8(source: str) -> str:
         and "__global half* restrict Q" in source
         and "__global half* restrict Ubuf" in source
         and "__global half* restrict Wbuf" in source
-        and "float4 acc_1_0_lo" in source
+        and re.search(r"float4\s+[A-Za-z_]\w*_lo\s*=", source) is not None
         and re.search(r"for \(int dk = 0; dk < 128; \+\+dk\).*?Wbuf\[.*?\].*?Q\[.*?\].*?S\[", source, re.S) is not None
-        and re.search(r"vstore(?:4|8)\(.*?, 0, vn \+ (?:\(tl_wi_aff10 \+ 4\)|tl_wi_aff10)\);", source, re.S) is not None
+        and re.search(r"vstore(?:4|8)\(\(\*\(half(?:4|8)\*\)\([A-Za-z_]\w*(?: \+ [04])?\)\), 0, vn \+ [^;]+\);", source, re.S) is not None
     ):
         return source
     repl = r'''    int t = (tl_lid0 >> 2);
@@ -769,22 +779,13 @@ def _patch_opencl_gdn_seq_pass1_float8(source: str) -> str:
     float4 acco_1_0_hi = acco8.hi;
     float4 out8_1_lo;
     float4 out8_1_hi;'''
-    out = re.sub(
-        r"    float4 acc_1_0_lo = .*?\n    vstore4\(\(\*\(half4\*\)\(vn_local_cast_1 \+ 0\)\), 0, vn \+ \(tl_wi_aff10 \+ 4\)\);",
-        repl,
-        source,
-        count=1,
-        flags=re.S,
+    pass1_re = re.compile(
+        r"(?m)^    float4\s+[A-Za-z_]\w*_lo = .*?\n"
+        r"    vstore(?:4|8)\(\(\*\(half(?:4|8)\*\)\([A-Za-z_]\w*(?: \+ [04])?\)\), 0, vn \+ [^;]+\);",
+        re.S,
     )
-    if out == source:
-        out = re.sub(
-            r"    float4 acc_1_0_lo = .*?\n    vstore8\(\(\*\(half8\*\)\(vn_local_cast \+ 0\)\), 0, vn \+ tl_wi_aff10\);",
-            repl,
-            source,
-            count=1,
-            flags=re.S,
-        )
-    if out == source or "float4 acc_1_0_lo" in out or "vn_local_cast_1" in out:
+    out = pass1_re.sub(repl, source, count=1)
+    if out == source or re.search(r"half\s+[A-Za-z_]\w*\[8\];\n\s+vstore(?:4|8)\(", out):
         return source
     return out
 
@@ -795,21 +796,31 @@ def _patch_opencl_gdn_seq_output_vstore8(source: str) -> str:
     if not (
         "__local half vn[1024];" in source
         and "__global half* restrict O" in source
-        and "half O_local_cast_3[8];" in source
-        and "vstore8((*(half8*)(O_local_cast_3 + 0)), 0, O +" in source
+        and re.search(r"for \(int j = 0; j < 32; \+\+j\).*?A2buf\[.*?vn", source, re.S) is not None
     ):
         return source
+    m = re.search(
+        r"(?m)^    half\s+([A-Za-z_]\w*)\[8\];\n"
+        r"    \(\*\(half4\*\)\(\1 \+ 0\)\) = \(convert_half4\((.*?)\)\);\n"
+        r"    \(\*\(half4\*\)\(\1 \+ 4\)\) = \(convert_half4\((.*?)\)\);\n"
+        r"    vstore8\(\(\*\(half8\*\)\(\1 \+ 0\)\), 0, O \+ ([^;]+)\);",
+        source,
+        re.S,
+    )
+    if not m:
+        return source
+    name = m.group(1)
     out = re.sub(
-        r"    half O_local_cast_3\[8\];\n"
-        r"    \(\*\(half4\*\)\(O_local_cast_3 \+ 0\)\) = \(convert_half4\((.*?)\)\);\n"
-        r"    \(\*\(half4\*\)\(O_local_cast_3 \+ 4\)\) = \(convert_half4\((.*?)\)\);\n"
-        r"    vstore8\(\(\*\(half8\*\)\(O_local_cast_3 \+ 0\)\), 0, O \+ ([^;]+)\);",
+        r"    half\s+" + re.escape(name) + r"\[8\];\n"
+        r"    \(\*\(half4\*\)\(" + re.escape(name) + r" \+ 0\)\) = \(convert_half4\((.*?)\)\);\n"
+        r"    \(\*\(half4\*\)\(" + re.escape(name) + r" \+ 4\)\) = \(convert_half4\((.*?)\)\);\n"
+        r"    vstore8\(\(\*\(half8\*\)\(" + re.escape(name) + r" \+ 0\)\), 0, O \+ ([^;]+)\);",
         r"    vstore8(convert_half8((float8)(\1, \2)), 0, O + \3);",
         source,
         count=1,
         flags=re.S,
     )
-    if out == source or "O_local_cast_3" in out:
+    if out == source or re.search(r"\b" + re.escape(name) + r"\b", out):
         return source
     return out
 
