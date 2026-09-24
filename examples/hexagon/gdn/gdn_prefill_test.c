@@ -40,7 +40,8 @@ static float rand_f(float scale) {
 }
 
 typedef struct {
-    size_t q_off, k_off, v_off, g_off, b_off, s0_off, o_off, s1_off, prof_off, slab_sz;
+    size_t q_off, k_off, v_off, g_off, b_off, s0_off, o_off, s1_off;
+    size_t std_scratch_off, prof_off, slab_sz;
 } layout_t;
 
 static layout_t make_layout(void) {
@@ -58,12 +59,29 @@ static layout_t make_layout(void) {
     l.s0_off = off; off += st;
     l.o_off = off; off += vv;
     l.s1_off = off; off += st;
-    l.prof_off = al128(off);
+    l.std_scratch_off = al128(off);
+    // Keep enough tail scratch for attnops_tl_gdn_std.  The normal GDN input /
+    // output prefix is naturally 128B-aligned for this anchored shape, so the
+    // handwritten and TL-helper kernels can share the same slab prefix.
+    off = l.std_scratch_off;
+    size_t nc = T / 32;
+    off = al128(off + (size_t)HV * nc * 64 * 32 * 2); // APg
+    off = al128(off + (size_t)HV * nc * 64 * D * 2);  // WUg
+    off = al128(off + (size_t)HV * nc * 32 * D * 2);  // Otmp
+    off = al128(off + (size_t)HV * D * D * 2);        // DSg
+    off = al128(off + (size_t)HV * nc * 32 * D * 4);  // Wg
+    off = al128(off + (size_t)HV * nc * 32 * 32 * 4); // Pg
+    off = al128(off + (size_t)HV * nc * 32 * 32 * 4); // Ag
+    off = al128(off + (size_t)HV * nc * 32 * 4);      // eGg
+    off = al128(off + (size_t)HV * nc * 32 * 4);      // eGivg
+    off = al128(off + (size_t)HV * nc * 32 * 4);      // betag
+    off = al128(off + (size_t)HV * nc * 4);           // eGCg
+    l.prof_off = off;
     l.slab_sz = l.prof_off + 8192;
     return l;
 }
 
-static void fill_inputs(unsigned char *slab, const layout_t *l) {
+static void fill_inputs(unsigned char *slab, const layout_t *l, int s0_mode) {
     _Float16 *Q = (_Float16 *)(slab + l->q_off);
     _Float16 *K = (_Float16 *)(slab + l->k_off);
     _Float16 *V = (_Float16 *)(slab + l->v_off);
@@ -80,7 +98,7 @@ static void fill_inputs(unsigned char *slab, const layout_t *l) {
         G[i] = -0.001f - fabsf(rand_f(0.020f));       // small negative log-decay
         B[i] = 0.02f + fabsf(rand_f(0.20f));          // post-sigmoid beta-like
     }
-    for (size_t i = 0; i < (size_t)HV * D * D; i++) S0[i] = rand_f(0.010f);
+    for (size_t i = 0; i < (size_t)HV * D * D; i++) S0[i] = s0_mode ? rand_f(0.010f) : 0.0f;
     memset(O, 0, (size_t)HV * T * D * 2);
     memset(S1, 0, (size_t)HV * D * D * 4);
     memset(slab + l->prof_off, 0, 8192);
@@ -89,7 +107,21 @@ static void fill_inputs(unsigned char *slab, const layout_t *l) {
 static void clear_outputs(unsigned char *slab, const layout_t *l) {
     memset(slab + l->o_off, 0, (size_t)HV * T * D * 2);
     memset(slab + l->s1_off, 0, (size_t)HV * D * D * 4);
+    memset(slab + l->std_scratch_off, 0, l->slab_sz - l->std_scratch_off);
     memset(slab + l->prof_off, 0, 8192);
+}
+
+typedef int (*variant_fn_t)(remote_handle64, unsigned char *, const layout_t *);
+typedef struct { const char *name; variant_fn_t fn; unsigned char *slab; double ms[2]; double max_o, max_s; int fail, ret; } variant_t;
+
+static int run_base(remote_handle64 ah, unsigned char *slab, const layout_t *l) {
+    return attnops_gdn(ah, slab, (int)l->slab_sz, T, HK, HV);
+}
+static int run_tl_helper(remote_handle64 ah, unsigned char *slab, const layout_t *l) {
+    return attnops_tl_gdn_prefill(ah, slab, (int)l->slab_sz, T, HK, HV);
+}
+static int run_tl_std(remote_handle64 ah, unsigned char *slab, const layout_t *l) {
+    return attnops_tl_gdn_std(ah, slab, (int)l->slab_sz, 0);
 }
 
 static int check_fp64_ref(const unsigned char *slab, const layout_t *l, double *max_o, double *max_s) {
@@ -215,44 +247,69 @@ static int cmp_tl_ref(const unsigned char *tl, const unsigned char *ref, const l
 }
 
 int main(int argc, char **argv) {
-    int iters = argc > 1 ? atoi(argv[1]) : 3;
+    int iters = argc > 1 ? atoi(argv[1]) : 5;
+    int rounds = argc > 2 ? atoi(argv[2]) : 2;
+    int s0_mode = argc > 3 ? atoi(argv[3]) : 0;
+    if (rounds < 1) rounds = 1;
+    if (rounds > 2) rounds = 2;
     layout_t l = make_layout();
-    unsigned char *slab_ref = rpcmem_alloc(RPCMEM_HEAP_ID_SYSTEM, RPCMEM_DEFAULT_FLAGS, l.slab_sz);
-    unsigned char *slab_tl = rpcmem_alloc(RPCMEM_HEAP_ID_SYSTEM, RPCMEM_DEFAULT_FLAGS, l.slab_sz);
-    if (!slab_ref || !slab_tl) { printf("alloc fail slab_sz=%zu\n", l.slab_sz); return 1; }
-    fill_inputs(slab_ref, &l);
-    memcpy(slab_tl, slab_ref, l.slab_sz);
-    remote_register_buf_attr2(slab_ref, l.slab_sz, rpcmem_to_fd(slab_ref),
-        FASTRPC_ATTR_COHERENT | FASTRPC_ATTR_KEEP_MAP | FASTRPC_ATTR_TRY_MAP_STATIC);
-    remote_register_buf_attr2(slab_tl, l.slab_sz, rpcmem_to_fd(slab_tl),
-        FASTRPC_ATTR_COHERENT | FASTRPC_ATTR_KEEP_MAP | FASTRPC_ATTR_TRY_MAP_STATIC);
+    variant_t v[] = {
+        { "BASE_GDN", run_base, NULL, {0,0}, 999, 999, 1, 0 },
+        { "TL_GDN_HELPER", run_tl_helper, NULL, {0,0}, 999, 999, 1, 0 },
+        { "TL_GDN_STD", run_tl_std, NULL, {0,0}, 999, 999, 1, 0 },
+    };
+    const int nv = (int)(sizeof(v) / sizeof(v[0]));
+    for (int i = 0; i < nv; i++) {
+        v[i].slab = rpcmem_alloc(RPCMEM_HEAP_ID_SYSTEM, RPCMEM_DEFAULT_FLAGS, l.slab_sz);
+        if (!v[i].slab) { printf("alloc fail slab_sz=%zu variant=%s\n", l.slab_sz, v[i].name); return 1; }
+        fill_inputs(v[i].slab, &l, s0_mode);
+        remote_register_buf_attr2(v[i].slab, l.slab_sz, rpcmem_to_fd(v[i].slab),
+            FASTRPC_ATTR_COHERENT | FASTRPC_ATTR_KEEP_MAP | FASTRPC_ATTR_TRY_MAP_STATIC);
+    }
     struct remote_rpc_control_unsigned_module umod = { .domain = CDSP_DOMAIN_ID, .enable = 1 };
     remote_session_control(DSPRPC_CONTROL_UNSIGNED_MODULE, &umod, sizeof umod);
     char uri[256]; snprintf(uri, sizeof uri, "%s&_dom=cdsp", attnops_URI);
     remote_handle64 ah = -1;
     if (attnops_open(uri, &ah)) { printf("open fail\n"); return 1; }
 
-    int e = attnops_gdn(ah, slab_ref, (int)l.slab_sz, T, HK, HV);
-    if (e) { printf("REF_GDN warmup ret=%d\n", e); return 1; }
-    double t0 = now_s();
-    for (int it=0; it<iters; it++) { clear_outputs(slab_ref, &l); e = attnops_gdn(ah, slab_ref, (int)l.slab_sz, T, HK, HV); }
-    double ref_ms = (now_s() - t0) * 1e3 / iters;
-    if (e) { printf("REF_GDN ret=%d\n", e); return 1; }
+    for (int i = 0; i < nv; i++) {
+        int e = v[i].fn(ah, v[i].slab, &l);
+        if (e) { printf("%s warmup ret=%d\n", v[i].name, e); return 1; }
+    }
+    for (int r = 0; r < rounds; r++) {
+        double acc[3] = {0, 0, 0};
+        for (int it = 0; it < iters; it++) {
+            for (int i = 0; i < nv; i++) {
+                clear_outputs(v[i].slab, &l);
+                double t0 = now_s();
+                v[i].ret = v[i].fn(ah, v[i].slab, &l);
+                acc[i] += (now_s() - t0) * 1e3;
+                if (v[i].ret) { printf("%s ret=%d round=%d iter=%d\n", v[i].name, v[i].ret, r, it); return 1; }
+            }
+        }
+        for (int i = 0; i < nv; i++) v[i].ms[r] = acc[i] / iters;
+    }
 
-    e = attnops_tl_gdn_prefill(ah, slab_tl, (int)l.slab_sz, T, HK, HV);
-    if (e) { printf("TL_GDN warmup ret=%d\n", e); return 1; }
-    t0 = now_s();
-    for (int it=0; it<iters; it++) { clear_outputs(slab_tl, &l); e = attnops_tl_gdn_prefill(ah, slab_tl, (int)l.slab_sz, T, HK, HV); }
-    double tl_ms = (now_s() - t0) * 1e3 / iters;
-    if (e) { printf("TL_GDN ret=%d\n", e); return 1; }
-
-    double max_o=999, max_s=999, cmp_o=999, cmp_s=999;
-    int fail = check_fp64_ref(slab_tl, &l, &max_o, &max_s);
-    int cmp_fail = cmp_tl_ref(slab_tl, slab_ref, &l, &cmp_o, &cmp_s);
-    printf("TL_GDN T=%d Hk=%d Hv=%d max_rel_o=%.6f max_rel_s1=%.6f ms=%.3f ref_ms=%.3f tl_vs_ref_o=%.6f tl_vs_ref_s1=%.6f ret=%d %s\n",
-           T, HK, HV, max_o, max_s, tl_ms, ref_ms, cmp_o, cmp_s, e, (fail || cmp_fail) ? "FAIL" : "OK");
+    int any_fail = 0;
+    for (int i = 0; i < nv; i++) {
+        v[i].fail = check_fp64_ref(v[i].slab, &l, &v[i].max_o, &v[i].max_s);
+        any_fail |= v[i].fail;
+    }
+    for (int i = 0; i < nv; i++) {
+        printf("GDN_VARIANT name=%s T=%d Hk=%d Hv=%d s0_mode=%d max_rel_o=%.6f max_rel_s1=%.6f round0_ms=%.3f round1_ms=%.3f avg_ms=%.3f ret=%d %s\n",
+               v[i].name, T, HK, HV, s0_mode, v[i].max_o, v[i].max_s, v[i].ms[0],
+               rounds > 1 ? v[i].ms[1] : 0.0, rounds > 1 ? 0.5 * (v[i].ms[0] + v[i].ms[1]) : v[i].ms[0],
+               v[i].ret, v[i].fail ? "FAIL" : "OK");
+    }
+    double cmp_o=999, cmp_s=999;
+    for (int i = 1; i < nv; i++) {
+        int cf = cmp_tl_ref(v[i].slab, v[0].slab, &l, &cmp_o, &cmp_s);
+        printf("GDN_COMPARE name=%s vs=BASE_GDN max_rel_o=%.6f max_rel_s1=%.6f %s\n",
+               v[i].name, cmp_o, cmp_s, cf ? "FAIL" : "OK");
+        any_fail |= cf;
+    }
     attnops_close(ah);
-    rpcmem_free(slab_ref); rpcmem_free(slab_tl);
-    printf("TL_GDN_ALL_%s\n", (fail || cmp_fail) ? "FAIL" : "OK");
-    return (fail || cmp_fail) ? 1 : 0;
+    for (int i = 0; i < nv; i++) rpcmem_free(v[i].slab);
+    printf("GDN_VARIANTS_ALL_%s\n", any_fail ? "FAIL" : "OK");
+    return any_fail ? 1 : 0;
 }
