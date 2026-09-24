@@ -759,8 +759,16 @@ def _patch_opencl_gdn_scalar1_arrays(source: str) -> str:
 
     if "gdn_prep_kernel_kernel" not in source and "gdn_seq_kernel_kernel" not in source:
         return source
-    decl_re = re.compile(r"(?m)^(\s*)float\s+([A-Za-z_]\w*)\[1\];\s*\n\1\2\[0\]\s*=\s*([^;]+);$")
     out = source
+    for m in list(re.finditer(r"(?m)^(\s*)float\s+([A-Za-z_]\w*)\[1\];\s*$", source)):
+        name = m.group(2)
+        rest = out[: m.start()] + out[m.end():]
+        if re.search(r"\b" + re.escape(name) + r"\[(?!0\])", rest):
+            continue
+        out = re.sub(r"(?m)^(\s*)float\s+" + re.escape(name) + r"\[1\];\s*$", r"\1float " + name + ";", out, count=1)
+        out = re.sub(r"\b" + re.escape(name) + r"\[0\]", name, out)
+    source = out
+    decl_re = re.compile(r"(?m)^(\s*)float\s+([A-Za-z_]\w*)\[1\];\s*\n\1\2\[0\]\s*=\s*([^;]+);$")
     for m in list(decl_re.finditer(source)):
         name = m.group(2)
         # Only rewrite pure scalar private temporaries with constant index 0.

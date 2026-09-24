@@ -71,9 +71,11 @@ def make_gdn_prep_kernel(TOK: int, Hk: int, Hv: int, D: int, chunk: int, threads
                 s = 0.0
                 for r in T.serial(i + 1):
                     s = s + gf[r]
+                e = T.alloc_var("float32")
+                e = T.exp(s)
                 gc[i] = s
-                egc[i] = T.exp(s)
-                EgcBuf[h, c, i] = T.exp(s)
+                egc[i] = e
+                EgcBuf[h, c, i] = e
             T.sync_threads()
             EglBuf[h, c] = T.exp(gc[chunk - 1])
 
