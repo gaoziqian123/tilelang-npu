@@ -726,6 +726,25 @@ def _patch_opencl_gdn_seq_pass1_float8(source: str) -> str:
     return out
 
 
+def _patch_opencl_gdn_seq_output_vstore8(source: str) -> str:
+    """Drop the half[8] staging array on the GDN seq output store."""
+
+    if "gdn_seq_kernel_kernel" not in source or "half O_local_cast_3[8];" not in source:
+        return source
+    out = re.sub(
+        r"    half O_local_cast_3\[8\];\n"
+        r"    \(\*\(half4\*\)\(O_local_cast_3 \+ 0\)\) = \(convert_half4\(out8_1_lo\)\);\n"
+        r"    \(\*\(half4\*\)\(O_local_cast_3 \+ 4\)\) = \(convert_half4\(out8_1_hi\)\);\n"
+        r"    vstore8\(\(\*\(half8\*\)\(O_local_cast_3 \+ 0\)\), 0, O \+ ([^;]+)\);",
+        r"    vstore8(convert_half8((float8)(out8_1_lo, out8_1_hi)), 0, O + \1);",
+        source,
+        count=1,
+    )
+    if out == source or "O_local_cast_3" in out:
+        return source
+    return out
+
+
 def _patch_opencl_gdn_native_exp(source: str) -> str:
     """Use OpenCL native_exp for GDN gate exponentials, matching gdn.cl."""
 
@@ -1232,6 +1251,9 @@ def build_opencl(mod, target):
     if patched != source:
         source = patched
     patched = _patch_opencl_gdn_seq_pass1_float8(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_gdn_seq_output_vstore8(source)
     if patched != source:
         source = patched
     patched = _patch_opencl_gdn_native_exp(source)

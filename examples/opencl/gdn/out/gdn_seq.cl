@@ -8,7 +8,7 @@
 #endif
 
 __kernel void gdn_seq_kernel_kernel(__global half* restrict A2buf, __global float* restrict EgcBuf, __global float* restrict EglBuf, __global half* restrict KDbuf, __global half* restrict O, __global half* restrict Q, __global float* restrict S, __global half* restrict Ubuf, __global half* restrict Wbuf);
-__kernel void gdn_seq_kernel_kernel(__global half* restrict A2buf, __global float* restrict EgcBuf, __global float* restrict EglBuf, __global half* restrict KDbuf, __global half* restrict O, __global half* restrict Q, __global float* restrict S, __global half* restrict Ubuf, __global half* restrict Wbuf) { const int tl_gid0 = convert_int(get_group_id(0)); const int tl_gid1 = convert_int(get_group_id(1)); const int tl_lid0 = convert_int(get_local_id(0)); const int tl_wi_aff0 = ((tl_lid0 >> 5) * 1024); const int tl_wi_aff1 = ((tl_lid0 >> 2) * 128); const int tl_wi_aff2 = ((tl_lid0 >> 2) * 32); const int tl_wi_aff3 = ((tl_lid0 & 3) * 8); const int tl_wi_aff4 = (tl_gid1 * 131072); const int tl_wi_aff5 = (tl_gid1 * 16384); const int tl_wi_aff6 = (tl_gid1 * 32768); const int tl_wi_aff7 = (tl_gid1 * 1024); const int tl_wi_aff8 = (tl_gid0 * 32); const int tl_wi_aff9 = (tl_gid1 * 32); const int tl_wi_aff10 = (tl_lid0 * 8);
+__kernel void gdn_seq_kernel_kernel(__global half* restrict A2buf, __global float* restrict EgcBuf, __global float* restrict EglBuf, __global half* restrict KDbuf, __global half* restrict O, __global half* restrict Q, __global float* restrict S, __global half* restrict Ubuf, __global half* restrict Wbuf) { const int tl_gid0 = convert_int(get_group_id(0)); const int tl_gid1 = convert_int(get_group_id(1)); const int tl_lid0 = convert_int(get_local_id(0)); const int tl_wi_aff0 = ((tl_lid0 >> 5) * 1024); const int tl_wi_aff1 = ((tl_lid0 >> 2) * 128); const int tl_wi_aff2 = ((tl_lid0 >> 2) * 32); const int tl_wi_aff3 = ((tl_lid0 & 3) * 8); const int tl_wi_aff4 = (tl_gid1 * 131072); const int tl_wi_aff5 = (tl_gid1 * 16384); const int tl_wi_aff6 = (tl_gid1 * 32768); const int tl_wi_aff7 = (tl_gid1 * 1024); const int tl_wi_aff8 = (tl_gid1 * 32); const int tl_wi_aff9 = (tl_gid0 * 32); const int tl_wi_aff10 = (tl_lid0 * 8);
 __local half kdl[4096];
 __local half vn[1024];
   for (int c = 0; c < 32; ++c) { const int tl_loop_aff0 = (tl_wi_aff4 + (c * 4096));
@@ -49,13 +49,10 @@ __local half vn[1024];
     }
     for (int dk_1 = 0; dk_1 < 128; ++dk_1) { const int tl_loop_aff0 = (tl_wi_aff5 + (dk_1 * 128));
       float qv_1 = (convert_float(Q[(((((tl_gid1 & 15) * 131072) + (c * 4096)) + tl_wi_aff1) + dk_1)]));
-      out8_1_lo = (out8_1_lo + (((float4)((EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1))) * vload4(0, S + ((tl_loop_aff0 + tl_wi_aff8) + tl_wi_aff3))));
-      out8_1_hi = (out8_1_hi + (((float4)((EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1))) * vload4(0, S + (((tl_loop_aff0 + tl_wi_aff8) + tl_wi_aff3) + 4))));
+      out8_1_lo = (out8_1_lo + (((float4)((EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1))) * vload4(0, S + ((tl_loop_aff0 + tl_wi_aff9) + tl_wi_aff3))));
+      out8_1_hi = (out8_1_hi + (((float4)((EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1))) * vload4(0, S + (((tl_loop_aff0 + tl_wi_aff9) + tl_wi_aff3) + 4))));
     }
-    half O_local_cast_3[8];
-    (*(half4*)(O_local_cast_3 + 0)) = (convert_half4(out8_1_lo));
-    (*(half4*)(O_local_cast_3 + 4)) = (convert_half4(out8_1_hi));
-    vstore8((*(half8*)(O_local_cast_3 + 0)), 0, O + ((((tl_wi_aff4 + (c * 4096)) + tl_wi_aff1) + tl_wi_aff8) + tl_wi_aff3));
+    vstore8(convert_half8((float8)(out8_1_lo, out8_1_hi)), 0, O + ((((tl_wi_aff4 + (c * 4096)) + tl_wi_aff1) + tl_wi_aff9) + tl_wi_aff3));
     barrier(CLK_LOCAL_MEM_FENCE);
     float egl = EglBuf[((tl_gid1 * 32) + c)];
     for (int sb = 0; sb < 4; ++sb) {
