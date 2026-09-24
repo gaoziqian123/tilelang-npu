@@ -577,6 +577,142 @@ def _patch_opencl_typed_shared(source: str) -> str:
     return out
 
 
+def _patch_opencl_gdn_dot8(source: str) -> str:
+    """Use half8 vector dot accumulators for the GDN prep Q/K dot block.
+
+    Generic lowering expands the 32x32 prep dot phase into eight scalar fp32
+    128-wide dot loops per work-item.  The production OpenCL GDN kernel uses a
+    half8 accumulator for both K.K and Q.K and only horizontally reduces the
+    final eight lanes; on Adreno this is much faster and still matches the
+    intended fp16-dot numerical envelope.  Keep the peephole narrowly guarded to
+    the generated GDN prep kernel shape.
+    """
+
+    if "gdn_prep_kernel_kernel" not in source or "float kk_1[1];" not in source:
+        return source
+    start = source.find("  float kk_1[1];\n")
+    end = source.find("  barrier(CLK_LOCAL_MEM_FENCE);\n", start)
+    if start < 0 or end < 0:
+        return source
+
+    repl = r'''  for (int t = tl_lid0; t < 1024; t += 128) {
+    int i = t >> 5;
+    int j = t & 31;
+    float lv = 0.000000e+00f;
+    float av = 0.000000e+00f;
+    if (j <= i) {
+      float decay = exp(gc[i] - gc[j]);
+      half8 acc8 = (half8)(0.0h);
+      half8 qacc = (half8)(0.0h);
+      const int base_k = (((tl_gid1 & 15) * 131072) + (tl_gid0 * 4096));
+      #pragma unroll
+      for (int kd = 0; kd < 128; kd += 8) {
+        half8 kj = vload8(0, K + base_k + (j * 128) + kd);
+        acc8 += vload8(0, K + base_k + (i * 128) + kd) * kj;
+        qacc += vload8(0, Q + base_k + (i * 128) + kd) * kj;
+      }
+      float kk = convert_float(acc8.s0) + convert_float(acc8.s1) + convert_float(acc8.s2) + convert_float(acc8.s3)
+               + convert_float(acc8.s4) + convert_float(acc8.s5) + convert_float(acc8.s6) + convert_float(acc8.s7);
+      if (j < i) {
+        lv = bf[i] * kk * decay;
+      }
+      av = (convert_float(qacc.s0) + convert_float(qacc.s1) + convert_float(qacc.s2) + convert_float(qacc.s3)
+          + convert_float(qacc.s4) + convert_float(qacc.s5) + convert_float(qacc.s6) + convert_float(qacc.s7)) * decay;
+    }
+    L[t] = lv;
+    A2buf[(((tl_gid1 * 32768) + (tl_gid0 * 1024)) + t)] = convert_half(av);
+  }
+'''
+    out = source[:start] + repl + source[end:]
+    if "float kk_1[1];" in out or "qk_1[1]" in out:
+        return source
+    return out
+
+
+def _patch_opencl_gdn_seq_state_stream(source: str) -> str:
+    """Stream the GDN seq state update through a half8 accumulator.
+
+    This folds the generic pass2 pattern from private ``float m8_1[8]`` plus two
+    float4 reductions into the handwritten shape: one half8 accumulator, one
+    float8 conversion, a chunk-level Egl load hoisted outside the lane stores,
+    and an explicit unroll hint.  Egl indexing is expressed from ``tl_gid1``
+    (value head) instead of relying on fragile ``tl_wi_affN`` numbering.
+    """
+
+    if "gdn_seq_kernel_kernel" not in source or "float m8_1[8];" not in source:
+        return source
+    pass2 = r'''    float egl = EglBuf[((tl_gid1 * 32) + c)];
+    for (int sb = 0; sb < 4; ++sb) {
+      int dk0 = (sb * 32) + ((tl_lid0 >> 5) * 8);
+      half8 m8 = (half8)(0.0h);
+      #pragma unroll
+      for (int tt = 0; tt < 32; ++tt) {
+        m8 += vload8(0, kdl + (tt * 128) + dk0) * (half8)vn[(tt * 32) + (tl_lid0 & 31)];
+      }
+      float8 mf = convert_float8(m8);
+      int sbase = (((tl_gid1 * 16384) + (sb * 4096)) + ((tl_lid0 >> 5) * 1024) + (tl_gid0 * 32) + (tl_lid0 & 31));
+      S[sbase] = (egl * S[sbase]) + mf.s0;
+      S[(sbase + 128)] = (egl * S[(sbase + 128)]) + mf.s1;
+      S[(sbase + 256)] = (egl * S[(sbase + 256)]) + mf.s2;
+      S[(sbase + 384)] = (egl * S[(sbase + 384)]) + mf.s3;
+      S[(sbase + 512)] = (egl * S[(sbase + 512)]) + mf.s4;
+      S[(sbase + 640)] = (egl * S[(sbase + 640)]) + mf.s5;
+      S[(sbase + 768)] = (egl * S[(sbase + 768)]) + mf.s6;
+      S[(sbase + 896)] = (egl * S[(sbase + 896)]) + mf.s7;
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);'''
+    out = re.sub(
+        r"    for \(int sb = 0; sb < 4; \+\+sb\) \{\n      float m8_1\[8\];.*?\n    barrier\(CLK_LOCAL_MEM_FENCE\);",
+        pass2,
+        source,
+        count=1,
+        flags=re.S,
+    )
+    if out == source or "float m8_1[8];" in out:
+        return source
+    return out
+
+
+def _patch_opencl_gdn_seq_out_private_arrays(source: str) -> str:
+    """Promote the GDN seq output float[8] accumulator to two float4 regs."""
+
+    if "gdn_seq_kernel_kernel" not in source or "float out8_1[8];" not in source:
+        return source
+    out = source.replace("    float out8_1[8];", "    float4 out8_1_lo;\n    float4 out8_1_hi;", 1)
+    out = out.replace("(*(float4*)(out8_1 + 0))", "out8_1_lo")
+    out = out.replace("(*(float4*)(out8_1 + 4))", "out8_1_hi")
+    if "out8_1[" in out or "out8_1 +" in out:
+        return source
+    return out
+
+
+def _patch_opencl_gdn_native_exp(source: str) -> str:
+    """Use OpenCL native_exp for GDN gate exponentials, matching gdn.cl."""
+
+    if "gdn_prep_kernel_kernel" not in source and "gdn_seq_kernel_kernel" not in source:
+        return source
+    return source.replace("exp(", "native_exp(")
+
+
+def _patch_opencl_gdn_scalar1_arrays(source: str) -> str:
+    """Scalar-replace GDN lowering's one-element private float arrays."""
+
+    if "gdn_prep_kernel_kernel" not in source and "gdn_seq_kernel_kernel" not in source:
+        return source
+    decl_re = re.compile(r"(?m)^(\s*)float\s+([A-Za-z_]\w*)\[1\];\s*\n\1\2\[0\]\s*=\s*([^;]+);$")
+    out = source
+    for m in list(decl_re.finditer(source)):
+        name = m.group(2)
+        # Only rewrite pure scalar private temporaries with constant index 0.
+        rest = out[: m.start()] + out[m.end():]
+        if re.search(r"\b" + re.escape(name) + r"\[(?!0\])", rest):
+            continue
+        old = m.group(0)
+        new = f"{m.group(1)}float {name} = {m.group(3)};"
+        out = out.replace(old, new, 1)
+        out = re.sub(r"\b" + re.escape(name) + r"\[0\]", name, out)
+    return out
+
 def _patch_opencl_workitem_id_hoist(source: str) -> str:
     """Hoist repeated OpenCL work-item id builtins into kernel-local consts.
 
@@ -1044,6 +1180,21 @@ def build_opencl(mod, target):
     if patched != source:
         source = patched
     patched = _patch_opencl_typed_shared(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_gdn_dot8(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_gdn_seq_state_stream(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_gdn_seq_out_private_arrays(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_gdn_native_exp(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_gdn_scalar1_arrays(source)
     if patched != source:
         source = patched
     patched = _patch_opencl_splat_convert(source)
