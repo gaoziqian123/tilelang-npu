@@ -1,4 +1,6 @@
-# Hexagon 后端示例
+# Hexagon legacy 后端示例
+
+本目录是 **statement-level emitter 旧路径**：2026-09 前的生产路径，GEMM / GDN / FA / FFN 等四个算子融合全绿。新路径（CUDA 架构风格重写）会放在 `examples/hexagon/`；在新路径完全接管前，本旧路径保持可 emit、可构建 skel、产物逐字节稳定可用。
 
 本目录展示 TileLang 的实验性 `target="hexagon"` 后端：用户仍在 Python 里描述张量、循环、shared/fragment buffer 和硬件叶片，lower 后拿到 **Hexagon intrinsic C 文本**。生成的 C 不是直接在本机运行，而是放进 OnePlus 13 / SM8750 的 FastRPC skel 工程里编译、部署、对拍。语法、布局约定和 Hexagon 红线见 [`docs/hexagon/00_syntax_and_rules.md`](../../docs/hexagon/00_syntax_and_rules.md)。当前脚本使用 `engine.lower(...).kernel_source` 取生成源码，并在本机有 Hexagon SDK 时额外跑 `hexagon-clang -fsyntax-only`。
 
@@ -21,11 +23,11 @@ C 文件；顶层仅保留公共说明、`copy_auto.py` 实验脚本和它对应
 从仓库根目录运行，显式设置 `PYTHONPATH` 并使用仓库内虚拟环境：
 
 ```bash
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gemm/gemm_nt.py
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gdn/gdn_prefill.py
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/gdn/gdn_prefill_renamed.py
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/silu/silu_mul.py --impl direct
-PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon/silu/silu_mul.py --impl vtcm
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon-legacy/gemm/gemm_nt.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon-legacy/gdn/gdn_prefill.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon-legacy/gdn/gdn_prefill_renamed.py
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon-legacy/silu/silu_mul.py --impl direct
+PYTHONPATH=/root/project/tilelang /root/project/tilelang/.venv/bin/python examples/hexagon-legacy/silu/silu_mul.py --impl vtcm
 ```
 
 默认输出在各算子自己的 `out/` 子目录。所有脚本都有 `--out`（或

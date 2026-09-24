@@ -3,7 +3,7 @@
 
 The default shape is the Qwen prefill projection slice used on OnePlus 13:
 M=960, N=8192, K=2560.  The generated C is written under
-examples/hexagon/gemm/out/ by default and can be compiled into the FastRPC skel
+examples/hexagon-legacy/gemm/out/ by default and can be compiled into the FastRPC skel
 project for device execution.
 """
 

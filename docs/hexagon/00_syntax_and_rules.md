@@ -115,7 +115,7 @@ Hexagon emitter 目前保留两条 GEMM lowering 路径：
 
 - **legacy GEMM 壳路径**：入口 ABI 为 `slab,w,M,N,K,abl` 的 GEMM_NT kernel 继续使用
   原有 `GM_ACT/GM_WA/GM_OUT/NP/nct/kt` 宏和运行时 panel 选择逻辑。该路径用于
-  `examples/hexagon/gemm/gemm_nt.py` / `gemm/gemm_small.py`，要求逐字节回归稳定。
+  `examples/hexagon-legacy/gemm/gemm_nt.py` / `gemm/gemm_small.py`，要求逐字节回归稳定。
 - **通用 recipe**：当 `hexagon.gemm_hmx + hexagon.copy_acc_rm` 出现在非 legacy GEMM
   壳的 kernel 内(例如 GDN/elementwise 壳内有多个异形 `T.gemm`)时，emitter 不再读取
   `GM_*` 运行时量，而是从当前 gemm extern 的静态 `(A_data,B_data,C_data,M,N,K)`
@@ -361,7 +361,7 @@ fp64 对拍 max_rel < 0.1(R12 判据),性能对照手写版 1.6–3.2 TFLOPS,
 GDN 显式 scratch 必须使用 `T.alloc_wscratch`，但变量名不参与 ABI 选择：
 `HexagonWScratchPlan` 按声明顺序检查 shape/dtype 并映射到 `hrt_gdn_slot_t`
 字段，生成 C 仍只出现 `slot->S/kf/.../eGC`，保证真机 ABI 不变；
-`examples/hexagon/gdn_prefill_renamed.py` 用任意 scratch 名覆盖此规则。
+`examples/hexagon-legacy/gdn/gdn_prefill_renamed.py` 用任意 scratch 名覆盖此规则。
 
 v0.1 只承诺 GEMM 端到端;GDN/FA/FFN 是语法表必须能表达、但尚未验证的后续目标。
 
