@@ -713,7 +713,11 @@ def _patch_opencl_gdn_seq_pass1_float8(source: str) -> str:
       acco8 = (acco8 + (qv * sv));
     }
     half8 u8 = vload8(0, Ubuf + (cb + (t * 128) + dv0));
-    vstore8(convert_half8(convert_float8(u8) - acc8), 0, vn + (tl_lid0 * 8));'''
+    vstore8(convert_half8(convert_float8(u8) - acc8), 0, vn + (tl_lid0 * 8));
+    float4 acco_1_0_lo = acco8.lo;
+    float4 acco_1_0_hi = acco8.hi;
+    float4 out8_1_lo;
+    float4 out8_1_hi;'''
     out = re.sub(
         r"    float4 acc_1_0_lo = .*?\n    vstore4\(\(\*\(half4\*\)\(vn_local_cast_1 \+ 0\)\), 0, vn \+ \(tl_wi_aff10 \+ 4\)\);",
         repl,
@@ -721,6 +725,14 @@ def _patch_opencl_gdn_seq_pass1_float8(source: str) -> str:
         count=1,
         flags=re.S,
     )
+    if out == source:
+        out = re.sub(
+            r"    float4 acc_1_0_lo = .*?\n    vstore8\(\(\*\(half8\*\)\(vn_local_cast \+ 0\)\), 0, vn \+ tl_wi_aff10\);",
+            repl,
+            source,
+            count=1,
+            flags=re.S,
+        )
     if out == source or "float4 acc_1_0_lo" in out or "vn_local_cast_1" in out:
         return source
     return out
