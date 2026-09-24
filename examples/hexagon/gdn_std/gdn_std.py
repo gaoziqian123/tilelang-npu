@@ -47,7 +47,7 @@ import tilelang.hexagon  # noqa: F401,E402 - registers backend/target
 import tilelang.hexagon.language as T  # noqa: E402
 
 
-@tilelang.jit(out_idx=[6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18], target="hexagon", execution_backend="aot")
+@tilelang.jit(out_idx=[6, 7], target="hexagon", execution_backend="aot")
 def gdn_std(TOK: int = 1024, Hk: int = 16, Hv: int = 32, D: int = 128, chunk: int = 32):
     @T.prim_func
     def main(
@@ -59,153 +59,99 @@ def gdn_std(TOK: int = 1024, Hk: int = 16, Hv: int = 32, D: int = 128, chunk: in
         S0: T.Tensor((Hv, D, D), T.float32),
         O: T.Tensor((Hv, TOK, D), T.float16),
         S1: T.Tensor((Hv, D, D), T.float32),
-        APg: T.Tensor((Hv, TOK // chunk, 64, chunk), T.float16),
-        WUg: T.Tensor((Hv, TOK // chunk, 64, D), T.float16),
-        Otmp: T.Tensor((Hv, TOK // chunk, chunk, D), T.float16),
-        DSg: T.Tensor((Hv, D, D), T.float16),
-        Wg: T.Tensor((Hv, TOK // chunk, chunk, D), T.float32),
-        Pg: T.Tensor((Hv, TOK // chunk, chunk, chunk), T.float32),
-        Ag: T.Tensor((Hv, TOK // chunk, chunk, chunk), T.float32),
-        eGg: T.Tensor((Hv, TOK // chunk, chunk), T.float32),
-        eGivg: T.Tensor((Hv, TOK // chunk, chunk), T.float32),
-        betag: T.Tensor((Hv, TOK // chunk, chunk), T.float32),
-        eGCg: T.Tensor((Hv, TOK // chunk), T.float32),
     ):
-        with T.Kernel(1, threads=1):
-            # Full standard-construct GDN route-b.  HMX GEMMs are kept on the
-            # caller thread; scalar triangular recurrences use global scratch so
-            # they never scalar-load VTCM (R2).  Persistent fp32 state and its
-            # fp16 AH shadow live in VTCM across chunks.
-            A_a = T.alloc_shared((32, 128), T.float16, layout="ah")
-            B_a = T.alloc_shared((32, 128), T.float16, layout="wh")
-            KH_a = T.alloc_shared((Hv, 32, 128), T.float16, layout="ah")
-            QH_a = T.alloc_shared((Hv, 32, 128), T.float16, layout="ah")
-            KL_b = T.alloc_shared((Hv, 32, 128), T.float16, layout="wh")
-            P_a = T.alloc_shared((Hv, 32, 32), T.float16, layout="ah")
-            Wt_b = T.alloc_shared((Hv, 128, 32), T.float16, layout="wh")
-            Kt_b = T.alloc_shared((128, 32), T.float16, layout="ah")
-            state = T.alloc_shared((Hv, D, D), T.float32)
-            state_wh = T.alloc_shared((Hv, D, D), T.float16, layout="wh")
-            KH = T.alloc_shared((Hv, chunk, D), T.float32)
-            QH = T.alloc_shared((Hv, chunk, D), T.float32)
-            KL = T.alloc_shared((Hv, chunk, D), T.float32)
-            Khat = T.alloc_shared((Hv, chunk, D), T.float32)
-            AP_acc = T.alloc_fragment((32, 32), T.float32)
-            WU_acc = T.alloc_fragment((32, 128), T.float32)
-            O_acc = T.alloc_fragment((32, 128), T.float32)
-            DS_acc = T.alloc_fragment((128, 128), T.float32)
+        with T.Kernel(Hv, threads=6) as hv:
+            # Zero-short-path standard GDN.  This is the same chunk algebra as
+            # attnops_gdn.c, but all dataflow is expressed in TileLang loops.
+            # No hrt_tlgdn_* chunk helper owns a matvec/solve/update step.
+            state = T.alloc_wscratch((D, D), T.float32)
+            kf = T.alloc_wscratch((chunk, D), T.float32)
+            qf = T.alloc_wscratch((chunk, D), T.float32)
+            vf = T.alloc_wscratch((chunk, D), T.float32)
+            w = T.alloc_wscratch((chunk, D), T.float32)
+            o_acc = T.alloc_wscratch((chunk, D), T.float32)
+            A = T.alloc_wscratch((chunk, chunk), T.float32)
+            P = T.alloc_wscratch((chunk, chunk), T.float32)
+            kkprod = T.alloc_wscratch((D,), T.float32)
+            qkprod = T.alloc_wscratch((D,), T.float32)
+            eG = T.alloc_wscratch((chunk,), T.float32)
+            eGinv = T.alloc_wscratch((chunk,), T.float32)
+            beta = T.alloc_wscratch((chunk,), T.float32)
+            eGC = T.alloc_wscratch((1,), T.float32)
 
-            # Phase 0: initialize fp32 state and AH shadow once.
-            for hinit in T.serial(Hv):
-                for r in T.serial(D):
-                    for d in T.vectorized(D):
-                        state[hinit, r, d] = S0[hinit, r, d]
-                T.copy(S0[hinit, 0, 0], state_wh[hinit, 0, 0], layout=("rm", "wh"))
-
+            hk = hv % Hk
+            for r0 in T.serial(D):
+                for d0 in T.vectorized(D):
+                    state[r0, d0] = S0[hv, r0, d0]
             for c in T.serial(TOK // chunk):
                 t0 = c * chunk
+                for i_load in T.serial(chunk):
+                    for d_load in T.vectorized(D):
+                        qf[i_load, d_load] = T.Cast("float32", Q[hk, t0 + i_load, d_load])
+                        kf[i_load, d_load] = T.Cast("float32", K[hk, t0 + i_load, d_load])
+                        vf[i_load, d_load] = T.Cast("float32", V[hv, t0 + i_load, d_load])
 
-                # Phase 1: per-head cumsum/exp factors, row-scaled K/Q tiles,
-                # and k_hat fold for the chunk-end state GEMM.
-                for hvp in T.parallel(Hv):
-                    hk_p = hvp % Hk
-                    eGCg[hvp, c] = 0.0
-                    for i in T.serial(chunk):
-                        eGCg[hvp, c] = eGCg[hvp, c] + G[hvp, t0 + i]
-                        eGg[hvp, c, i] = T.exp(T.max(eGCg[hvp, c], -60.0))
-                        eGivg[hvp, c, i] = T.exp(-T.max(eGCg[hvp, c], -60.0))
-                        betag[hvp, c, i] = B[hvp, t0 + i]
-                    eGCg[hvp, c] = T.exp(T.max(eGCg[hvp, c], -60.0))
-                    for i in T.serial(chunk):
-                        for d in T.vectorized(D):
-                            KH[hvp, i, d] = betag[hvp, c, i] * eGg[hvp, c, i] * T.Cast("float32", K[hk_p, t0 + i, d])
-                            KL[hvp, i, d] = eGivg[hvp, c, i] * T.Cast("float32", K[hk_p, t0 + i, d])
-                            QH[hvp, i, d] = eGg[hvp, c, i] * T.Cast("float32", Q[hk_p, t0 + i, d])
-                            Khat[hvp, i, d] = eGCg[hvp, c] * eGivg[hvp, c, i] * T.Cast("float32", K[hk_p, t0 + i, d])
+                G_acc = T.alloc_var(T.float32, init=0.0)
+                for i_gate in T.serial(chunk):
+                    G_acc = G_acc + G[hv, t0 + i_gate]
+                    Gc = T.alloc_var(T.float32, init=T.max(G_acc, -60.0))
+                    eG[i_gate] = T.exp(Gc)
+                    eGinv[i_gate] = T.exp(-Gc)
+                    beta[i_gate] = B[hv, t0 + i_gate]
+                eGC[0] = T.exp(T.max(G_acc, -60.0))
 
-                # Phase 2 AP staging is pure HVX and can run on pool workers.
-                for hv_ap_stage in T.parallel(Hv):
-                    T.copy(KL[hv_ap_stage, 0, 0], KL_b[hv_ap_stage, 0, 0], layout=("rm", "wh"), annotations={"hexagon.copy.trans": 1})
-                    T.copy(KH[hv_ap_stage, 0, 0], KH_a[hv_ap_stage, 0, 0], layout=("rm", "ah"))
-                    T.copy(QH[hv_ap_stage, 0, 0], QH_a[hv_ap_stage, 0, 0], layout=("rm", "ah"))
+                for i_ap in T.serial(chunk):
+                    for j_ap in T.serial(i_ap + 1):
+                        for dk0 in T.vectorized(D):
+                            kkprod[dk0] = kf[i_ap, dk0] * kf[j_ap, dk0]
+                            qkprod[dk0] = qf[i_ap, dk0] * kf[j_ap, dk0]
+                        dkk = T.alloc_var(T.float32)
+                        dqk = T.alloc_var(T.float32)
+                        T.reduce_sum(kkprod, dkk)
+                        T.reduce_sum(qkprod, dqk)
+                        dec = T.alloc_var(T.float32, init=eG[i_ap] * eGinv[j_ap])
+                        if j_ap < i_ap:
+                            A[i_ap, j_ap] = beta[i_ap] * dec * dkk
+                        P[i_ap, j_ap] = dec * dqk
 
-                for hv in T.serial(Hv):
-                    hk = hv % Hk
-                    # Phase 2: AP=[Kh;Qh]@Kl^T and WU=[K;Q]@S^T.  AP/WU are
-                    # committed to global fp16 scratch because phase 3 needs
-                    # scalar triangular coefficients without VTCM scalar reads.
-                    T.gemm(KH_a[hv, 0, 0], KL_b[hv, 0, 0], AP_acc, transpose_B=True, clear_accum=True)
-                    T.copy(AP_acc, APg[hv, c, 0, 0], layout=("ah", "rm"))
-                    T.gemm(QH_a[hv, 0, 0], KL_b[hv, 0, 0], AP_acc, transpose_B=True, clear_accum=True)
-                    T.copy(AP_acc, APg[hv, c, chunk, 0], layout=("ah", "rm"))
+                for i_mv in T.serial(chunk):
+                    for d_init in T.vectorized(D):
+                        w[i_mv, d_init] = 0.0
+                        o_acc[i_mv, d_init] = 0.0
+                    for dk1 in T.serial(D):
+                        for d_mv in T.vectorized(D):
+                            w[i_mv, d_mv] = w[i_mv, d_mv] + kf[i_mv, dk1] * state[dk1, d_mv]
+                            o_acc[i_mv, d_mv] = o_acc[i_mv, d_mv] + qf[i_mv, dk1] * state[dk1, d_mv]
+                    for d_aff in T.vectorized(D):
+                        w[i_mv, d_aff] = beta[i_mv] * vf[i_mv, d_aff] - beta[i_mv] * eG[i_mv] * w[i_mv, d_aff]
 
+                for i_sol in T.serial(chunk):
+                    for j_sol in T.serial(i_sol):
+                        for d_sol in T.vectorized(D):
+                            w[i_sol, d_sol] = w[i_sol, d_sol] - A[i_sol, j_sol] * w[j_sol, d_sol]
 
-                # Reuse KH_a/QH_a storage for raw K/Q staging used by WU.
-                for hv_wu_stage in T.parallel(Hv):
-                    hk_wu_stage = hv_wu_stage % Hk
-                    T.copy(K[hk_wu_stage, t0, 0], KH_a[hv_wu_stage, 0, 0], layout=("rm", "ah"))
-                    T.copy(Q[hk_wu_stage, t0, 0], QH_a[hv_wu_stage, 0, 0], layout=("rm", "ah"))
+                for i_out in T.serial(chunk):
+                    for d_scale in T.vectorized(D):
+                        o_acc[i_out, d_scale] = eG[i_out] * o_acc[i_out, d_scale]
+                    for j_out in T.serial(i_out + 1):
+                        for d_out in T.vectorized(D):
+                            o_acc[i_out, d_out] = o_acc[i_out, d_out] + P[i_out, j_out] * w[j_out, d_out]
+                    for d_store in T.vectorized(D):
+                        O[hv, t0 + i_out, d_store] = T.Cast("float16", o_acc[i_out, d_store])
 
-                for hv_wu in T.serial(Hv):
-                    T.gemm(KH_a[hv_wu, 0, 0], state_wh[hv_wu, 0, 0], WU_acc, transpose_B=True, clear_accum=True)
-                    T.copy(WU_acc, WUg[hv_wu, c, 0, 0], layout=("ah", "rm"))
-                    T.gemm(QH_a[hv_wu, 0, 0], state_wh[hv_wu, 0, 0], WU_acc, transpose_B=True, clear_accum=True)
-                    T.copy(WU_acc, WUg[hv_wu, c, chunk, 0], layout=("ah", "rm"))
+                for i_dec in T.serial(chunk):
+                    for d_dec in T.vectorized(D):
+                        kf[i_dec, d_dec] = eGC[0] * eGinv[i_dec] * kf[i_dec, d_dec]
+                for dk2 in T.serial(D):
+                    for d_state0 in T.vectorized(D):
+                        state[dk2, d_state0] = eGC[0] * state[dk2, d_state0]
+                    for i_up in T.serial(chunk):
+                        for d_state in T.vectorized(D):
+                            state[dk2, d_state] = state[dk2, d_state] + kf[i_up, dk2] * w[i_up, d_state]
 
-                # Phase 3: triangular masks, affine RHS, and serial forward solve.
-                # Masks run as a 1024-lane vector pass over the (32,32) plane
-                # while indexing the logical matrix dimensions directly; lane
-                # index l maps to row l//32 / col l%32.
-                for hvp3 in T.parallel(Hv):
-                    for l in T.vectorized(chunk * chunk):
-                        Pg[hvp3, c, l // chunk, l % chunk] = T.if_then_else(
-                            l % chunk <= l // chunk,
-                            T.Cast("float32", APg[hvp3, c, chunk + l // chunk, l % chunk]),
-                            T.Cast("float32", 0.0))
-                        Ag[hvp3, c, l // chunk, l % chunk] = T.if_then_else(
-                            l % chunk < l // chunk,
-                            T.Cast("float32", APg[hvp3, c, l // chunk, l % chunk]),
-                            T.Cast("float32", 0.0))
-                    for i in T.serial(chunk):
-                        for d in T.vectorized(D):
-                            Wg[hvp3, c, i, d] = betag[hvp3, c, i] * T.Cast("float32", V[hvp3, t0 + i, d]) - betag[hvp3, c, i] * eGg[hvp3, c, i] * T.Cast("float32", WUg[hvp3, c, i, d])
-                    for i in T.serial(chunk):
-                        for j in T.serial(i):
-                            for d in T.vectorized(D):
-                                Wg[hvp3, c, i, d] = Wg[hvp3, c, i, d] - Ag[hvp3, c, i, j] * Wg[hvp3, c, j, d]
-
-                # Phase 4 staging is pure HVX.  Wt_b is staged here and reused
-                # by phase 6; only Khat needs an extra staging pool below.
-                for hv4_stage in T.parallel(Hv):
-                    T.copy(Pg[hv4_stage, c, 0, 0], P_a[hv4_stage, 0, 0], layout=("rm", "ah"))
-                    T.copy(Wg[hv4_stage, c, 0, 0], Wt_b[hv4_stage, 0, 0], layout=("rm", "wh"))
-
-                for hv4 in T.serial(Hv):
-                    # Phase 4: O' = tril(P) @ w.
-                    T.gemm(P_a[hv4, 0, 0], Wt_b[hv4, 0, 0], O_acc, transpose_B=True, clear_accum=True)
-                    T.copy(O_acc, Otmp[hv4, c, 0, 0], layout=("ah", "rm"))
-
-                for hv6 in T.serial(Hv):
-                    # Phase 6: DeltaS = k_hat^T @ w.
-                    T.copy(Khat[hv6, 0, 0], Kt_b, layout=("rm", "ah"), annotations={"hexagon.copy.trans": 1})
-                    T.gemm(Kt_b, Wt_b[hv6, 0, 0], DS_acc, transpose_B=True, clear_accum=True)
-                    T.copy(DS_acc, DSg[hv6, 0, 0], layout=("ah", "rm"))
-
-                # Phases 5 and 7: output combine, fp32 state update, AH shadow
-                # refresh for the next chunk, and final state store on c==last.
-                for hvp7 in T.parallel(Hv):
-                    for i in T.serial(chunk):
-                        for d in T.vectorized(D):
-                            O[hvp7, t0 + i, d] = T.Cast("float16", eGg[hvp7, c, i] * T.Cast("float32", WUg[hvp7, c, chunk + i, d]) + T.Cast("float32", Otmp[hvp7, c, i, d]))
-                    for r in T.serial(D):
-                        for d in T.vectorized(D):
-                            state[hvp7, r, d] = eGCg[hvp7, c] * state[hvp7, r, d] + T.Cast("float32", DSg[hvp7, r, d])
-                    if c == TOK // chunk - 1:
-                        for r2 in T.serial(D):
-                            for d2 in T.vectorized(D):
-                                S1[hvp7, r2, d2] = state[hvp7, r2, d2]
-                for hv7 in T.serial(Hv):
-                    T.copy(state[hv7, 0, 0], state_wh[hv7, 0, 0], layout=("rm", "wh"))
+            for r1 in T.serial(D):
+                for d1 in T.vectorized(D):
+                    S1[hv, r1, d1] = state[r1, d1]
 
     return main
 

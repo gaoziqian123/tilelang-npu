@@ -112,19 +112,17 @@ static void clear_outputs(unsigned char *slab, const layout_t *l) {
 }
 
 typedef int (*variant_fn_t)(remote_handle64, unsigned char *, const layout_t *);
-typedef struct { const char *name; variant_fn_t fn; unsigned char *slab; double ms[2]; double max_o, max_s; int fail, ret; } variant_t;
+typedef struct { const char *name; variant_fn_t fn; unsigned char *slab; double ms[2]; double max_o, max_s, cos_o, cos_s; int fail, ret; } variant_t;
 
 static int run_base(remote_handle64 ah, unsigned char *slab, const layout_t *l) {
     return attnops_gdn(ah, slab, (int)l->slab_sz, T, HK, HV);
-}
-static int run_tl_helper(remote_handle64 ah, unsigned char *slab, const layout_t *l) {
-    return attnops_tl_gdn_prefill(ah, slab, (int)l->slab_sz, T, HK, HV);
 }
 static int run_tl_std(remote_handle64 ah, unsigned char *slab, const layout_t *l) {
     return attnops_tl_gdn_std(ah, slab, (int)l->slab_sz, 0);
 }
 
-static int check_fp64_ref(const unsigned char *slab, const layout_t *l, double *max_o, double *max_s) {
+static int check_fp64_ref(const unsigned char *slab, const layout_t *l, double *max_o, double *max_s,
+                          double *cos_o, double *cos_s) {
     const _Float16 *Q = (const _Float16 *)(slab + l->q_off);
     const _Float16 *K = (const _Float16 *)(slab + l->k_off);
     const _Float16 *V = (const _Float16 *)(slab + l->v_off);
@@ -174,6 +172,8 @@ static int check_fp64_ref(const unsigned char *slab, const layout_t *l, double *
     int bad_o = 0, bad_s = 0;
     int bo_h=-1, bo_t=-1, bo_d=-1, bs_h=-1, bs_i=-1;
     double bo_g=0, bo_r=0, bs_g=0, bs_r=0;
+    double dot_o = 0.0, got2_o = 0.0, ref2_o = 0.0;
+    double dot_s = 0.0, got2_s = 0.0, ref2_s = 0.0;
     for (int hv = 0; hv < HV; hv++) {
         int hk = hv % HK;
         for (int dk = 0; dk < D; dk++)
@@ -198,6 +198,7 @@ static int check_fp64_ref(const unsigned char *slab, const layout_t *l, double *
                 double ref = 0.0;
                 for (int dk = 0; dk < D; dk++) ref += (double)(float)q[dk] * S[(size_t)dk * D + dv];
                 double got = (double)(float)O[((size_t)hv * T + t) * D + dv];
+                dot_o += got * ref; got2_o += got * got; ref2_o += ref * ref;
                 double rel = fabs(got - ref) / (fabs(ref) + 0.02 * rms_o);
                 if (rel > mr_o) { mr_o = rel; bo_h=hv; bo_t=t; bo_d=dv; bo_g=got; bo_r=ref; }
                 if (rel >= 0.1) bad_o++;
@@ -206,12 +207,15 @@ static int check_fp64_ref(const unsigned char *slab, const layout_t *l, double *
         for (int i = 0; i < D * D; i++) {
             double ref = S[i];
             double got = (double)S1[(size_t)hv * D * D + i];
+            dot_s += got * ref; got2_s += got * got; ref2_s += ref * ref;
             double rel = fabs(got - ref) / (fabs(ref) + 0.02 * rms_s);
             if (rel > mr_s) { mr_s = rel; bs_h=hv; bs_i=i; bs_g=got; bs_r=ref; }
             if (rel >= 0.1) bad_s++;
         }
     }
     *max_o = mr_o; *max_s = mr_s;
+    *cos_o = dot_o / (sqrt(got2_o) * sqrt(ref2_o) + 1e-300);
+    *cos_s = dot_s / (sqrt(got2_s) * sqrt(ref2_s) + 1e-300);
     if (bad_o || bad_s) {
         printf("  worst O h=%d t=%d d=%d got %.8f ref %.8f rms %.8f max_rel %.6f bad %d/%zu\n",
                bo_h, bo_t, bo_d, bo_g, bo_r, rms_o, mr_o, bad_o, no);
@@ -254,9 +258,8 @@ int main(int argc, char **argv) {
     if (rounds > 2) rounds = 2;
     layout_t l = make_layout();
     variant_t v[] = {
-        { "BASE_GDN", run_base, NULL, {0,0}, 999, 999, 1, 0 },
-        { "TL_GDN_HELPER", run_tl_helper, NULL, {0,0}, 999, 999, 1, 0 },
-        { "TL_GDN_STD", run_tl_std, NULL, {0,0}, 999, 999, 1, 0 },
+        { "BASE_GDN", run_base, NULL, {0,0}, 999, 999, 0, 0, 1, 0 },
+        { "TL_GDN_STD", run_tl_std, NULL, {0,0}, 999, 999, 0, 0, 1, 0 },
     };
     const int nv = (int)(sizeof(v) / sizeof(v[0]));
     for (int i = 0; i < nv; i++) {
@@ -292,12 +295,12 @@ int main(int argc, char **argv) {
 
     int any_fail = 0;
     for (int i = 0; i < nv; i++) {
-        v[i].fail = check_fp64_ref(v[i].slab, &l, &v[i].max_o, &v[i].max_s);
+        v[i].fail = check_fp64_ref(v[i].slab, &l, &v[i].max_o, &v[i].max_s, &v[i].cos_o, &v[i].cos_s);
         any_fail |= v[i].fail;
     }
     for (int i = 0; i < nv; i++) {
-        printf("GDN_VARIANT name=%s T=%d Hk=%d Hv=%d s0_mode=%d max_rel_o=%.6f max_rel_s1=%.6f round0_ms=%.3f round1_ms=%.3f avg_ms=%.3f ret=%d %s\n",
-               v[i].name, T, HK, HV, s0_mode, v[i].max_o, v[i].max_s, v[i].ms[0],
+        printf("GDN_VARIANT name=%s T=%d Hk=%d Hv=%d s0_mode=%d max_rel_o=%.6f max_rel_s1=%.6f cos_o=%.9f cos_s1=%.9f round0_ms=%.3f round1_ms=%.3f avg_ms=%.3f ret=%d %s\n",
+               v[i].name, T, HK, HV, s0_mode, v[i].max_o, v[i].max_s, v[i].cos_o, v[i].cos_s, v[i].ms[0],
                rounds > 1 ? v[i].ms[1] : 0.0, rounds > 1 ? 0.5 * (v[i].ms[0] + v[i].ms[1]) : v[i].ms[0],
                v[i].ret, v[i].fail ? "FAIL" : "OK");
     }
