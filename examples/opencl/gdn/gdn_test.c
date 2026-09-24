@@ -37,10 +37,13 @@ typedef cl_int (*PFN_clEnqueueWriteBuffer)(cl_command_queue, cl_mem, cl_bool, si
 typedef cl_int (*PFN_clEnqueueReadBuffer)(cl_command_queue, cl_mem, cl_bool, size_t, size_t, void*, cl_uint, const cl_event*, cl_event*);
 typedef cl_int (*PFN_clEnqueueCopyBuffer)(cl_command_queue, cl_mem, cl_mem, size_t, size_t, size_t, cl_uint, const cl_event*, cl_event*);
 typedef cl_int (*PFN_clFinish)(cl_command_queue);
+typedef cl_int (*PFN_clGetEventProfilingInfo)(cl_event, cl_profiling_info, size_t, void*, size_t*);
+typedef cl_int (*PFN_clReleaseEvent)(cl_event);
 #define DECL(n) static PFN_##n my_##n
 DECL(clGetPlatformIDs); DECL(clGetDeviceIDs); DECL(clCreateContext); DECL(clCreateCommandQueueWithProperties);
 DECL(clCreateProgramWithSource); DECL(clBuildProgram); DECL(clGetProgramBuildInfo); DECL(clCreateKernel); DECL(clCreateBuffer);
 DECL(clSetKernelArg); DECL(clEnqueueNDRangeKernel); DECL(clEnqueueWriteBuffer); DECL(clEnqueueReadBuffer); DECL(clEnqueueCopyBuffer); DECL(clFinish);
+DECL(clGetEventProfilingInfo); DECL(clReleaseEvent);
 
 #define CK(x) do { cl_int e__=(x); if(e__){fprintf(stderr,"CL error %d at %s:%d\n",e__,__FILE__,__LINE__); exit(2);} } while(0)
 
@@ -51,6 +54,7 @@ static void load_cl(void){
     GET(clGetPlatformIDs); GET(clGetDeviceIDs); GET(clCreateContext); GET(clCreateCommandQueueWithProperties); GET(clCreateProgramWithSource);
     GET(clBuildProgram); GET(clGetProgramBuildInfo); GET(clCreateKernel); GET(clCreateBuffer); GET(clSetKernelArg); GET(clEnqueueNDRangeKernel);
     GET(clEnqueueWriteBuffer); GET(clEnqueueReadBuffer); GET(clEnqueueCopyBuffer); GET(clFinish);
+    GET(clGetEventProfilingInfo); GET(clReleaseEvent);
 #undef GET
 }
 static char *read_file(const char *p, size_t *n){ FILE *f=fopen(p,"rb"); if(!f){perror(p); exit(2);} fseek(f,0,SEEK_END); long z=ftell(f); fseek(f,0,SEEK_SET); char *b=(char*)malloc((size_t)z+1); fread(b,1,(size_t)z,f); fclose(f); b[z]=0; *n=(size_t)z; return b; }
@@ -58,6 +62,7 @@ static double now_s(void){ struct timespec ts; clock_gettime(CLOCK_MONOTONIC_RAW
 static unsigned short f2h(float f){ unsigned x; memcpy(&x,&f,4); unsigned sign=(x>>16)&0x8000; int e=((x>>23)&0xff)-127+15; unsigned m=x&0x7fffff; if(e<=0) return sign; if(e>=31) return sign|0x7bff; return sign|(e<<10)|(m>>13); }
 static float h2f(unsigned short h){ unsigned sign=(h&0x8000)<<16; int e=(h>>10)&0x1f,m=h&0x3ff; if(e==0) return m*5.9604645e-8f; unsigned x=sign|((e-15+127)<<23)|(m<<13); float f; memcpy(&f,&x,4); return f; }
 static cl_mem mkbuf(cl_context ctx, cl_mem_flags fl, size_t sz){ cl_int err; cl_mem m=my_clCreateBuffer(ctx,fl,sz,NULL,&err); CK(err); return m; }
+static double event_s(cl_event ev){ cl_ulong a=0,b=0; CK(my_clGetEventProfilingInfo(ev,CL_PROFILING_COMMAND_START,sizeof(a),&a,NULL)); CK(my_clGetEventProfilingInfo(ev,CL_PROFILING_COMMAND_END,sizeof(b),&b,NULL)); return (double)(b-a)*1e-9; }
 
 int main(int argc,char**argv){
     const char *prep_path=argc>1?argv[1]:"gdn_prep.cl", *seq_path=argc>2?argv[2]:"gdn_seq.cl";
@@ -70,7 +75,7 @@ int main(int argc,char**argv){
     for(size_t i=0;i<nv;i++){ Vp[i]=((rand()%1000)/1000.0-0.5)*0.4; Vh[i]=f2h((float)Vp[i]); }
     for(size_t i=0;i<(size_t)HV*T;i++){ Gf[i]=-0.3f*(rand()%1000)/1000.0f; Bf[i]=0.05f+0.9f*(rand()%1000)/1000.0f; }
     load_cl(); cl_platform_id pf; cl_uint np,nd; CK(my_clGetPlatformIDs(1,&pf,&np)); cl_device_id dev; CK(my_clGetDeviceIDs(pf,CL_DEVICE_TYPE_GPU,1,&dev,&nd)); cl_int err;
-    cl_context ctx=my_clCreateContext(NULL,1,&dev,NULL,NULL,&err); CK(err); cl_command_queue q=my_clCreateCommandQueueWithProperties(ctx,dev,NULL,&err); CK(err);
+    cl_context ctx=my_clCreateContext(NULL,1,&dev,NULL,NULL,&err); CK(err); const cl_queue_properties qprops[]={CL_QUEUE_PROPERTIES,CL_QUEUE_PROFILING_ENABLE,0}; cl_command_queue q=my_clCreateCommandQueueWithProperties(ctx,dev,qprops,&err); CK(err);
     size_t sz1,sz2; char *src1=read_file(prep_path,&sz1), *src2=read_file(seq_path,&sz2); const char* srcs[2]={src1,src2}; size_t szs[2]={sz1,sz2};
     cl_program prog=my_clCreateProgramWithSource(ctx,2,srcs,szs,&err); CK(err); err=my_clBuildProgram(prog,1,&dev,"-cl-fast-relaxed-math",NULL,NULL);
     if(err){ size_t ln=0; my_clGetProgramBuildInfo(prog,dev,CL_PROGRAM_BUILD_LOG,0,NULL,&ln); char *log=calloc(ln+1,1); my_clGetProgramBuildInfo(prog,dev,CL_PROGRAM_BUILD_LOG,ln,log,NULL); fprintf(stderr,"build failed:\n%s\n",log); return 3; }
@@ -84,9 +89,24 @@ int main(int argc,char**argv){
 #undef ARG
     size_t gp[2]={(size_t)nc*WG,HV}, gs[2]={4*WG,HV}, l[2]={WG,1};
 #define RUN() do{ CK(my_clEnqueueCopyBuffer(q,bS0,bS,0,0,ns*4,0,NULL,NULL)); CK(my_clEnqueueNDRangeKernel(q,kp,2,NULL,gp,l,0,NULL,NULL)); CK(my_clEnqueueNDRangeKernel(q,ks,2,NULL,gs,l,0,NULL,NULL)); }while(0)
-    RUN(); CK(my_clFinish(q)); double t0=now_s(); for(int it=0;it<iters;it++) RUN(); CK(my_clFinish(q)); double ms=(now_s()-t0)*1e3/iters;
+    RUN(); CK(my_clFinish(q));
+    double t_total=0.0,t_prep=0.0,t_seq=0.0;
+    for(int it=0;it<iters;it++){
+        cl_event ev_copy=NULL, ev_prep=NULL, ev_seq=NULL;
+        double t0=now_s();
+        CK(my_clEnqueueCopyBuffer(q,bS0,bS,0,0,ns*4,0,NULL,&ev_copy));
+        CK(my_clEnqueueNDRangeKernel(q,kp,2,NULL,gp,l,0,NULL,&ev_prep));
+        CK(my_clEnqueueNDRangeKernel(q,ks,2,NULL,gs,l,0,NULL,&ev_seq));
+        CK(my_clFinish(q));
+        double t3=now_s();
+        t_total += t3 - t0;
+        t_prep += event_s(ev_prep);
+        t_seq += event_s(ev_seq);
+        CK(my_clReleaseEvent(ev_copy)); CK(my_clReleaseEvent(ev_prep)); CK(my_clReleaseEvent(ev_seq));
+    }
+    double ms=t_total*1e3/iters, prep_ms=t_prep*1e3/iters, seq_ms=t_seq*1e3/iters;
 #undef RUN
-    CK(my_clEnqueueReadBuffer(q,bO,1,0,nv*2,Oh,0,NULL,NULL)); CK(my_clEnqueueReadBuffer(q,bS,1,0,ns*4,Sf,0,NULL,NULL)); printf("TL GDN: T=%d Hk=%d Hv=%d %.3f ms/iter\n",T,HK,HV,ms);
+    CK(my_clEnqueueReadBuffer(q,bO,1,0,nv*2,Oh,0,NULL,NULL)); CK(my_clEnqueueReadBuffer(q,bS,1,0,ns*4,Sf,0,NULL,NULL)); printf("TL GDN: T=%d Hk=%d Hv=%d %.3f ms/iter prep %.3f seq %.3f\n",T,HK,HV,ms,prep_ms,seq_ms);
     if(!check) return 0; double max_rel=0,max_rel_s=0, dot=0,ng=0,nr=0; long bad=0; 
     for(int h=0;h<HV;h++){ int hk=h%HK; double *St=calloc((size_t)D*D,8); const double *qh=Qp+(size_t)hk*T*D,*kh=Kp+(size_t)hk*T*D,*vh=Vp+(size_t)h*T*D; for(int t=0;t<T;t++){ double a=exp(Gf[(size_t)h*T+t]), b=Bf[(size_t)h*T+t]; const double *kt=kh+(size_t)t*D,*vt=vh+(size_t)t*D,*qt=qh+(size_t)t*D; for(int dv=0;dv<D;dv++){ double sk=0; for(int dk=0;dk<D;dk++) sk+=St[(size_t)dk*D+dv]*kt[dk]; double delta=(vt[dv]-a*sk)*b; for(int dk=0;dk<D;dk++) St[(size_t)dk*D+dv]=a*St[(size_t)dk*D+dv]+delta*kt[dk]; } for(int dv=0;dv<D;dv++){ double acc=0; for(int dk=0;dk<D;dk++) acc+=qt[dk]*St[(size_t)dk*D+dv]; double got=h2f(Oh[((size_t)h*T+t)*D+dv]); double rel=fabs(got-acc)/(fabs(acc)+1e-1); if(rel>max_rel)max_rel=rel; if(rel>0.1)bad++; dot+=got*acc; ng+=got*got; nr+=acc*acc; }} for(size_t i=0;i<(size_t)D*D;i++){ double rel=fabs(Sf[(size_t)h*D*D+i]-St[i])/(fabs(St[i])+1e-1); if(rel>max_rel_s)max_rel_s=rel; } free(St); }
     printf("%s out max_rel %.4f bad %ld state max_rel %.4f cosine %.9f\n",(max_rel<0.1&&max_rel_s<0.1)?"OK":"FAIL",max_rel,bad,max_rel_s,dot/sqrt(ng*nr));
