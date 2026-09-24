@@ -69,9 +69,8 @@ def make_gdn_prep_kernel(TOK: int, Hk: int, Hv: int, D: int, chunk: int, threads
             for i in T.Parallel(chunk):
                 s = T.alloc_var("float32")
                 s = 0.0
-                for r in T.serial(chunk):
-                    if r <= i:
-                        s = s + gf[r]
+                for r in T.serial(i + 1):
+                    s = s + gf[r]
                 gc[i] = s
                 egc[i] = T.exp(s)
                 EgcBuf[h, c, i] = T.exp(s)
