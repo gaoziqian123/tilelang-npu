@@ -686,6 +686,46 @@ def _patch_opencl_gdn_seq_out_private_arrays(source: str) -> str:
     return out
 
 
+def _patch_opencl_gdn_seq_pass1_float8(source: str) -> str:
+    """Rewrite GDN seq pass1 to the handwritten float8 stream shape.
+
+    Generic lowering (after float8 splitting) prints the pass1 state stream as
+    two float4 accumulators, two vload4s from S, and explicit scalar splats for
+    w/q.  The handwritten GDN kernel uses one float8 load and scalar*vector
+    FMAs per dk.  Keep this narrowly scoped to the current GDN seq lowering and
+    express addresses from group/local ids rather than tl_wi_affN meanings.
+    """
+
+    if "gdn_seq_kernel_kernel" not in source or "float4 acc_1_0_lo" not in source:
+        return source
+    repl = r'''    int t = (tl_lid0 >> 2);
+    int dvg = (tl_lid0 & 3);
+    int dv0 = ((tl_gid0 * 32) + (dvg * 8));
+    int cb = (((tl_gid1 * 32) + c) * 4096);
+    int qbase = (((tl_gid1 & 15) * 131072) + (c * 4096) + (t * 128));
+    float8 acc8 = (float8)(0.000000e+00f);
+    float8 acco8 = (float8)(0.000000e+00f);
+    for (int dk = 0; dk < 128; ++dk) {
+      float8 sv = vload8(0, S + (((tl_gid1 * 16384) + (dk * 128)) + dv0));
+      float wv = convert_float(Wbuf[(cb + (t * 128) + dk)]);
+      float qv = convert_float(Q[(qbase + dk)]);
+      acc8 = (acc8 + (wv * sv));
+      acco8 = (acco8 + (qv * sv));
+    }
+    half8 u8 = vload8(0, Ubuf + (cb + (t * 128) + dv0));
+    vstore8(convert_half8(convert_float8(u8) - acc8), 0, vn + (tl_lid0 * 8));'''
+    out = re.sub(
+        r"    float4 acc_1_0_lo = .*?\n    vstore4\(\(\*\(half4\*\)\(vn_local_cast_1 \+ 0\)\), 0, vn \+ \(tl_wi_aff10 \+ 4\)\);",
+        repl,
+        source,
+        count=1,
+        flags=re.S,
+    )
+    if out == source or "float4 acc_1_0_lo" in out or "vn_local_cast_1" in out:
+        return source
+    return out
+
+
 def _patch_opencl_gdn_native_exp(source: str) -> str:
     """Use OpenCL native_exp for GDN gate exponentials, matching gdn.cl."""
 
@@ -1189,6 +1229,9 @@ def build_opencl(mod, target):
     if patched != source:
         source = patched
     patched = _patch_opencl_gdn_seq_out_private_arrays(source)
+    if patched != source:
+        source = patched
+    patched = _patch_opencl_gdn_seq_pass1_float8(source)
     if patched != source:
         source = patched
     patched = _patch_opencl_gdn_native_exp(source)
