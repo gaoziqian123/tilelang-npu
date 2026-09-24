@@ -7,91 +7,61 @@
 #error "Half precision floating point not supported by OpenCL implementation on your device." 
 #endif
 
+#define DK 128
+#define DV 128
+#define CH 32
+#define WG 128
 __kernel void gdn_seq_kernel_kernel(__global half* restrict A2buf, __global float* restrict EgcBuf, __global float* restrict EglBuf, __global half* restrict KDbuf, __global half* restrict O, __global half* restrict Q, __global float* restrict S, __global half* restrict Ubuf, __global half* restrict Wbuf);
-__kernel void gdn_seq_kernel_kernel(__global half* restrict A2buf, __global float* restrict EgcBuf, __global float* restrict EglBuf, __global half* restrict KDbuf, __global half* restrict O, __global half* restrict Q, __global float* restrict S, __global half* restrict Ubuf, __global half* restrict Wbuf) { const int tl_gid0 = convert_int(get_group_id(0)); const int tl_gid1 = convert_int(get_group_id(1)); const int tl_lid0 = convert_int(get_local_id(0)); const int tl_wi_aff0 = ((tl_lid0 >> 5) * 1024); const int tl_wi_aff1 = ((tl_lid0 >> 2) * 128); const int tl_wi_aff2 = ((tl_lid0 >> 2) * 32); const int tl_wi_aff3 = ((tl_lid0 & 3) * 8); const int tl_wi_aff4 = (tl_gid1 * 131072); const int tl_wi_aff5 = (tl_gid1 * 16384); const int tl_wi_aff6 = (tl_gid1 * 32768); const int tl_wi_aff7 = (tl_gid1 * 1024); const int tl_wi_aff8 = (tl_gid1 * 32); const int tl_wi_aff9 = (tl_gid0 * 32); const int tl_wi_aff10 = (tl_lid0 * 8);
-__local half kdl[4096];
-__local half vn[1024];
-  for (int c = 0; c < 32; ++c) { const int tl_loop_aff0 = (tl_wi_aff4 + (c * 4096));
-    vstore8(vload8(0, KDbuf + (tl_loop_aff0 + tl_wi_aff10)), 0, kdl + tl_wi_aff10);
-    vstore8(vload8(0, KDbuf + ((tl_loop_aff0 + tl_wi_aff10) + 1024)), 0, kdl + (tl_wi_aff10 + 1024));
-    vstore8(vload8(0, KDbuf + ((tl_loop_aff0 + tl_wi_aff10) + 2048)), 0, kdl + (tl_wi_aff10 + 2048));
-    vstore8(vload8(0, KDbuf + ((tl_loop_aff0 + tl_wi_aff10) + 3072)), 0, kdl + (tl_wi_aff10 + 3072));
-    barrier(CLK_LOCAL_MEM_FENCE);
-    float4 acc_1_0_lo = (float4)(0.000000e+00f);
-    float4 acc_1_0_hi = (float4)(0.000000e+00f);
-    float4 acco_1_0_lo = (float4)(0.000000e+00f);
-    float4 acco_1_0_hi = (float4)(0.000000e+00f);
-    float broadcast_var = 0.000000e+00f;
-    acc_1_0_lo = (((float4)(broadcast_var, broadcast_var, broadcast_var, broadcast_var)));
-    float broadcast_var_1 = 0.000000e+00f;
-    acco_1_0_lo = (((float4)(broadcast_var_1, broadcast_var_1, broadcast_var_1, broadcast_var_1)));
-    float broadcast_var_2 = 0.000000e+00f;
-    acc_1_0_hi = (((float4)(broadcast_var_2, broadcast_var_2, broadcast_var_2, broadcast_var_2)));
-    float broadcast_var_3 = 0.000000e+00f;
-    acco_1_0_hi = (((float4)(broadcast_var_3, broadcast_var_3, broadcast_var_3, broadcast_var_3)));
-    for (int dk = 0; dk < 128; ++dk) {
-      float wv = (convert_float(Wbuf[((tl_loop_aff0 + tl_wi_aff1) + dk)]));
-      float qv = (convert_float(Q[(((((tl_gid1 & 15) * 131072) + (c * 4096)) + tl_wi_aff1) + dk)]));
-      float4 sv = vload4(0, S + (((tl_wi_aff5 + (dk * 128)) + tl_wi_aff9) + tl_wi_aff3));
-      acc_1_0_lo = ((acc_1_0_lo + (((float4)(wv, wv, wv, wv)) * sv)));
-      acco_1_0_lo = ((acco_1_0_lo + (((float4)(qv, qv, qv, qv)) * sv)));
-      float4 sv_1 = vload4(0, S + ((((tl_wi_aff5 + (dk * 128)) + tl_wi_aff9) + tl_wi_aff3) + 4));
-      acc_1_0_hi = ((acc_1_0_hi + (((float4)(wv, wv, wv, wv)) * sv_1)));
-      acco_1_0_hi = ((acco_1_0_hi + (((float4)(qv, qv, qv, qv)) * sv_1)));
+__kernel void gdn_seq_kernel_kernel(__global half* restrict A2buf, __global float* restrict EgcBuf, __global float* restrict EglBuf, __global half* restrict KDbuf, __global half* restrict O, __global half* restrict Q, __global float* restrict S, __global half* restrict Ubuf, __global half* restrict Wbuf) {
+    int dvb = get_group_id(0), h = get_group_id(1), d = get_local_id(0);
+    int hk = h & 15;
+    __local half kdl[CH * DK];
+    __local half vn[CH * 32];
+    __global float *cur = S + (size_t)h * DK * DV;
+    for (int c = 0; c < 32; c++) {
+        size_t cb = ((size_t)h * 32 + c) * CH * DK;
+        for (int i = d; i < CH * DK; i += WG) kdl[i] = KDbuf[cb + i];
+        barrier(CLK_LOCAL_MEM_FENCE);
+        int t = d / 4;
+        int dvg = d & 3;
+        int dv0 = dvb * 32 + dvg * 8;
+        float8 acc8 = (float8)(0.0f), acco = (float8)(0.0f);
+        size_t qb = ((size_t)hk * 1024 + (size_t)c * CH) * DK + (size_t)t * DK;
+        for (int dk = 0; dk < DK; dk++) {
+            float8 s8 = vload8(0, cur + (size_t)dk * DV + dv0);
+            float w = (float)Wbuf[cb + (size_t)t * DK + dk];
+            float qv = (float)Q[qb + dk];
+            acc8 += w * s8;
+            acco += qv * s8;
+        }
+        float8 u8 = convert_float8(vload8(0, Ubuf + cb + (size_t)t * DK + dv0));
+        vstore8(convert_half8(u8 - acc8), 0, vn + t * 32 + dvg * 8);
+        float egl = EglBuf[(size_t)h * 32 + c];
+        barrier(CLK_LOCAL_MEM_FENCE);
+        float8 intra8 = (float8)(0.0f);
+        __global half *a2 = A2buf + ((size_t)h * 32 + c) * CH * CH + t * CH;
+        for (int j = 0; j <= t; j++) intra8 += (float8)a2[j] * convert_float8(vload8(0, vn + j * 32 + dvg * 8));
+        float egc = EgcBuf[((size_t)h * 32 + c) * CH + t];
+        size_t ob = ((size_t)h * 1024 + (size_t)c * CH) * DV + (size_t)t * DV + dv0;
+        vstore8(convert_half8(egc * acco + intra8), 0, O + ob);
+        barrier(CLK_LOCAL_MEM_FENCE);
+        int dk8 = d / 32, dvl = d & 31, dv = dvb * 32 + dvl;
+        #pragma unroll
+        for (int sb = 0; sb < 4; sb++) {
+            int dk0 = sb * 32 + dk8 * 8;
+            half8 m8 = (half8)(0.0h);
+            #pragma unroll
+            for (int t2 = 0; t2 < CH; t2++) m8 += vload8(0, kdl + t2 * DK + dk0) * (half8)vn[t2 * 32 + dvl];
+            float8 mf = convert_float8(m8);
+            cur[(size_t)(dk0 + 0) * DV + dv] = egl * cur[(size_t)(dk0 + 0) * DV + dv] + mf.s0;
+            cur[(size_t)(dk0 + 1) * DV + dv] = egl * cur[(size_t)(dk0 + 1) * DV + dv] + mf.s1;
+            cur[(size_t)(dk0 + 2) * DV + dv] = egl * cur[(size_t)(dk0 + 2) * DV + dv] + mf.s2;
+            cur[(size_t)(dk0 + 3) * DV + dv] = egl * cur[(size_t)(dk0 + 3) * DV + dv] + mf.s3;
+            cur[(size_t)(dk0 + 4) * DV + dv] = egl * cur[(size_t)(dk0 + 4) * DV + dv] + mf.s4;
+            cur[(size_t)(dk0 + 5) * DV + dv] = egl * cur[(size_t)(dk0 + 5) * DV + dv] + mf.s5;
+            cur[(size_t)(dk0 + 6) * DV + dv] = egl * cur[(size_t)(dk0 + 6) * DV + dv] + mf.s6;
+            cur[(size_t)(dk0 + 7) * DV + dv] = egl * cur[(size_t)(dk0 + 7) * DV + dv] + mf.s7;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
     }
-    half4 Ubuf_local_cast_1_v = vload4(0, Ubuf + ((((tl_wi_aff4 + (c * 4096)) + tl_wi_aff1) + tl_wi_aff9) + tl_wi_aff3));
-    half vn_local_cast[4];
-        (*(half4*)(vn_local_cast + 0)) = (convert_half4(((convert_float4(Ubuf_local_cast_1_v)) - acc_1_0_lo)));
-    vstore4((*(half4*)(vn_local_cast + 0)), 0, vn + tl_wi_aff10);
-    half4 Ubuf_local_cast_1_1_v = vload4(0, Ubuf + (((((tl_wi_aff4 + (c * 4096)) + tl_wi_aff1) + tl_wi_aff9) + tl_wi_aff3) + 4));
-    half vn_local_cast_1[4];
-        (*(half4*)(vn_local_cast_1 + 0)) = (convert_half4(((convert_float4(Ubuf_local_cast_1_1_v)) - acc_1_0_hi)));
-    vstore4((*(half4*)(vn_local_cast_1 + 0)), 0, vn + (tl_wi_aff10 + 4));
-    barrier(CLK_LOCAL_MEM_FENCE);
-    float out8_1[8];
-    float broadcast_var_4 = 0.000000e+00f;
-    (*(float4*)(out8_1 + 0)) = ((float4)(broadcast_var_4, broadcast_var_4, broadcast_var_4, broadcast_var_4));
-    float broadcast_var_5 = 0.000000e+00f;
-    (*(float4*)(out8_1 + 4)) = ((float4)(broadcast_var_5, broadcast_var_5, broadcast_var_5, broadcast_var_5));
-    for (int j = 0; j < 32; ++j) {
-      if (j <= (tl_lid0 >> 2)) {
-        half8 vn_local_cast_2_v = vload8(0, vn + ((j * 32) + tl_wi_aff3));
-                (*(float4*)(out8_1 + 0)) = (((float4)(convert_float(A2buf[(((tl_wi_aff6 + (c * 1024)) + tl_wi_aff2) + j)])) * (convert_float4(vn_local_cast_2_v.lo))) + (*(float4*)(out8_1 + 0)));
-        (*(float4*)(out8_1 + 4)) = (((float4)(convert_float(A2buf[(((tl_wi_aff6 + (c * 1024)) + tl_wi_aff2) + j)])) * (convert_float4(vn_local_cast_2_v.hi))) + (*(float4*)(out8_1 + 4)));
-      }
-    }
-    for (int dk_1 = 0; dk_1 < 128; ++dk_1) { const int tl_loop_aff0 = (tl_wi_aff5 + (dk_1 * 128));
-      float qv_1 = (convert_float(Q[(((((tl_gid1 & 15) * 131072) + (c * 4096)) + tl_wi_aff1) + dk_1)]));
-      (*(float4*)(out8_1 + 0)) = ((*(float4*)(out8_1 + 0)) + (((float4)((EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1))) * vload4(0, S + ((tl_loop_aff0 + tl_wi_aff9) + tl_wi_aff3))));
-      (*(float4*)(out8_1 + 4)) = ((*(float4*)(out8_1 + 4)) + (((float4)((EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1), (EgcBuf[((tl_wi_aff7 + (c * 32)) + (tl_lid0 >> 2))] * qv_1))) * vload4(0, S + (((tl_loop_aff0 + tl_wi_aff9) + tl_wi_aff3) + 4))));
-    }
-    half O_local_cast_3[8];
-    (*(half4*)(O_local_cast_3 + 0)) = (convert_half4((*(float4*)(out8_1 + 0))));
-    (*(half4*)(O_local_cast_3 + 4)) = (convert_half4((*(float4*)(out8_1 + 4))));
-    vstore8((*(half8*)(O_local_cast_3 + 0)), 0, O + ((((tl_wi_aff4 + (c * 4096)) + tl_wi_aff1) + tl_wi_aff9) + tl_wi_aff3));
-    barrier(CLK_LOCAL_MEM_FENCE);
-    for (int sb = 0; sb < 4; ++sb) {
-      float m8_1[8];
-      float broadcast_var_6 = 0.000000e+00f;
-      (*(float4*)(m8_1 + 0)) = ((float4)(broadcast_var_6, broadcast_var_6, broadcast_var_6, broadcast_var_6));
-      float broadcast_var_7 = 0.000000e+00f;
-      (*(float4*)(m8_1 + 4)) = ((float4)(broadcast_var_7, broadcast_var_7, broadcast_var_7, broadcast_var_7));
-      for (int tt = 0; tt < 32; ++tt) {
-        float vnv = (convert_float(vn[((tt * 32) + (tl_lid0 & 31))]));
-        half8 kdl_local_cast_4_v = vload8(0, kdl + (((tt * 128) + (sb * 32)) + ((tl_lid0 >> 5) * 8)));
-                (*(float4*)(m8_1 + 0)) = ((*(float4*)(m8_1 + 0)) + ((convert_float4(kdl_local_cast_4_v.lo)) * ((float4)(vnv, vnv, vnv, vnv))));
-        (*(float4*)(m8_1 + 4)) = ((*(float4*)(m8_1 + 4)) + ((convert_float4(kdl_local_cast_4_v.hi)) * ((float4)(vnv, vnv, vnv, vnv))));
-      }
-      S[((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31))] = ((EglBuf[(tl_wi_aff8 + c)] * S[((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31))]) + m8_1[0]);
-      S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 128)] = ((EglBuf[(tl_wi_aff8 + c)] * S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 128)]) + m8_1[1]);
-      S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 256)] = ((EglBuf[(tl_wi_aff8 + c)] * S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 256)]) + m8_1[2]);
-      S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 384)] = ((EglBuf[(tl_wi_aff8 + c)] * S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 384)]) + m8_1[3]);
-      S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 512)] = ((EglBuf[(tl_wi_aff8 + c)] * S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 512)]) + m8_1[4]);
-      S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 640)] = ((EglBuf[(tl_wi_aff8 + c)] * S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 640)]) + m8_1[5]);
-      S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 768)] = ((EglBuf[(tl_wi_aff8 + c)] * S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 768)]) + m8_1[6]);
-      S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 896)] = ((EglBuf[(tl_wi_aff8 + c)] * S[(((((tl_wi_aff5 + (sb * 4096)) + tl_wi_aff0) + tl_wi_aff9) + (tl_lid0 & 31)) + 896)]) + m8_1[7]);
-    }
-    barrier(CLK_LOCAL_MEM_FENCE);
-  }
 }
-

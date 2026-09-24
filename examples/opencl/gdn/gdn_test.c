@@ -83,10 +83,19 @@ int main(int argc,char**argv){
     ARG(ks,0,bA2); ARG(ks,1,bEgc); ARG(ks,2,bEgl); ARG(ks,3,bKD); ARG(ks,4,bO); ARG(ks,5,bQ); ARG(ks,6,bS); ARG(ks,7,bU); ARG(ks,8,bW);
 #undef ARG
     size_t gp[2]={(size_t)nc*WG,HV}, gs[2]={4*WG,HV}, l[2]={WG,1};
-#define RUN() do{ CK(my_clEnqueueCopyBuffer(q,bS0,bS,0,0,ns*4,0,NULL,NULL)); CK(my_clEnqueueNDRangeKernel(q,kp,2,NULL,gp,l,0,NULL,NULL)); CK(my_clEnqueueNDRangeKernel(q,ks,2,NULL,gs,l,0,NULL,NULL)); }while(0)
-    RUN(); CK(my_clFinish(q)); double t0=now_s(); for(int it=0;it<iters;it++) RUN(); CK(my_clFinish(q)); double ms=(now_s()-t0)*1e3/iters;
+#define RUN_PREP() do{ CK(my_clEnqueueNDRangeKernel(q,kp,2,NULL,gp,l,0,NULL,NULL)); }while(0)
+#define RUN_SEQ()  do{ CK(my_clEnqueueNDRangeKernel(q,ks,2,NULL,gs,l,0,NULL,NULL)); }while(0)
+#define RUN() do{ CK(my_clEnqueueCopyBuffer(q,bS0,bS,0,0,ns*4,0,NULL,NULL)); RUN_PREP(); RUN_SEQ(); }while(0)
+    RUN(); CK(my_clFinish(q));
+    double t0=now_s(); for(int it=0;it<iters;it++) RUN(); CK(my_clFinish(q)); double ms=(now_s()-t0)*1e3/iters;
+    t0=now_s(); for(int it=0;it<iters;it++) RUN_PREP(); CK(my_clFinish(q)); double prep_ms=(now_s()-t0)*1e3/iters;
+    RUN_PREP(); CK(my_clFinish(q));
+    t0=now_s(); for(int it=0;it<iters;it++){ CK(my_clEnqueueCopyBuffer(q,bS0,bS,0,0,ns*4,0,NULL,NULL)); RUN_SEQ(); } CK(my_clFinish(q)); double seq_ms=(now_s()-t0)*1e3/iters;
 #undef RUN
+#undef RUN_SEQ
+#undef RUN_PREP
     CK(my_clEnqueueReadBuffer(q,bO,1,0,nv*2,Oh,0,NULL,NULL)); CK(my_clEnqueueReadBuffer(q,bS,1,0,ns*4,Sf,0,NULL,NULL)); printf("TL GDN: T=%d Hk=%d Hv=%d %.3f ms/iter\n",T,HK,HV,ms);
+    printf("TL GDN split: prep %.3f ms seq %.3f ms sum %.3f ms/iter\n",prep_ms,seq_ms,prep_ms+seq_ms);
     if(!check) return 0; double max_rel=0,max_rel_s=0, dot=0,ng=0,nr=0; long bad=0; 
     for(int h=0;h<HV;h++){ int hk=h%HK; double *St=calloc((size_t)D*D,8); const double *qh=Qp+(size_t)hk*T*D,*kh=Kp+(size_t)hk*T*D,*vh=Vp+(size_t)h*T*D; for(int t=0;t<T;t++){ double a=exp(Gf[(size_t)h*T+t]), b=Bf[(size_t)h*T+t]; const double *kt=kh+(size_t)t*D,*vt=vh+(size_t)t*D,*qt=qh+(size_t)t*D; for(int dv=0;dv<D;dv++){ double sk=0; for(int dk=0;dk<D;dk++) sk+=St[(size_t)dk*D+dv]*kt[dk]; double delta=(vt[dv]-a*sk)*b; for(int dk=0;dk<D;dk++) St[(size_t)dk*D+dv]=a*St[(size_t)dk*D+dv]+delta*kt[dk]; } for(int dv=0;dv<D;dv++){ double acc=0; for(int dk=0;dk<D;dk++) acc+=qt[dk]*St[(size_t)dk*D+dv]; double got=h2f(Oh[((size_t)h*T+t)*D+dv]); double rel=fabs(got-acc)/(fabs(acc)+1e-1); if(rel>max_rel)max_rel=rel; if(rel>0.1)bad++; dot+=got*acc; ng+=got*got; nr+=acc*acc; }} for(size_t i=0;i<(size_t)D*D;i++){ double rel=fabs(Sf[(size_t)h*D*D+i]-St[i])/(fabs(St[i])+1e-1); if(rel>max_rel_s)max_rel_s=rel; } free(St); }
     printf("%s out max_rel %.4f bad %ld state max_rel %.4f cosine %.9f\n",(max_rel<0.1&&max_rel_s<0.1)?"OK":"FAIL",max_rel,bad,max_rel_s,dot/sqrt(ng*nr));
