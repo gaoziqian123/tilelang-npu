@@ -99,26 +99,26 @@ def make_gdn_prep_kernel(TOK: int, Hk: int, Hv: int, D: int, chunk: int, threads
 
             # Forward solve U, then W.  Thread d owns one vector column.
             for d in T.Parallel(D):
-                for i in T.serial(chunk):
+                for i in T.unroll(chunk):
                     au = T.alloc_var("float32")
                     au = bf[i] * T.Cast("float32", V[h, c * chunk + i, d])
-                    for m in T.serial(chunk):
+                    for m in T.unroll(chunk):
                         if m < i:
                             au = au - L[i, m] * T.Cast("float32", UW[m, d])
                     UW[i, d] = T.Cast("float16", au)
-                for i in T.serial(chunk):
+                for i in T.unroll(chunk):
                     Ubuf[h, c, i, d] = UW[i, d]
             T.sync_threads()
             for d in T.Parallel(D):
-                for i in T.serial(chunk):
+                for i in T.unroll(chunk):
                     aw = T.alloc_var("float32")
                     aw = bf[i] * T.Cast("float32", K[hk, c * chunk + i, d]) * egc[i]
-                    for m in T.serial(chunk):
+                    for m in T.unroll(chunk):
                         if m < i:
                             aw = aw - L[i, m] * T.Cast("float32", UW[m, d])
                     UW[i, d] = T.Cast("float16", aw)
                     T.sync_threads()
-                for i in T.serial(chunk):
+                for i in T.unroll(chunk):
                     Wbuf[h, c, i, d] = UW[i, d]
                     KDbuf[h, c, i, d] = T.Cast("float16", T.Cast("float32", K[hk, c * chunk + i, d]) * T.exp(gc[chunk - 1] - gc[i]))
 
