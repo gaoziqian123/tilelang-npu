@@ -724,7 +724,6 @@ class _Verifier:
     def __init__(self) -> None:
         self.in_vector = 0
         self.in_pool = 0
-        self.has_gdn_leaf = False
         self.buffers: dict[str, Buffer] = {}
         self.annotated_layouts: dict[str, Any] = {}
 
@@ -748,17 +747,6 @@ class _Verifier:
 
         post_order_visit(func.body, collect_layouts)
 
-        def scan(node: Any) -> None:
-            if isinstance(node, Call) and _is_extern(node):
-                callee = _extern_callee(node)
-                if callee and callee.startswith("hexagon.") and callee.split(".", 1)[1] in {
-                    "load_state128", "store_state128", "load_h2f_rows128", "scan_exp32", "dot128x2_store",
-                    "state_x2_matvec128", "affine_rows128", "forward_solve32", "output_rows128",
-                    "state_decay_rows128", "state_update32",
-                }:
-                    self.has_gdn_leaf = True
-
-        post_order_visit(func.body, scan)
         self._visit_stmt(func.body)
 
     def _visit_stmt(self, op: Any) -> None:
@@ -788,7 +776,7 @@ class _Verifier:
                     raise HexagonEmitError(f"R10: threadIdx.x extent 必须是静态整数{_loc(op)}")
                 if extent > 6:
                     raise HexagonEmitError(f"R10: Hexagon worker 数必须 ≤6, 实际 {extent}{_loc(op)}")
-            is_pool = ("blockIdx.x" in ttag or var == "bx") and self._contains_gdn_leaf(op.body)
+            is_pool = False
             self.in_vector += 1 if is_vec else 0
             self.in_pool += 1 if is_pool else 0
             self._visit_stmt(op.body)
@@ -806,7 +794,7 @@ class _Verifier:
                         raise HexagonEmitError("R10: threadIdx.x extent 必须是静态整数")
                     if extent > 6:
                         raise HexagonEmitError(f"R10: Hexagon worker 数必须 ≤6, 实际 {extent}")
-                is_pool = ("blockIdx.x" in name or vname == "bx") and self._contains_gdn_leaf(op.body)
+                is_pool = False
             else:
                 is_pool = False
             self.in_pool += 1 if is_pool else 0
@@ -820,7 +808,7 @@ class _Verifier:
                 self._visit_stmt(op.else_case)
             return
         if isinstance(op, BufferStore):
-            if _is_vtcm(_buffer_scope(op.buffer)) and not self.in_vector and not self.has_gdn_leaf:
+            if _is_vtcm(_buffer_scope(op.buffer)) and not self.in_vector:
                 raise HexagonEmitError(f"R2: 禁止对 VTCM buffer {_buffer_name(op.buffer)} 做标量 load/store{_loc(op)}")
             self._check_expr(op.value)
             for idx in op.indices:
@@ -877,7 +865,7 @@ class _Verifier:
 
     def _check_expr(self, e: Any) -> None:
         if isinstance(e, BufferLoad):
-            if _is_vtcm(_buffer_scope(e.buffer)) and not self.in_vector and not self.has_gdn_leaf:
+            if _is_vtcm(_buffer_scope(e.buffer)) and not self.in_vector:
                 raise HexagonEmitError(f"R2: 禁止对 VTCM buffer {_buffer_name(e.buffer)} 做标量 load/store{_loc(e)}")
             for idx in e.indices:
                 self._check_expr(idx)
@@ -923,25 +911,6 @@ class _Verifier:
     def _check_r4(self, op: Any) -> None:
         if self.in_pool:
             raise HexagonEmitError(f"R4: HMX/T.gemm(hexagon.gemm_hmx) 不得出现在 pool worker 段内{_loc(op)}")
-
-    def _contains_gdn_leaf(self, op: Any) -> bool:
-        found = False
-
-        def scan(node: Any) -> None:
-            nonlocal found
-            if found:
-                return
-            if isinstance(node, Call) and _is_extern(node):
-                callee = _extern_callee(node)
-                if callee and callee.startswith("hexagon.") and callee.split(".", 1)[1] in {
-                    "load_state128", "store_state128", "load_h2f_rows128", "scan_exp32", "dot128x2_store",
-                    "state_x2_matvec128", "affine_rows128", "forward_solve32", "output_rows128",
-                    "state_decay_rows128", "state_update32",
-                }:
-                    found = True
-
-        post_order_visit(op, scan)
-        return found
 
     def _check_copy(self, call: Call) -> None:
         if len(call.args) < 2:

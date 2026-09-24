@@ -286,6 +286,10 @@ int attnops_tl_fa_std(remote_handle64 h, unsigned char *slab, int slabLen, int a
     uint8_t *V = HRT_VTCM_BASE();
     const size_t total = (size_t)-1;
     (void)V; (void)total;
+    int g_lo = (abl >> 8) & 0xf;
+    int g_hi = (abl >> 12) & 0xf;
+    if (g_hi == 0) g_hi = 4;
+    if (g_lo < 0 || g_lo >= 4 || g_hi <= g_lo || g_hi > 4) return -5;
     uint64_t t0, tl_prof_phase_t0, tt = HAP_perf_get_qtimer_count();
     // TIR launch_thread(blockIdx.x, extent=1)
     for (int bx = 0; bx < 1; bx++) {
@@ -298,7 +302,7 @@ int attnops_tl_fa_std(remote_handle64 h, unsigned char *slab, int slabLen, int a
                 HVX_Vector hv0 = hrt_splat_h(0x0000);
             *(HVX_Vector *)(((f16 *)(V + 1196032)) + hvx_idx0) = hv0;
         }
-        for (int g = 0; g < 4; g++) {
+        for (int g = g_lo; g < g_hi; g++) {
             // T.Parallel(4) -> Hexagon worker-pool phase (sync join)
             attnops_tl_fa_std_pool0_ctx_t ctx0 = { q, k, v, o, g, abl, prof };
             tl_prof_phase_t0 = HAP_perf_get_qtimer_count();

@@ -245,7 +245,9 @@ def emit(args: argparse.Namespace) -> str:
     with PassContext(config={PassConfigKey.TL_HEXAGON_PROF.value: True}):
         artifact = tilelang.engine.lower(
             fa_std.get_tir(S=args.s, HQ=args.hq, HKV=args.hkv, D=args.d, tile=args.tile)
-            .with_attr("global_symbol", "attnops_tl_fa_std"),
+            .with_attr("global_symbol", "attnops_tl_fa_std")
+            .with_attr("hexagon.fa_kv_slice_from_abl", True)
+            .with_attr("hexagon.loop_bounds", "g:g_lo:g_hi"),
             target="hexagon",
             enable_device_compile=False,
         )

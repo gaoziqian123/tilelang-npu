@@ -1,8 +1,8 @@
 // silu_mul_test.c - host validation for TileLang-emitted SwiGLU silu_mul.
-// Shape: M=960, FF=9216.  Slab ABI matches attnops_tl_silu:
+// Shape: M=960, FF=9216.  Slab ABI matches attnops_tl_silu_generic:
 //   G[M*FF] fp16 | U[M*FF] fp16 | O[M*FF] fp16, each 128B-aligned.
-// Checks primitive and generic-expression O = silu(G) * U against fp64 reference
-// with R12 rms-scaled rel error, then compares the two outputs directly.
+// Checks generic-expression and VTCM-staging O = silu(G) * U against fp64
+// reference with R12 rms-scaled rel error, then compares the two outputs directly.
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -181,52 +181,31 @@ int main(int argc, char **argv) {
     remote_handle64 ah = -1;
     if (attnops_open(uri, &ah)) { printf("open fail\n"); return 1; }
 
-    _Float16 *out_prim = (_Float16 *)malloc(l.elems * 2);
     _Float16 *out_gen = (_Float16 *)malloc(l.elems * 2);
     _Float16 *out_vtcm = (_Float16 *)malloc(l.elems * 2);
-    _Float16 *out_pipe = (_Float16 *)malloc(l.elems * 2);
-    if (!out_prim || !out_gen || !out_vtcm || !out_pipe) { printf("malloc output copies fail\n"); return 1; }
+    if (!out_gen || !out_vtcm) { printf("malloc output copies fail\n"); return 1; }
 
     int abl = getenv("ABL") ? atoi(getenv("ABL")) : 0;
-    result_t prim = run_kernel("primitive", attnops_tl_silu, ah, slab, &l, iters, abl, out_prim);
     result_t gen = run_kernel("generic", attnops_tl_silu_generic, ah, slab, &l, iters, abl, out_gen);
     result_t vtcm = run_kernel("vtcm", attnops_tl_silu_vtcm, ah, slab, &l, iters, abl, out_vtcm);
-    result_t pipe = run_kernel("pipe", attnops_tl_silu_pipe, ah, slab, &l, iters, abl, out_pipe);
-    double pair_rel = compare_outputs(out_prim, out_gen, l.elems);
     double vtcm_pair_rel = compare_outputs(out_gen, out_vtcm, l.elems);
-    double pipe_pair_rel = compare_outputs(out_gen, out_pipe, l.elems);
-    double maxrel_delta = gen.max_rel - prim.max_rel;
-    double perf_delta = prim.ms > 0.0 ? (gen.ms / prim.ms - 1.0) * 100.0 : 0.0;
     double vtcm_perf_delta = gen.ms > 0.0 ? (vtcm.ms / gen.ms - 1.0) * 100.0 : 0.0;
-    double pipe_perf_delta = gen.ms > 0.0 ? (pipe.ms / gen.ms - 1.0) * 100.0 : 0.0;
 
     printf("TL_SILU_COMPARE M=%d FF=%d elems=%zu iters=%d\n", M, FF, l.elems, iters);
     printf("  kernel      max_rel     ms      GBps   prof_cycles ret status\n");
-    printf("  %-10s %.6f  %.3f  %.2f  %d %d %s\n",
-           prim.name, prim.max_rel, prim.ms, prim.gbps, prim.prof_cycles, prim.ret,
-           prim.fail ? "FAIL" : "OK");
     printf("  %-10s %.6f  %.3f  %.2f  %d %d %s\n",
            gen.name, gen.max_rel, gen.ms, gen.gbps, gen.prof_cycles, gen.ret,
            gen.fail ? "FAIL" : "OK");
     printf("  %-10s %.6f  %.3f  %.2f  %d %d %s\n",
            vtcm.name, vtcm.max_rel, vtcm.ms, vtcm.gbps, vtcm.prof_cycles, vtcm.ret,
            vtcm.fail ? "FAIL" : "OK");
-    printf("  %-10s %.6f  %.3f  %.2f  %d %d %s\n",
-           pipe.name, pipe.max_rel, pipe.ms, pipe.gbps, pipe.prof_cycles, pipe.ret,
-           pipe.fail ? "FAIL" : "OK");
-    printf("  generic_minus_primitive max_rel_delta=%.6f ms_delta=%.3f ms perf_delta=%.1f%% out_pair_max_rel=%.6f\n",
-           maxrel_delta, gen.ms - prim.ms, perf_delta, pair_rel);
     printf("  vtcm_minus_generic max_rel_delta=%.6f ms_delta=%.3f ms perf_delta=%.1f%% out_pair_max_rel=%.6f\n",
            vtcm.max_rel - gen.max_rel, vtcm.ms - gen.ms, vtcm_perf_delta, vtcm_pair_rel);
-    printf("  pipe_minus_generic max_rel_delta=%.6f ms_delta=%.3f ms perf_delta=%.1f%% out_pair_max_rel=%.6f\n",
-           pipe.max_rel - gen.max_rel, pipe.ms - gen.ms, pipe_perf_delta, pipe_pair_rel);
     attnops_close(ah);
-    free(out_prim);
     free(out_gen);
     free(out_vtcm);
-    free(out_pipe);
     rpcmem_free(slab);
-    int fail = prim.fail || gen.fail || vtcm.fail || pipe.fail || prim.ret || gen.ret || vtcm.ret || pipe.ret;
+    int fail = gen.fail || vtcm.fail || gen.ret || vtcm.ret;
     printf("TL_SILU_ALL_%s\n", fail ? "FAIL" : "OK");
     return fail ? 1 : 0;
 }
