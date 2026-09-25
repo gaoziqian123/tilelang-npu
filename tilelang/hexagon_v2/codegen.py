@@ -107,13 +107,18 @@ def emit_gemm_nt_c(m: int, n: int, k: int, *, cfg: GemmNTConfig | None = None) -
         #define HV2_GM_TILE HRT_TILE_BYTES
         #define HV2_GM_KMAX {cfg.kmax}
         #define HV2_GM_BLOCK_N {cfg.block_n}
-        #define HV2_GM_LIN  (0)
-        #define HV2_GM_ACT  (HV2_GM_LIN + HV2_GM_KMAX * 64)
-        #define HV2_GM_WA   (HV2_GM_ACT + HV2_GM_KMAX * 64)
+        #define HV2_GM_ACT0 (0)
+        #define HV2_GM_ACT1 (HV2_GM_ACT0 + HV2_GM_KMAX * 64)
+        #define HV2_GM_GBUF0 (HV2_GM_ACT1 + HV2_GM_KMAX * 64)
+        #define HV2_GM_GBUF1 (HV2_GM_GBUF0 + 32 * HV2_GM_TILE)
+        #define HV2_GM_WA   (HV2_GM_GBUF1 + 32 * HV2_GM_TILE)
         #define HV2_GM_WA_MAX ((size_t){cfg.wa_max})
         #define HV2_GM_OUT  (HV2_GM_WA + HV2_GM_WA_MAX)
         #define HV2_GM_SCALE (HV2_GM_OUT + 2 * HV2_GM_TILE)
-        #define HV2_GM_END  (HV2_GM_SCALE + 256)
+        #define HV2_GM_WBTMP (HV2_GM_SCALE + 256)
+        #define HV2_GM_WBTMP_STRIDE (32 * 128)
+        #define HV2_GM_WBTMP_MAX (32 * HV2_GM_WBTMP_STRIDE)
+        #define HV2_GM_END  (HV2_GM_WBTMP + HV2_GM_WBTMP_MAX)
 
         static inline void hv2_hmx_acc_clear(void) {{
             asm volatile("mxclracc.hf\\n" ::: "memory");
@@ -137,6 +142,33 @@ def emit_gemm_nt_c(m: int, n: int, k: int, *, cfg: GemmNTConfig | None = None) -
                          : : "r"((uint32_t)(uintptr_t)out), "r"(0) : "memory");
         }}
 
+        typedef HVX_Vector hv2_hvx_vec;
+
+        static inline hv2_hvx_vec hv2_hvx_load_u8x128(const void *ptr) {{
+            return *(const HVX_Vector *)ptr;
+        }}
+
+        static inline void hv2_hvx_store_u8x128(void *ptr, hv2_hvx_vec v) {{
+            *(HVX_Vector *)ptr = v;
+        }}
+
+        static inline hv2_hvx_vec hv2_hvx_add_f16(hv2_hvx_vec a, hv2_hvx_vec b) {{ return Q6_Vhf_vadd_VhfVhf(a, b); }}
+        static inline hv2_hvx_vec hv2_hvx_mul_f16(hv2_hvx_vec a, hv2_hvx_vec b) {{ return Q6_Vhf_vmpy_VhfVhf(a, b); }}
+        static inline hv2_hvx_vec hv2_hvx_fma_f16(hv2_hvx_vec acc, hv2_hvx_vec a, hv2_hvx_vec b) {{ return Q6_Vhf_vmpyacc_VhfVhfVhf(acc, a, b); }}
+        static inline hv2_hvx_vec hv2_hvx_add_f32(hv2_hvx_vec a, hv2_hvx_vec b) {{ return Q6_Vsf_vadd_VsfVsf(a, b); }}
+        static inline hv2_hvx_vec hv2_hvx_mul_f32(hv2_hvx_vec a, hv2_hvx_vec b) {{ return Q6_Vsf_vmpy_VsfVsf(a, b); }}
+        static inline hv2_hvx_vec hv2_hvx_fma_f32(hv2_hvx_vec acc, hv2_hvx_vec a, hv2_hvx_vec b) {{ return Q6_Vsf_vadd_VsfVsf(acc, Q6_Vsf_vmpy_VsfVsf(a, b)); }}
+        static inline hv2_hvx_vec hv2_hvx_exp_f16(hv2_hvx_vec v) {{ return hrt_exp_fp16(v); }}
+        static inline hv2_hvx_vec hv2_hvx_exp_f32(hv2_hvx_vec v) {{ return hrt_exp_fp32_vec(v); }}
+        static inline void hv2_hvx_h2f(hv2_hvx_vec v, hv2_hvx_vec *lo, hv2_hvx_vec *hi) {{ hrt_h2f_vec_pair(v, lo, hi); }}
+        static inline hv2_hvx_vec hv2_hvx_f2h(hv2_hvx_vec lo, hv2_hvx_vec hi) {{ return hrt_f2h_vec_pair(lo, hi); }}
+        static inline f32 hv2_hvx_reduce_max_f32_128(const f32 *p) {{ return hrt_reduce_max_f32_128(p); }}
+        static inline f32 hv2_hvx_reduce_sum_f32_128(const f32 *p) {{ return hrt_reduce_sum_f32_128(p); }}
+        static inline f32 hv2_hvx_reduce_max_f16_128(const f16 *p) {{ return hrt_reduce_max_f16_128(p); }}
+        static inline f32 hv2_hvx_reduce_sum_f16_128(const f16 *p) {{ return hrt_reduce_sum_f16_128(p); }}
+        static inline void hv2_hvx_copy_128(void *dst, const void *src, size_t bytes) {{ hrt_copy_128_dcfetch((uint8_t *)dst, (const uint8_t *)src, bytes); }}
+        static inline void hv2_hvx_copy_pooled(void *dst, const void *src, size_t bytes) {{ hrt_copy_pooled((uint8_t *)dst, (const uint8_t *)src, bytes); }}
+
         static inline void hv2_hmx_mma_deep_split(uint8_t *V, size_t ah_off, size_t wh_off, int kt) {{
             int done = 0;
             while (done < kt) {{
@@ -158,6 +190,57 @@ def emit_gemm_nt_c(m: int, n: int, k: int, *, cfg: GemmNTConfig | None = None) -
             hv2_hmx_set_bias(V + HV2_GM_SCALE);
         }}
 
+        typedef struct {{
+            uint8_t *V;
+            size_t gbuf;
+            f16 *C;
+            int N;
+            int ncol0;
+            int prof_slot;
+        }} hv2_gm_wb_t;
+        static hv2_gm_wb_t g_hv2_gm_wb;
+        static int g_hv2_gm_pp_nz;
+        static int32_t *g_hv2_gm_prof;
+
+        static inline void hv2_gm_prof_add(int slot, uint64_t dt) {{
+            if (g_hv2_gm_prof) __sync_fetch_and_add(&g_hv2_gm_prof[slot], (int32_t)dt);
+        }}
+
+        static void hv2_gm_wb_worker(int pi) {{
+            const uint8_t *g0 = g_hv2_gm_wb.V + g_hv2_gm_wb.gbuf + (size_t)(2 * pi) * HV2_GM_TILE;
+            const uint8_t *g1 = g0 + HV2_GM_TILE;
+            f16 *dst0 = g_hv2_gm_wb.C + (size_t)g_hv2_gm_wb.ncol0 + (size_t)(2 * pi) * 32;
+            uint8_t *tmp = g_hv2_gm_wb.V + HV2_GM_WBTMP + (size_t)pi * HV2_GM_WBTMP_STRIDE;
+            const HVX_Vector mlo = *(const HVX_Vector *)g_hrt_mask[0];
+            const HVX_Vector mhi = *(const HVX_Vector *)g_hrt_mask[1];
+            uint64_t t0 = HAP_perf_get_qtimer_count();
+            for (int rp = 0; rp < 16; rp++) {{
+                HVX_Vector d0 = Q6_Vh_vdeal_Vh(*(const HVX_Vector *)(g0 + rp * 128));
+                HVX_Vector d1 = Q6_Vh_vdeal_Vh(*(const HVX_Vector *)(g1 + rp * 128));
+                HVX_Vector t0v = Q6_V_valign_VVR(d0, d0, 64);
+                HVX_Vector t1v = Q6_V_valign_VVR(d1, d1, 64);
+                HVX_Vector row0 = Q6_V_vor_VV(Q6_V_vand_VV(d0, mlo), Q6_V_vand_VV(t1v, mhi));
+                HVX_Vector row1 = Q6_V_vor_VV(Q6_V_vand_VV(t0v, mlo), Q6_V_vand_VV(d1, mhi));
+                *(HVX_Vector *)(tmp + (size_t)(2 * rp) * 128) = row0;
+                *(HVX_Vector *)(tmp + (size_t)(2 * rp + 1) * 128) = row1;
+            }}
+            uint64_t t1 = HAP_perf_get_qtimer_count();
+            for (int r = 0; r < 32; r++)
+                *(HVX_Vector *)(dst0 + (size_t)r * g_hv2_gm_wb.N) = *(const HVX_Vector *)(tmp + (size_t)r * 128);
+            uint64_t t2 = HAP_perf_get_qtimer_count();
+            hv2_gm_prof_add(11, t1 - t0);
+            hv2_gm_prof_add(12, t2 - t1);
+            hv2_gm_prof_add(g_hv2_gm_wb.prof_slot, t2 - t0);
+        }}
+
+        static void hv2_gm_pp_worker(int i) {{
+            if (i < g_hv2_gm_pp_nz) {{
+                uint64_t t0 = HAP_perf_get_qtimer_count();
+                hrt_zip_worker(i);
+                hv2_gm_prof_add(1, HAP_perf_get_qtimer_count() - t0);
+            }} else hv2_gm_wb_worker(i - g_hv2_gm_pp_nz);
+        }}
+
         int {cfg.symbol}(remote_handle64 h, unsigned char *slab, int slabLen,
                          unsigned char *w, int wLen, int M, int N, int K, int abl) {{
             (void)h;
@@ -172,51 +255,127 @@ def emit_gemm_nt_c(m: int, n: int, k: int, *, cfg: GemmNTConfig | None = None) -
             size_t c_off = HRT_ALIGN128(x_sz);
             size_t c_sz = (size_t)M * N * 2;
             size_t prof_off = HRT_ALIGN128(c_off + c_sz);
-            if ((size_t)slabLen < prof_off + 20) return -1;
+            if ((size_t)slabLen < prof_off + 80) return -1;
             if ((size_t)wLen < (size_t)K * N * 2) return -1;
             const f16 *A = (const f16 *)slab;
             f16 *C = (f16 *)(slab + c_off);
             HRT_PROF_DECL(prof, slab, prof_off);
-            HRT_PROF_CLEAR(prof, 20);
+            HRT_PROF_CLEAR(prof, 80);
+            g_hv2_gm_prof = prof;
 
             uint8_t *V = HRT_VTCM_BASE();
             int kt = K / 32, nct = NP / 32;
-            uint64_t t0, tt = HAP_perf_get_qtimer_count();
+            uint64_t t0, t1, tt = HAP_perf_get_qtimer_count();
             for (int bx = 0; bx < N / NP; bx++) {{
                 t0 = HAP_perf_get_qtimer_count();
                 if (!(abl & 1))
-                    hrt_copy_pooled(V + HV2_GM_WA, (const uint8_t *)w + (size_t)bx * nct * kt * HRT_TILE_BYTES,
+                    hv2_hvx_copy_pooled(V + HV2_GM_WA, (const uint8_t *)w + (size_t)bx * nct * kt * HRT_TILE_BYTES,
                         (size_t)nct * kt * HRT_TILE_BYTES);
                 prof[0] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
-                for (int m0 = 0; m0 < M / 32; m0++) {{
+                if (abl & 64) {{
+                    for (int m0 = 0; m0 < M / 32; m0++) {{
+                        t0 = HAP_perf_get_qtimer_count();
+                        if (!(abl & 2)) {{
+                            hrt_mask_init();
+                            hrt_stage_act_hvx_direct((const uint8_t *)(A + (size_t)m0 * 32 * K), V + HV2_GM_ACT0,
+                                                     K, kt, HRT_TILE_BYTES, 32);
+                        }}
+                        prof[10] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                        for (int c2 = 0; c2 < nct; c2++) {{
+                            t0 = HAP_perf_get_qtimer_count();
+                            if (!(abl & 4)) {{
+                                int e = hrt_acc_clear_f16();
+                                if (e) return e;
+                                t1 = HAP_perf_get_qtimer_count();
+                                hv2_hmx_mma_deep_split(V, HV2_GM_ACT0,
+                                    HV2_GM_WA + (size_t)c2 * kt * HRT_TILE_BYTES, kt);
+                                prof[2] += (int32_t)(HAP_perf_get_qtimer_count() - t1);
+                                if (!(abl & 16)) {{
+                                    t1 = HAP_perf_get_qtimer_count();
+                                    e = hrt_acc_read_f16(V, g_v.CFG, HV2_GM_GBUF0 + (size_t)(c2 & 1) * HRT_TILE_BYTES);
+                                    if (e) return e;
+                                    prof[3] += (int32_t)(HAP_perf_get_qtimer_count() - t1);
+                                }}
+                            }}
+                            prof[9] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                            t0 = HAP_perf_get_qtimer_count();
+                            if (!(abl & 8) && (c2 & 1)) {{
+                                int ncol = bx * NP + (c2 - 1) * 32;
+                                hrt_mask_init();
+                                hrt_unperm_pair_hvx(V + HV2_GM_GBUF0, V + HV2_GM_GBUF0 + HRT_TILE_BYTES, C + (size_t)(m0 * 32) * N + ncol, N);
+                            }}
+                            prof[6] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                        }}
+                    }}
+                }} else {{
+                    int nrb = M / 32;
                     t0 = HAP_perf_get_qtimer_count();
                     if (!(abl & 2)) {{
-                        hrt_copy_128_dcfetch(V + HV2_GM_LIN, (const uint8_t *)(A + (size_t)m0 * 32 * K), (size_t)32 * K * 2);
                         hrt_mask_init();
-                        hrt_stage_act_hvx(V + HV2_GM_LIN, V + HV2_GM_ACT, K, kt, HRT_TILE_BYTES);
+                        hrt_stage_act_pooled((uint8_t *)A, V + HV2_GM_ACT0, K, kt, HRT_TILE_BYTES);
                     }}
-                    prof[1] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
-                    for (int c2 = 0; c2 < nct; c2++) {{
+                    prof[10] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                    for (int m0 = 0; m0 < nrb; m0++) {{
+                        uint64_t tw = HAP_perf_get_qtimer_count();
+                        int cur = m0 & 1;
+                        size_t act_c = cur ? HV2_GM_ACT1 : HV2_GM_ACT0;
+                        size_t act_n = cur ? HV2_GM_ACT0 : HV2_GM_ACT1;
+                        size_t gb_c = cur ? HV2_GM_GBUF1 : HV2_GM_GBUF0;
+                        size_t gb_p = cur ? HV2_GM_GBUF0 : HV2_GM_GBUF1;
                         t0 = HAP_perf_get_qtimer_count();
-                        if (!(abl & 4)) {{
-                            int e = hrt_acc_clear_f16();
-                            if (e) return e;
-                            hv2_hmx_mma_deep_split(V, HV2_GM_ACT,
-                                HV2_GM_WA + (size_t)c2 * kt * HRT_TILE_BYTES, kt);
-                            if (!(abl & 16)) {{
-                                e = hrt_acc_read_f16(V, g_v.CFG, HV2_GM_OUT + (size_t)(c2 & 1) * HRT_TILE_BYTES);
+                        int do_zip = !(abl & 2) && m0 + 1 < nrb;
+                        int do_wb = !(abl & 8) && m0 > 0;
+                        if (do_zip) {{
+                            hrt_zip_prepare((uint8_t *)(A + (size_t)(m0 + 1) * 32 * K),
+                                            V + act_n, K, kt, HRT_TILE_BYTES);
+                        }}
+                        if (do_wb) {{
+                            g_hv2_gm_wb.V = V;
+                            g_hv2_gm_wb.gbuf = gb_p;
+                            g_hv2_gm_wb.C = C + (size_t)((m0 - 1) * 32) * N;
+                            g_hv2_gm_wb.N = N;
+                            g_hv2_gm_wb.ncol0 = bx * NP;
+                            g_hv2_gm_wb.prof_slot = 6;
+                        }}
+                        t0 = HAP_perf_get_qtimer_count();
+                        if (do_zip || do_wb) {{
+                            g_hv2_gm_pp_nz = do_zip ? 16 : 0;
+                            attnops_pool_start(hv2_gm_pp_worker, g_hv2_gm_pp_nz + (do_wb ? nct / 2 : 0));
+                        }}
+                        prof[8] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                        for (int c2 = 0; c2 < nct; c2++) {{
+                            if (!(abl & 4)) {{
+                                int e = hrt_acc_clear_f16();
                                 if (e) return e;
+                                t1 = HAP_perf_get_qtimer_count();
+                                hv2_hmx_mma_deep_split(V, act_c,
+                                    HV2_GM_WA + (size_t)c2 * kt * HRT_TILE_BYTES, kt);
+                                prof[2] += (int32_t)(HAP_perf_get_qtimer_count() - t1);
+                                if (!(abl & 16)) {{
+                                    t1 = HAP_perf_get_qtimer_count();
+                                    e = hrt_acc_read_f16(V, g_v.CFG, gb_c + (size_t)c2 * HRT_TILE_BYTES);
+                                    if (e) return e;
+                                    prof[3] += (int32_t)(HAP_perf_get_qtimer_count() - t1);
+                                }}
                             }}
                         }}
-                        prof[2] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
                         t0 = HAP_perf_get_qtimer_count();
-                        if (!(abl & 8) && (c2 & 1)) {{
-                            int ncol = bx * NP + (c2 - 1) * 32;
-                            hrt_mask_init();
-                            hrt_unperm_pair_hvx(V + HV2_GM_OUT, V + HV2_GM_OUT + HRT_TILE_BYTES, C + (size_t)(m0 * 32) * N + ncol, N);
-                        }}
-                        prof[3] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                        if (do_zip || do_wb) attnops_pool_join();
+                        prof[5] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                        prof[9] += (int32_t)(HAP_perf_get_qtimer_count() - tw);
                     }}
+                    t0 = HAP_perf_get_qtimer_count();
+                    if (!(abl & 8)) {{
+                        int cur = (nrb - 1) & 1;
+                        g_hv2_gm_wb.V = V;
+                        g_hv2_gm_wb.gbuf = cur ? HV2_GM_GBUF1 : HV2_GM_GBUF0;
+                        g_hv2_gm_wb.C = C + (size_t)((nrb - 1) * 32) * N;
+                        g_hv2_gm_wb.N = N;
+                        g_hv2_gm_wb.ncol0 = bx * NP;
+                        g_hv2_gm_wb.prof_slot = 7;
+                        attnops_pool_run(hv2_gm_wb_worker, nct / 2);
+                    }}
+                    prof[8] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
                 }}
             }}
             prof[4] = (int32_t)(HAP_perf_get_qtimer_count() - tt);
@@ -292,13 +451,232 @@ def _patch_fa_std_legacy_to_v2(src: str, symbol: str = "attnops_tl_fa_std_v2") -
     return src
 
 
-def emit_fa_std_v2_c(*, symbol: str = "attnops_tl_fa_std_v2") -> str:
-    """Emit the FA std v2 bridge source from the checked-in legacy FA shell."""
-    legacy = Path(os.environ.get(
-        "TILELANG_HEXAGON_V2_FA_LEGACY_C",
-        "/root/project/backend/npu/attn/skel/src/attnops_tl_fa_std.c",
+def _emit_fa256_structured_v2(symbol: str = "attnops_tl_fa_std_v2") -> str:
+    """Emit FA prefill v2 from the hand-tuned online-softmax structure.
+
+    This is the first non-bridge FA v2 path: it keeps the TileLang FA std ABI
+    (row-major full-Q, prepacked K/V, full row-major O, KV-head slice encoded in
+    ``abl``) but uses the fa256 online-softmax organization: Q is staged once in
+    AH layout and pre-scaled by 1/sqrt(256), QK softmax stays in AH row-pair
+    tiles, and PV readout/normalization/writeback is fused in ``fa2_qtile``.
+    """
+
+    src_path = Path(os.environ.get(
+        "TILELANG_HEXAGON_V2_FA256_C",
+        "/root/project/backend/npu/attn/skel/src/attnops_fa256.c",
     ))
-    return _patch_fa_std_legacy_to_v2(legacy.read_text(encoding="utf-8"), symbol=symbol)
+    src = src_path.read_text(encoding="utf-8")
+    marker = "// shared body: process ngroups kv-groups"
+    if marker not in src:
+        raise ValueError("fa256 source body marker not found")
+    prefix = src.split(marker, 1)[0]
+    prefix = prefix.replace(
+        "// attnops_fa256.c - causal flash attention, head_dim=256, Hexagon v79 HMX + HVX.",
+        "// Generated by tilelang.hexagon_v2.codegen: structured FA v2 (online softmax, AH row-pair).",
+        1,
+    )
+    prefix = prefix.replace('#include "HAP_farf.h"', '#include "HAP_farf.h"\n#include "HAP_perf.h"')
+    prefix = prefix.replace('#include "attnops_shared.h"', '#include "attnops_shared.h"\n#include "hexagon_rt.h"')
+    prefix = prefix.replace("typedef float f32;", "typedef float f32;\n\ntypedef HVX_Vector hv2_hvx_vec;\n"
+        "static inline hv2_hvx_vec hv2_hvx_mul_f16(hv2_hvx_vec a, hv2_hvx_vec b) { return Q6_Vhf_vmpy_VhfVhf(a, b); }\n"
+        "static inline void hv2_hvx_copy_pooled(void *dst, const void *src, size_t bytes) { hrt_copy_pooled((uint8_t *)dst, (const uint8_t *)src, bytes); }")
+    stage_helper = dedent(
+        """
+
+        static inline void fa2_scale_ah_tiles(uint8_t *p, int ntiles) {
+            HVX_Vector s = fa2_splat((f16)0x2C00);  // 0.0625 = 1/sqrt(256)
+            for (int t = 0; t < ntiles; t++) {
+                HVX_Vector *v = (HVX_Vector *)(p + (size_t)t * FA2_ALN);
+                for (int i = 0; i < 16; i++) v[i] = hv2_hvx_mul_f16(v[i], s);
+            }
+        }
+
+        static inline void fa2_stage_q_scaled(uint8_t *V, const f16 *q, uint32_t qah, int qt) {
+            hrt_mask_init();
+            for (int q_stage = 0; q_stage < 4; q_stage++) {
+                uint8_t *dst = V + qah + (size_t)q_stage * 2 * FA2_ALN;
+                hrt_stage_act_hvx_direct_strided(
+                    (const uint8_t *)(q + (size_t)(qt * 32) * FA2_D + (size_t)q_stage * 64),
+                    dst, FA2_D, 64, 2, FA2_ALN, 32);
+                fa2_scale_ah_tiles(dst, 2);
+            }
+        }
+        """
+    )
+    insert_after = "static void fa2_layout(int S) {"
+    if insert_after not in prefix:
+        raise ValueError("fa2_layout anchor not found")
+    # Put staging helpers after layout definition, not before fa2_splat exists.
+    qtile_anchor = "// one 32-row Q tile of one head: pass A/B over KV tiles, mm2 chain, writeback."
+    if qtile_anchor not in prefix:
+        raise ValueError("fa2_qtile anchor not found")
+    prefix = prefix.replace(qtile_anchor, stage_helper + "\n" + qtile_anchor, 1)
+    body = dedent(
+        f"""
+
+        // TileLang FA std ABI: Q row-major [16,1024,256], K packed WH
+        // [4,1024,256], V packed WH-transposed [4,256,1024], O row-major.
+        int {symbol}(remote_handle64 h, unsigned char *slab, int slabLen, int abl) {{
+            (void)h;
+            if (!HRT_VTCM_READY()) return -3;
+            const int S = 1024;
+            const size_t qk = (size_t)S * FA2_D;
+            size_t off = 0;
+            const f16 *q = (const f16 *)(slab + off);
+            off = HRT_ALIGN128(off + (size_t)FA2_NQ * qk * 2);
+            const f16 *k = (const f16 *)(slab + off);
+            off = HRT_ALIGN128(off + (size_t)FA2_NKV * qk * 2);
+            const f16 *v = (const f16 *)(slab + off);
+            off = HRT_ALIGN128(off + (size_t)FA2_NKV * qk * 2);
+            f16 *o = (f16 *)(slab + off);
+            off = HRT_ALIGN128(off + (size_t)FA2_NQ * qk * 2);
+            size_t prof_off = off;
+            if ((size_t)slabLen < prof_off + 80) return -1;
+            HRT_PROF_DECL(prof, slab, prof_off);
+            HRT_PROF_CLEAR(prof, 80);
+
+            int g_lo = (abl >> 8) & 0xf;
+            int g_hi = (abl >> 12) & 0xf;
+            if (g_hi == 0) g_hi = FA2_NKV;
+            if (g_lo < 0 || g_lo >= FA2_NKV || g_hi <= g_lo || g_hi > FA2_NKV) return -5;
+            fa2_layout(S);
+            if (fa2_end > HRT_VTCM_SIZE()) return -4;
+            uint8_t *V = HRT_VTCM_BASE();
+            HVX_Vector *ones = (HVX_Vector *)(V + fa2_VONES);
+            HVX_Vector vone = fa2_splat((f16)0x3C00);
+            for (int i = 0; i < 16; i++) ones[i] = vone;
+            int nq = S / 32, nkv = S / 32, nd = FA2_ND;
+            uint32_t ntile = (uint32_t)nkv * nd * FA2_ALN;
+            uint64_t tt = HAP_perf_get_qtimer_count();
+            for (int g = g_lo; g < g_hi; g++) {{
+                uint64_t t0 = HAP_perf_get_qtimer_count();
+                if (!(abl & 1)) hv2_hvx_copy_pooled(V + fa2_KWH, k + (size_t)g * qk, ntile);
+                prof[0] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                t0 = HAP_perf_get_qtimer_count();
+                if (!(abl & 1)) hv2_hvx_copy_pooled(V + fa2_VWH, v + (size_t)g * qk, ntile);
+                prof[1] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                if (abl == 1) continue;
+                for (int hq = 0; hq < 4; hq++) {{
+                    int h = g * 4 + hq;
+                    uint32_t qah = fa2_QAH + (size_t)hq * nq * nd * FA2_ALN;
+                    f16 *Oh = o + (size_t)h * qk;
+                    for (int qt = 0; qt < nq; qt++) {{
+                        t0 = HAP_perf_get_qtimer_count();
+                        if (!(abl & 2)) fa2_stage_q_scaled(V, q + (size_t)h * qk, qah + (size_t)qt * nd * FA2_ALN, qt);
+                        prof[2] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                        t0 = HAP_perf_get_qtimer_count();
+                        int e = fa2_qtile(V, S, qah, qt, Oh, abl & ~1);
+                        prof[3] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                        if (e) {{ FARF(HIGH, "tl_fa_std_v2: head %d qt %d err %d", h, qt, e); return e; }}
+                    }}
+                }}
+            }}
+            prof[4] = (int32_t)(HAP_perf_get_qtimer_count() - tt);
+            return 0;
+        }}
+        """
+    )
+    return prefix + body
+
+
+def emit_fa_online_v2_c(*, symbol: str = "attnops_tl_fa_online_v2") -> str:
+    """Emit the production Hexagon-v2 FA prefill ABI.
+
+    Unlike ``tl_fa_std_v2`` this entry does not use the legacy TileLang slab or
+    ABL slice encoding.  The host passes full Q/K/V/O buffers and an explicit
+    KV-head interval [head_lo, head_hi).  Q/O are row-major [HQ,S,D]; K is
+    WH-packed as [HKV*S,D]; V is WH-packed transpose [HKV*D,S].
+    """
+    src = _emit_fa256_structured_v2(symbol=symbol)
+    start = src.find(f"int {symbol}(remote_handle64 h, unsigned char *slab")
+    if start < 0:
+        raise ValueError("structured FA body anchor not found")
+    src = src[:start]
+    body = dedent(
+        f"""
+
+        // Production explicit ABI.  No host-side slice gather/pack: q/k/v/o are
+        // full tensors and [head_lo, head_hi) is a KV-head interval.
+        //   Q/O row-major: [16,1024,256], head stride S*D.
+        //   K WH-packed:   [4*1024,256], group stride S*D elements.
+        //   V WH-packed-T: [4*256,1024], group stride D*S elements.
+        int {symbol}(remote_handle64 h,
+                     unsigned char *q_buf, int q_len,
+                     unsigned char *k_buf, int k_len,
+                     unsigned char *v_buf, int v_len,
+                     unsigned char *o_buf, int o_len,
+                     unsigned char *prof_buf, int prof_len,
+                     int head_lo, int head_hi, int abl) {{
+            (void)h;
+            if (!HRT_VTCM_READY()) return -3;
+            const int S = 1024;
+            const size_t qk = (size_t)S * FA2_D;
+            const size_t q_bytes = (size_t)FA2_NQ * qk * 2;
+            const size_t kv_bytes = (size_t)FA2_NKV * qk * 2;
+            if ((size_t)q_len < q_bytes || (size_t)k_len < kv_bytes ||
+                (size_t)v_len < kv_bytes || (size_t)o_len < q_bytes || prof_len < 80) return -1;
+            if (head_lo < 0 || head_lo >= FA2_NKV || head_hi <= head_lo || head_hi > FA2_NKV) return -5;
+            const f16 *q = (const f16 *)q_buf;
+            const f16 *k = (const f16 *)k_buf;
+            const f16 *v = (const f16 *)v_buf;
+            f16 *o = (f16 *)o_buf;
+            HRT_PROF_DECL(prof, prof_buf, 0);
+            HRT_PROF_CLEAR(prof, 80);
+
+            fa2_layout(S);
+            if (fa2_end > HRT_VTCM_SIZE()) return -4;
+            uint8_t *V = HRT_VTCM_BASE();
+            HVX_Vector *ones = (HVX_Vector *)(V + fa2_VONES);
+            HVX_Vector vone = fa2_splat((f16)0x3C00);
+            for (int i = 0; i < 16; i++) ones[i] = vone;
+            int nq = S / 32, nkv = S / 32, nd = FA2_ND;
+            uint32_t ntile = (uint32_t)nkv * nd * FA2_ALN;
+            uint64_t tt = HAP_perf_get_qtimer_count();
+            for (int g = head_lo; g < head_hi; g++) {{
+                uint64_t t0 = HAP_perf_get_qtimer_count();
+                if (!(abl & 1)) hv2_hvx_copy_pooled(V + fa2_KWH, k + (size_t)g * qk, ntile);
+                prof[0] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                t0 = HAP_perf_get_qtimer_count();
+                if (!(abl & 1)) hv2_hvx_copy_pooled(V + fa2_VWH, v + (size_t)g * qk, ntile);
+                prof[1] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                if (abl == 1) continue;
+                for (int hq = 0; hq < 4; hq++) {{
+                    int hidx = g * 4 + hq;
+                    uint32_t qah = fa2_QAH + (size_t)hq * nq * nd * FA2_ALN;
+                    f16 *Oh = o + (size_t)hidx * qk;
+                    for (int qt = 0; qt < nq; qt++) {{
+                        t0 = HAP_perf_get_qtimer_count();
+                        if (!(abl & 2)) fa2_stage_q_scaled(V, q + (size_t)hidx * qk,
+                                                           qah + (size_t)qt * nd * FA2_ALN, qt);
+                        prof[2] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                        t0 = HAP_perf_get_qtimer_count();
+                        int e = fa2_qtile(V, S, qah, qt, Oh, abl & ~1);
+                        prof[3] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
+                        if (e) {{ FARF(HIGH, "tl_fa_online_v2: head %d qt %d err %d", hidx, qt, e); return e; }}
+                    }}
+                }}
+            }}
+            prof[4] = (int32_t)(HAP_perf_get_qtimer_count() - tt);
+            return 0;
+        }}
+        """
+    )
+    return src + body
+
+
+def emit_fa_std_v2_c(*, symbol: str = "attnops_tl_fa_std_v2") -> str:
+    """Emit the FA std v2 source.
+
+    Default is the structured v2 implementation. Set
+    ``TILELANG_HEXAGON_V2_FA_BRIDGE=1`` to regenerate the old bridge for A/B.
+    """
+    if os.environ.get("TILELANG_HEXAGON_V2_FA_BRIDGE") == "1":
+        legacy = Path(os.environ.get(
+            "TILELANG_HEXAGON_V2_FA_LEGACY_C",
+            "/root/project/backend/npu/attn/skel/src/attnops_tl_fa_std.c",
+        ))
+        return _patch_fa_std_legacy_to_v2(legacy.read_text(encoding="utf-8"), symbol=symbol)
+    return _emit_fa256_structured_v2(symbol=symbol)
 
 
 def build_hexagon_v2_without_compile(mod: IRModule, target: Target):
@@ -318,6 +696,13 @@ def build_hexagon_v2_without_compile(mod: IRModule, target: Target):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(source, encoding="utf-8")
         return _source_module(source, [symbol or "attnops_tl_fa_std_v2"])
+    if kind == "fa_online_v2":
+        source = emit_fa_online_v2_c(symbol=symbol or "attnops_tl_fa_online_v2")
+        if out := os.environ.get("TILELANG_HEXAGON_V2_EMIT_C"):
+            path = Path(out)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(source, encoding="utf-8")
+        return _source_module(source, [symbol or "attnops_tl_fa_online_v2"])
 
     inferred = _infer_gemm_shape(mod)
     dm, dn, dk = inferred or (1024, 12288, 2560)

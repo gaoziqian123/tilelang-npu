@@ -608,7 +608,64 @@ hexagon.hmx_cvt_store(acc/dst_ah, dst_rm, scale/bias/shape flags)
 | `src/tl_templates/cuda/instruction/*.h` | `src/tl_templates/hexagon/hexagon_hmx.h` |
 | nvcc compile callback/cache | external skel AOT build callback/cache（后续） |
 
-## 12. 建议的第一批任务清单
+## 12. HVX intrinsic 层与 copy/DMA 边界
+
+本轮把 HVX 从 `hexagon_rt.h` recipe/helper 里提升为 Hexagon-v2 的一等 IR
+surface，落点如下：
+
+- IR schema：`tilelang/hexagon_v2/intrinsics.py` 新增 `hexagon.hvx.*` 清单；
+- TIR wrapper：`tilelang/hexagon_v2/language/tir.py` 新增 `hvx_*` 调用；
+- source codegen：`tilelang/hexagon_v2/codegen.py` 中集中发射 `hv2_hvx_*`
+  wrapper，GEMM v2 的 weight staging 已改为 `hv2_hvx_copy_pooled(...)`，不再在
+  kernel body 直接调用 copy helper。
+
+### 12.1 IR surface
+
+| intrinsic | 语义 | C/HVX lowering |
+|---|---|---|
+| `tl.hexagon_v2.hvx_load` / `hvx_store` | 128B aligned vector load/store；未对齐 load 在硬件上会向下对齐，verifier 后续必须拒绝 | `*(HVX_Vector *)ptr` |
+| `hvx_add` / `hvx_mul` / `hvx_fma` | fp16/fp32 向量算术 | `Q6_Vhf_*` / `Q6_Vsf_*` |
+| `hvx_exp` | fp16 快速 exp / fp32 exp | `hrt_exp_fp16` / `hrt_exp_fp32_vec`，语义对齐现有 helper |
+| `hvx_reduce_max` / `hvx_reduce_sum` | 32/128 lane reduce，fp16 reduce 按既有规则 widen 到 fp32 | `hrt_reduce_*` |
+| `hvx_h2f` / `hvx_f2h` | fp16↔fp32 vector convert | `hrt_h2f_vec_pair` / `hrt_f2h_vec_pair` |
+| `hvx_copy` | DDR↔VTCM 128B vector copy；大块 copy 可 pooled 并行 + `dcfetch` | `hv2_hvx_copy_128` / `hv2_hvx_copy_pooled` |
+
+这些 wrapper 是 compiler/codegen 的唯一发射点；后续 FA softmax、GEMM staging
+流水、GDN vector leaf 都应生成上述 intrinsic，而不是在 generated C 里拼
+`Q6_*` 或调用整块 recipe。
+
+### 12.2 helper 边界
+
+进入 IR 的内容：纯向量 load/store、算术、exp、reduce、convert、layout copy/
+staging primitive、bulk copy primitive。它们只依赖参数、VTCM/DDR 指针和 128B
+对齐语义。
+
+继续留在 `hexagon_rt.h` / runtime 的内容：FastRPC ABI、HMX lock/session、worker
+pool 生命周期、VTCM base/size、profiling slots、slab offset 解析、pool start/join
+调度。也就是说，`hvx_copy(kind="pooled_dcfetch")` 是 IR 级 copy op，但 worker
+pool 的实现和线程数仍是 runtime policy。
+
+### 12.3 DMA / copy 调查结论
+
+当前可用路径是 HVX vector copy + `Q6_dcfetch_A` 预取 + worker pool 并行：
+`hrt_copy_128_dcfetch` 单线程、`hrt_copy_pooled` 四线程。已有代码里没有可用的
+Hexagon VTCM DMA API；仓库中 “DMA” 注释实际指 pooled prefetch copy。历史探针
+显示 `l2fetch` 会杀 DSP PD，因此禁止作为 lowering 候选。真机本轮复测
+`bw_test 4 128 1 8192`：256MB DDR→VTCM 为 **6.83ms / 39.29GB/s**，与既有
+约 40GB/s 上限一致；GEMM v2 weight staging 继续使用此路径作为 `hvx_copy`
+的默认实现。若后续拿到 `dm0/dmcpy` 可调用 ABI，应作为 `hvx_copy(kind="dma")`
+的另一个 lowering 分支，并以同一 IR surface A/B。
+
+### 12.4 GEMM v2 试点
+
+`attnops_tl_gemm_v2.c` 由 v2 codegen 逐字节生成，新增 HVX wrapper 后行数从 265
+变为 292；两次 emit `cmp=0`，`hexagon-clang -mv79 -mhvx -mhmx` 语法通过。
+真机 plan 驱动纯 NPU `M=1024,N=12288,K=2560,iters=2`：kernel critical
+**8.307ms/iter (7.756T effective)**，fp64 抽查 `max_rel=0.0003` PASS。该成绩
+与 deep-chain v2 预期同级，说明把 staging copy 改经 `hv2_hvx_copy_pooled`
+没有破坏性能或正确性。
+
+## 13. 建议的第一批任务清单
 
 1. 写 `HMXIntrinEmitter` 的纯 Python prototype，只生成 TIR intrinsic，不接 codegen。
 2. 写 `CodeGenTileLangHexagon` skeleton，能打印空 kernel + scalar/HVX extern call。

@@ -40,4 +40,64 @@ def hmx_store_after(out_ptr):
     return _call_intrin("handle", "tl.hexagon_v2.hmx_store_after", out_ptr)
 
 
-__all__ = ["hmx_acc_clear", "hmx_set_bias", "hmx_mma_deep", "hmx_store_after"]
+def hvx_load(ptr, dtype="u8x128", align=128):
+    return _call_intrin("handle", "tl.hexagon_v2.hvx_load", ptr, dtype, _i32(align))
+
+
+def hvx_store(ptr, value, dtype="u8x128", align=128):
+    return _call_intrin("handle", "tl.hexagon_v2.hvx_store", ptr, value, dtype, _i32(align))
+
+
+def hvx_add(a, b, dtype="f16"):
+    return _call_intrin("handle", "tl.hexagon_v2.hvx_add", a, b, dtype)
+
+
+def hvx_mul(a, b, dtype="f16"):
+    return _call_intrin("handle", "tl.hexagon_v2.hvx_mul", a, b, dtype)
+
+
+def hvx_fma(acc, a, b, dtype="f32"):
+    return _call_intrin("handle", "tl.hexagon_v2.hvx_fma", acc, a, b, dtype)
+
+
+def hvx_exp(value, dtype="f16"):
+    return _call_intrin("handle", "tl.hexagon_v2.hvx_exp", value, dtype)
+
+
+def hvx_reduce_max(ptr, dtype="f32", lanes=128):
+    return _call_intrin("handle", "tl.hexagon_v2.hvx_reduce_max", ptr, dtype, _i32(lanes))
+
+
+def hvx_reduce_sum(ptr, dtype="f32", lanes=128):
+    return _call_intrin("handle", "tl.hexagon_v2.hvx_reduce_sum", ptr, dtype, _i32(lanes))
+
+
+def hvx_h2f(value):
+    return _call_intrin("handle", "tl.hexagon_v2.hvx_h2f", value)
+
+
+def hvx_f2h(lo, hi):
+    return _call_intrin("handle", "tl.hexagon_v2.hvx_f2h", lo, hi)
+
+
+def hvx_copy(dst, src, nbytes, kind="pooled_dcfetch"):
+    return _call_intrin("handle", "tl.hexagon_v2.hvx_copy", dst, src, _u32(nbytes), kind)
+
+
+__all__ = [
+    "hmx_acc_clear",
+    "hmx_set_bias",
+    "hmx_mma_deep",
+    "hmx_store_after",
+    "hvx_load",
+    "hvx_store",
+    "hvx_add",
+    "hvx_mul",
+    "hvx_fma",
+    "hvx_exp",
+    "hvx_reduce_max",
+    "hvx_reduce_sum",
+    "hvx_h2f",
+    "hvx_f2h",
+    "hvx_copy",
+]
