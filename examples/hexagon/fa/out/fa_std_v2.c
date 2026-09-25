@@ -146,8 +146,10 @@ static void attnops_tl_fa_std_v2_pool3_worker(int job, void *opaque) {
     f32 l_tile;
     const int rmask = job;
     qrow = ((qt * 32) + rmask);
-    // T.vectorized(1024) -> 128B HVX vector loop
-    for (int cmask = 0; cmask < 1024; cmask += 64) {
+    int visible64 = (((qt + 1) * 32 + 63) & ~63);
+    if (visible64 > 1024) visible64 = 1024;
+    // T.vectorized(1024) -> 128B HVX vector loop, causal visible prefix only
+    for (int cmask = 0; cmask < visible64; cmask += 64) {
         size_t hvx_idx4 = (size_t)((rmask) * 1024 + (cmask));
             HVX_Vector hv1 = hrt_vsplat_f32_bits(0xC7000000);
             HVX_Vector hv2 = (*(const HVX_Vector *)(((f16 *)(V + 1064960)) + (size_t)((rmask) * 1024 + (cmask))));
@@ -175,8 +177,8 @@ static void attnops_tl_fa_std_v2_pool3_worker(int job, void *opaque) {
         m_row = fmaxf(m_row, m_tile);
     }
     f32 m_new = fmaxf(m_row, -32768.0f);
-    // T.vectorized(1024) -> 128B HVX vector loop
-    for (int cprob = 0; cprob < 1024; cprob += 64) {
+    // T.vectorized(1024) -> 128B HVX vector loop, causal visible prefix only
+    for (int cprob = 0; cprob < visible64; cprob += 64) {
         size_t hvx_idx5 = (size_t)((rmask) * 1024 + (cprob));
             HVX_Vector hv17 = (*(const HVX_Vector *)(((f16 *)(V + 1064960)) + (size_t)((rmask) * 1024 + (cprob))));
             HVX_Vector hv18, hv19;

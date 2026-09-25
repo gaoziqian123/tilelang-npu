@@ -272,6 +272,23 @@ def _patch_fa_std_legacy_to_v2(src: str, symbol: str = "attnops_tl_fa_std_v2") -
     if qk_old not in src or pv_old not in src:
         raise ValueError("legacy FA HMX loop anchors not found")
     src = src.replace(qk_old, qk_new).replace(pv_old, pv_new)
+
+    softmax_bound_old = """qrow = ((qt * 32) + rmask);
+    // T.vectorized(1024) -> 128B HVX vector loop
+    for (int cmask = 0; cmask < 1024; cmask += 64) {"""
+    softmax_bound_new = """qrow = ((qt * 32) + rmask);
+    int visible64 = (((qt + 1) * 32 + 63) & ~63);
+    if (visible64 > 1024) visible64 = 1024;
+    // T.vectorized(1024) -> 128B HVX vector loop, causal visible prefix only
+    for (int cmask = 0; cmask < visible64; cmask += 64) {"""
+    exp_bound_old = """// T.vectorized(1024) -> 128B HVX vector loop
+    for (int cprob = 0; cprob < 1024; cprob += 64) {"""
+    exp_bound_new = """// T.vectorized(1024) -> 128B HVX vector loop, causal visible prefix only
+    for (int cprob = 0; cprob < visible64; cprob += 64) {"""
+    if softmax_bound_old not in src or exp_bound_old not in src:
+        raise ValueError("legacy FA softmax loop anchors not found")
+    src = src.replace(softmax_bound_old, softmax_bound_new, 1)
+    src = src.replace(exp_bound_old, exp_bound_new, 1)
     return src
 
 
