@@ -316,29 +316,36 @@ static int fa2_qtile(uint8_t *V, int S, uint32_t qah, int qt, f16 *Of, int abl) 
 
 // TileLang FA std ABI: Q row-major [16,1024,256], K packed WH
 // [4,1024,256], V packed WH-transposed [4,256,1024], O row-major.
-int attnops_tl_fa_std_v2(remote_handle64 h, unsigned char *slab, int slabLen, int abl) {
+
+
+// Production explicit ABI.  No host-side slice gather/pack: q/k/v/o are
+// full tensors and [head_lo, head_hi) is a KV-head interval.
+//   Q/O row-major: [16,1024,256], head stride S*D.
+//   K WH-packed:   [4*1024,256], group stride S*D elements.
+//   V WH-packed-T: [4*256,1024], group stride D*S elements.
+int attnops_tl_fa_online_v2(remote_handle64 h,
+             unsigned char *q_buf, int q_len,
+             unsigned char *k_buf, int k_len,
+             unsigned char *v_buf, int v_len,
+             unsigned char *o_buf, int o_len,
+             unsigned char *prof_buf, int prof_len,
+             int head_lo, int head_hi, int abl) {
     (void)h;
     if (!HRT_VTCM_READY()) return -3;
     const int S = 1024;
     const size_t qk = (size_t)S * FA2_D;
-    size_t off = 0;
-    const f16 *q = (const f16 *)(slab + off);
-    off = HRT_ALIGN128(off + (size_t)FA2_NQ * qk * 2);
-    const f16 *k = (const f16 *)(slab + off);
-    off = HRT_ALIGN128(off + (size_t)FA2_NKV * qk * 2);
-    const f16 *v = (const f16 *)(slab + off);
-    off = HRT_ALIGN128(off + (size_t)FA2_NKV * qk * 2);
-    f16 *o = (f16 *)(slab + off);
-    off = HRT_ALIGN128(off + (size_t)FA2_NQ * qk * 2);
-    size_t prof_off = off;
-    if ((size_t)slabLen < prof_off + 80) return -1;
-    HRT_PROF_DECL(prof, slab, prof_off);
+    const size_t q_bytes = (size_t)FA2_NQ * qk * 2;
+    const size_t kv_bytes = (size_t)FA2_NKV * qk * 2;
+    if ((size_t)q_len < q_bytes || (size_t)k_len < kv_bytes ||
+        (size_t)v_len < kv_bytes || (size_t)o_len < q_bytes || prof_len < 80) return -1;
+    if (head_lo < 0 || head_lo >= FA2_NKV || head_hi <= head_lo || head_hi > FA2_NKV) return -5;
+    const f16 *q = (const f16 *)q_buf;
+    const f16 *k = (const f16 *)k_buf;
+    const f16 *v = (const f16 *)v_buf;
+    f16 *o = (f16 *)o_buf;
+    HRT_PROF_DECL(prof, prof_buf, 0);
     HRT_PROF_CLEAR(prof, 80);
 
-    int g_lo = (abl >> 8) & 0xf;
-    int g_hi = (abl >> 12) & 0xf;
-    if (g_hi == 0) g_hi = FA2_NKV;
-    if (g_lo < 0 || g_lo >= FA2_NKV || g_hi <= g_lo || g_hi > FA2_NKV) return -5;
     fa2_layout(S);
     if (fa2_end > HRT_VTCM_SIZE()) return -4;
     uint8_t *V = HRT_VTCM_BASE();
@@ -348,7 +355,7 @@ int attnops_tl_fa_std_v2(remote_handle64 h, unsigned char *slab, int slabLen, in
     int nq = S / 32, nkv = S / 32, nd = FA2_ND;
     uint32_t ntile = (uint32_t)nkv * nd * FA2_ALN;
     uint64_t tt = HAP_perf_get_qtimer_count();
-    for (int g = g_lo; g < g_hi; g++) {
+    for (int g = head_lo; g < head_hi; g++) {
         uint64_t t0 = HAP_perf_get_qtimer_count();
         if (!(abl & 1)) hv2_hvx_copy_pooled(V + fa2_KWH, k + (size_t)g * qk, ntile);
         prof[0] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
@@ -357,17 +364,18 @@ int attnops_tl_fa_std_v2(remote_handle64 h, unsigned char *slab, int slabLen, in
         prof[1] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
         if (abl == 1) continue;
         for (int hq = 0; hq < 4; hq++) {
-            int h = g * 4 + hq;
+            int hidx = g * 4 + hq;
             uint32_t qah = fa2_QAH + (size_t)hq * nq * nd * FA2_ALN;
-            f16 *Oh = o + (size_t)h * qk;
+            f16 *Oh = o + (size_t)hidx * qk;
             for (int qt = 0; qt < nq; qt++) {
                 t0 = HAP_perf_get_qtimer_count();
-                if (!(abl & 2)) fa2_stage_q_scaled(V, q + (size_t)h * qk, qah + (size_t)qt * nd * FA2_ALN, qt);
+                if (!(abl & 2)) fa2_stage_q_scaled(V, q + (size_t)hidx * qk,
+                                                   qah + (size_t)qt * nd * FA2_ALN, qt);
                 prof[2] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
                 t0 = HAP_perf_get_qtimer_count();
                 int e = fa2_qtile(V, S, qah, qt, Oh, abl & ~1);
                 prof[3] += (int32_t)(HAP_perf_get_qtimer_count() - t0);
-                if (e) { FARF(HIGH, "tl_fa_std_v2: head %d qt %d err %d", h, qt, e); return e; }
+                if (e) { FARF(HIGH, "tl_fa_online_v2: head %d qt %d err %d", hidx, qt, e); return e; }
             }
         }
     }

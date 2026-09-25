@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Emit the Hexagon-v2 Phase-1 FA std kernel.
+"""Emit the Hexagon-v2 FA std kernel.
 
-This is a bridge migration: the input TIR is the legacy standard FA prefill
-structure (same shape, buffers, full-row softmax, KV-head slice attrs), but the
-``hexagon_v2`` source-codegen route patches only the QK/PV HMX compute sites to
-inline ``mxmem:deep`` chains.
+The default output is now the structured v2 implementation: TileLang FA std ABI
+with fa256-style online softmax, Q pre-scale, AH row-pair softmax, and fused
+PV readout/normalize/writeback.  Set ``TILELANG_HEXAGON_V2_FA_BRIDGE=1`` to
+regenerate the older legacy-shell bridge for A/B.
 """
 
 from __future__ import annotations
@@ -92,14 +92,15 @@ def emit(args: argparse.Namespace) -> str:
 
 def structural_check(src: str) -> int:
     checks: list[tuple[str, bool]] = []
-    checks.append(("deep asm present", "mxmem(%1, %0):deep" in src and "hv2_hmx_mma_deep_split" in src))
+    checks.append(("deep asm present", "mxmem(%1, %0):deep" in src and "fa2_hmx_mma_deep_split" in src))
     checks.append(("legacy hmx recipe removed", "hrt_hmx_mm_f16" not in src))
-    checks.append(("QK kt=8", re.search(r"QK:.*kt=8[\s\S]*?hv2_hmx_mma_deep_split[\s\S]*?,\s*8\);", src) is not None))
-    checks.append(("PV kt=32", re.search(r"PV:.*kt=32[\s\S]*?hv2_hmx_mma_deep_split[\s\S]*?,\s*32\);", src) is not None))
-    checks.append(("pool phase count unchanged", src.count("attnops_pool_run_ctx(") == 6))
+    checks.append(("QK kt=8", re.search(r"fa2_hmx_mma_deep_split\(V, qah[\s\S]*?,\s*FA2_ND\);", src) is not None))
+    checks.append(("PV online kt chain", "fa2_hmx_mma_deep_split(V, fa2_SROW" in src and "qt + 1" in src))
+    checks.append(("bridge pool phases removed", src.count("attnops_pool_run_ctx(") == 0))
     checks.append(("KV slice attrs lowered", "g_lo" in src and "g_hi" in src))
-    checks.append(("legacy softmax helpers kept", "hrt_reduce_max_f16_32_vtcm" in src and "hrt_exp_fp32_vec" in src))
-    checks.append(("acc tile copy kept", "hrt_tlgdn_acc_tile_to_vtcm_rm" in src))
+    checks.append(("Q prescale present", "fa2_stage_q_scaled" in src and "0x2C00" in src))
+    checks.append(("fp16 AH softmax", "fa2_exp_neg" in src and "fa2_fold_max" in src))
+    checks.append(("no ScoreFull RM staging", "hrt_tlgdn_acc_tile_to_vtcm_rm" not in src and "hrt_exp_fp32_vec" not in src))
     rc = 0
     for name, ok in checks:
         print(f"CHECK_{'PASS' if ok else 'FAIL'} {name}")

@@ -10,7 +10,9 @@
 #include "sdkl.h"
 #include "attnops.h"
 
-#ifdef FA_STD_V2
+#ifdef FA_ONLINE_V2
+#define FA_STD_TAG "FA_ONLINE_V2"
+#elif defined(FA_STD_V2)
 #define FA_STD_CALL attnops_tl_fa_std_v2
 #define FA_STD_TAG "FA_STD_V2"
 #else
@@ -86,6 +88,23 @@ static void fill_inputs(unsigned char *s, const lay_t *l) {
 
 static void clear_outputs(unsigned char *s, const lay_t *l) {
     memset(s + l->o, 0, l->sz - l->o);
+}
+
+static int run_kernel(remote_handle64 ah, unsigned char *slab, const lay_t *l, int abl) {
+#ifdef FA_ONLINE_V2
+    int g_lo = (abl >> 8) & 0xf, g_hi = (abl >> 12) & 0xf;
+    if (g_hi == 0) g_hi = HKV;
+    int phase_abl = abl & 0xff;
+    return attnops_tl_fa_online_v2(ah,
+        slab + l->q, (int)((size_t)HQ * gS * D * 2),
+        slab + l->k, (int)((size_t)HKV * gS * D * 2),
+        slab + l->v, (int)((size_t)HKV * D * gS * 2),
+        slab + l->o, (int)((size_t)HQ * gS * D * 2),
+        slab + l->prof, PROF_BYTES,
+        g_lo, g_hi, phase_abl);
+#else
+    return FA_STD_CALL(ah, slab, (int)l->sz, abl);
+#endif
 }
 
 static void ref_row(const _Float16 *Q, const _Float16 *K, const _Float16 *VtIn,
@@ -276,9 +295,9 @@ int main(int argc, char **argv) {
     const char *pm = getenv("ATTN_POWER_MASK");
     char uri[256]; snprintf(uri, sizeof uri, "%s&_dom=cdsp%s%s", attnops_URI,
                             (pm && pm[0]) ? "&attn_power_mask=" : "", (pm && pm[0]) ? pm : ""); remote_handle64 ah = -1; if (attnops_open(uri, &ah)) { printf("open fail\n"); rpcmem_free(slab); free_logical_kv(); return 1; }
-    int e = FA_STD_CALL(ah, slab, (int)l.sz, abl); if (e) { printf("TL_%s warmup ret=%d slab_sz=%zu\n", FA_STD_TAG, e, l.sz); attnops_close(ah); rpcmem_free(slab); free_logical_kv(); return 1; }
+    int e = run_kernel(ah, slab, &l, abl); if (e) { printf("TL_%s warmup ret=%d slab_sz=%zu\n", FA_STD_TAG, e, l.sz); attnops_close(ah); rpcmem_free(slab); free_logical_kv(); return 1; }
     double t0 = now_s();
-    for (int it = 0; it < iters; it++) { clear_outputs(slab, &l); e = FA_STD_CALL(ah, slab, (int)l.sz, abl); if (e) break; }
+    for (int it = 0; it < iters; it++) { clear_outputs(slab, &l); e = run_kernel(ah, slab, &l, abl); if (e) break; }
     double ms = (now_s() - t0) * 1e3 / (iters ? iters : 1);
     int fail = e ? 1 : check_fp64_ref(slab, &l, phase_debug);
     if (!fail) fail = compare_legacy(ah, slab, &l);

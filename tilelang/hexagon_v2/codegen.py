@@ -476,7 +476,7 @@ def _emit_fa256_structured_v2(symbol: str = "attnops_tl_fa_std_v2") -> str:
         1,
     )
     prefix = prefix.replace('#include "HAP_farf.h"', '#include "HAP_farf.h"\n#include "HAP_perf.h"')
-    prefix = prefix.replace('#include "attnops_shared.h"', '#include "attnops_shared.h"\n#include "hexagon_rt.h"')
+    prefix = prefix.replace('#include "attnops_shared.h"', '#include "/root/project/backend/npu/attn/skel/src/attnops_shared.h"\n#include "/root/project/backend/npu/attn/skel/src/hexagon_rt.h"')
     prefix = prefix.replace("typedef float f32;", "typedef float f32;\n\ntypedef HVX_Vector hv2_hvx_vec;\n"
         "static inline hv2_hvx_vec hv2_hvx_mul_f16(hv2_hvx_vec a, hv2_hvx_vec b) { return Q6_Vhf_vmpy_VhfVhf(a, b); }\n"
         "static inline void hv2_hvx_copy_pooled(void *dst, const void *src, size_t bytes) { hrt_copy_pooled((uint8_t *)dst, (const uint8_t *)src, bytes); }")
