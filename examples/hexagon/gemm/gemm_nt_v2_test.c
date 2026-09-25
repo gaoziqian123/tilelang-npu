@@ -141,7 +141,9 @@ int main(int argc, char **argv) {
     struct remote_rpc_control_unsigned_module umod = { .domain = CDSP_DOMAIN_ID, .enable = 1 };
     remote_session_control(DSPRPC_CONTROL_UNSIGNED_MODULE, &umod, sizeof umod);
     char uri[256];
-    snprintf(uri, sizeof uri, "%s&_dom=cdsp", attnops_URI);
+    const char *pm = getenv("ATTN_POWER_MASK");
+    snprintf(uri, sizeof uri, "%s&_dom=cdsp%s%s", attnops_URI,
+             (pm && pm[0]) ? "&attn_power_mask=" : "", (pm && pm[0]) ? pm : "");
     remote_handle64 ah = -1;
     if (attnops_open(uri, &ah)) { printf("open fail\n"); return 1; }
     int rc = run_one(ah, M, N, K, iters);

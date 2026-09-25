@@ -10,6 +10,14 @@
 #include "sdkl.h"
 #include "attnops.h"
 
+#ifdef FA_STD_V2
+#define FA_STD_CALL attnops_tl_fa_std_v2
+#define FA_STD_TAG "FA_STD_V2"
+#else
+#define FA_STD_CALL attnops_tl_fa_std
+#define FA_STD_TAG "FA_STD"
+#endif
+
 #define HQ 16
 #define HKV 4
 #define D 256
@@ -18,6 +26,7 @@
 #define PROF_BYTES 80
 
 static int gS = 1024;
+static int g_check_h0 = 0, g_check_h1 = HQ;
 
 static size_t al128(size_t v) { return (v + 127) & ~(size_t)127; }
 static double now_s(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC_RAW, &ts); return ts.tv_sec + ts.tv_nsec * 1e-9; }
@@ -137,14 +146,14 @@ static int check_fp64_ref(const unsigned char *slab, const lay_t *l, int phase_d
     double *out = (double *)malloc((size_t)D * sizeof(double));
     if (!scores || !out) { printf("ref alloc fail\n"); free(scores); free(out); return 1; }
     double rr = 0.0;
-    for (int h = 0; h < HQ; h++) for (int t = 0; t < gS; t++) {
+    for (int h = g_check_h0; h < g_check_h1; h++) for (int t = 0; t < gS; t++) {
         ref_row(Q, K, VtIn, h, t, scores, out);
         for (int d = 0; d < D; d++) rr += out[d] * out[d];
     }
-    double rms = sqrt(rr / ((double)HQ * gS * D));
+    double rms = sqrt(rr / ((double)(g_check_h1 - g_check_h0) * gS * D));
     double dot = 0.0, gg = 0.0; int fail = 0; worst_t worst[10] = {0};
     double tb_dot[64] = {0}, tb_gg[64] = {0}, tb_rr[64] = {0};
-    for (int h = 0; h < HQ; h++) for (int t = 0; t < gS; t++) {
+    for (int h = g_check_h0; h < g_check_h1; h++) for (int t = 0; t < gS; t++) {
         ref_row(Q, K, VtIn, h, t, scores, out);
         const _Float16 *gotp = O + ((size_t)h * gS + t) * D;
         int tb = t >> 4;
@@ -166,7 +175,7 @@ static int check_fp64_ref(const unsigned char *slab, const lay_t *l, int phase_d
        cos(ref16, ref64) -- the best achievable cosine -- alongside
        cos(got, ref16) -- kernel fidelity against that target. */
     double d16_g = 0.0, d16_r = 0.0, gg16 = 0.0, rr16 = 0.0, dg_r16 = 0.0;
-    for (int h = 0; h < HQ; h++) for (int t = 0; t < gS; t++) {
+    for (int h = g_check_h0; h < g_check_h1; h++) for (int t = 0; t < gS; t++) {
         ref_row(Q, K, VtIn, h, t, scores, out);
         int g = h / 4;
         double out16[D];
@@ -195,7 +204,7 @@ static int check_fp64_ref(const unsigned char *slab, const lay_t *l, int phase_d
        kernel tracks the fp16-P reference to the same 5e-6 deficit, i.e. the
        residual is the format, not a logic bug. */
     int pass = (cos_o >= 0.99999 && fail == 0);
-    printf("FINAL_CRITERION cos_o=%.9f final_fail_o=%d/%d rms=%.9g %s\n", cos_o, fail, HQ*gS*D, rms, pass ? "PASS" : "FAIL");
+    printf("FINAL_CRITERION cos_o=%.9f final_fail_o=%d/%d rms=%.9g h_range=%d:%d %s\n", cos_o, fail, (g_check_h1 - g_check_h0)*gS*D, rms, g_check_h0, g_check_h1, pass ? "PASS" : "FAIL");
     if (!pass) {
         printf("FINAL_WORST_O\n");
         for (int i = 0; i < 10 && worst[i].score > 0; i++)
@@ -214,12 +223,48 @@ static int check_fp64_ref(const unsigned char *slab, const lay_t *l, int phase_d
     free(scores); free(out); return pass ? 0 : 1;
 }
 
+#ifdef FA_STD_V2
+static int compare_legacy(remote_handle64 ah, unsigned char *slab, const lay_t *l) {
+    if (!getenv("FA_COMPARE_LEGACY")) return 0;
+    size_t n = (size_t)HQ * gS * D;
+    _Float16 *v2 = (_Float16 *)malloc(n * sizeof(_Float16));
+    if (!v2) { printf("LEGACY_COMPARE alloc fail\n"); return 1; }
+    memcpy(v2, slab + l->o, n * sizeof(_Float16));
+    clear_outputs(slab, l);
+    int e = attnops_tl_fa_std(ah, slab, (int)l->sz, 0);
+    if (e) { printf("LEGACY_COMPARE legacy_ret=%d FAIL\n", e); free(v2); return 1; }
+    const _Float16 *leg = (const _Float16 *)(slab + l->o);
+    double dot = 0.0, aa = 0.0, bb = 0.0;
+    int bad = 0; double max_abs = 0.0;
+    for (size_t i = 0; i < n; i++) {
+        double a = (double)(float)v2[i], b = (double)(float)leg[i];
+        dot += a * b; aa += a * a; bb += b * b;
+        double da = fabs(a - b); if (da > max_abs) max_abs = da;
+        if (da > 0.001) bad++;
+    }
+    double cos = dot / (sqrt(aa * bb) + 1e-300);
+    int fail = (cos < 0.99999 || bad != 0);
+    printf("LEGACY_COMPARE cos=%.9f max_abs=%.9g bad_abs1e3=%d/%zu %s\n", cos, max_abs, bad, n, fail ? "FAIL" : "PASS");
+    memcpy(slab + l->o, v2, n * sizeof(_Float16));
+    free(v2);
+    return fail;
+}
+#else
+static int compare_legacy(remote_handle64 ah, unsigned char *slab, const lay_t *l) { (void)ah; (void)slab; (void)l; return 0; }
+#endif
+
 int main(int argc, char **argv) {
     int iters = argc > 1 ? atoi(argv[1]) : 1;
     int abl = argc > 2 ? atoi(argv[2]) : 0;
     int phase_debug = argc > 3 ? atoi(argv[3]) : 1;
     gS = argc > 4 ? atoi(argv[4]) : 1024;
     if (gS <= 0 || (gS % TILE)) { printf("bad S=%d\n", gS); return 1; }
+    int g_lo = (abl >> 8) & 0xf, g_hi = (abl >> 12) & 0xf;
+    if (g_hi == 0) g_hi = 4;
+    if (g_lo >= 0 && g_lo < 4 && g_hi > g_lo && g_hi <= 4) {
+        g_check_h0 = g_lo * 4;
+        g_check_h1 = g_hi * 4;
+    }
     lay_t l = layout_std();
     printf("FA_STD_LAYOUT q=%zu k=%zu vt=%zu o=%zu prof=%zu sz=%zu\n", l.q,l.k,l.v,l.o,l.prof,l.sz);
     if (alloc_logical_kv()) return 1;
@@ -228,16 +273,19 @@ int main(int argc, char **argv) {
     fill_inputs(slab, &l);
     remote_register_buf_attr2(slab, l.sz, rpcmem_to_fd(slab), FASTRPC_ATTR_COHERENT|FASTRPC_ATTR_KEEP_MAP|FASTRPC_ATTR_TRY_MAP_STATIC);
     struct remote_rpc_control_unsigned_module umod = {.domain = CDSP_DOMAIN_ID, .enable = 1}; remote_session_control(DSPRPC_CONTROL_UNSIGNED_MODULE, &umod, sizeof umod);
-    char uri[256]; snprintf(uri, sizeof uri, "%s&_dom=cdsp", attnops_URI); remote_handle64 ah = -1; if (attnops_open(uri, &ah)) { printf("open fail\n"); rpcmem_free(slab); free_logical_kv(); return 1; }
-    int e = attnops_tl_fa_std(ah, slab, (int)l.sz, abl); if (e) { printf("TL_FA_STD warmup ret=%d slab_sz=%zu\n", e, l.sz); attnops_close(ah); rpcmem_free(slab); free_logical_kv(); return 1; }
+    const char *pm = getenv("ATTN_POWER_MASK");
+    char uri[256]; snprintf(uri, sizeof uri, "%s&_dom=cdsp%s%s", attnops_URI,
+                            (pm && pm[0]) ? "&attn_power_mask=" : "", (pm && pm[0]) ? pm : ""); remote_handle64 ah = -1; if (attnops_open(uri, &ah)) { printf("open fail\n"); rpcmem_free(slab); free_logical_kv(); return 1; }
+    int e = FA_STD_CALL(ah, slab, (int)l.sz, abl); if (e) { printf("TL_%s warmup ret=%d slab_sz=%zu\n", FA_STD_TAG, e, l.sz); attnops_close(ah); rpcmem_free(slab); free_logical_kv(); return 1; }
     double t0 = now_s();
-    for (int it = 0; it < iters; it++) { clear_outputs(slab, &l); e = attnops_tl_fa_std(ah, slab, (int)l.sz, abl); if (e) break; }
+    for (int it = 0; it < iters; it++) { clear_outputs(slab, &l); e = FA_STD_CALL(ah, slab, (int)l.sz, abl); if (e) break; }
     double ms = (now_s() - t0) * 1e3 / (iters ? iters : 1);
     int fail = e ? 1 : check_fp64_ref(slab, &l, phase_debug);
+    if (!fail) fail = compare_legacy(ah, slab, &l);
     int32_t *p = (int32_t *)(slab + l.prof);
-    printf("FA_STD HQ=%d HKV=%d S=%d D=%d ret=%d ms=%.3f %s\n", HQ,HKV,gS,D,e,ms,fail?"FAIL":"OK");
-    printf("FA_STD_EMIT_PROF ticks legacy0=%d stage=%d mm=%d unperm=%d wall=%d\n", p[0],p[1],p[2],p[3],p[4]);
-    printf("FA_STD_POOL p0_kall=%d p1_vall=%d p2_qpro=%d p3_qasync=%d p4_softmax=%d p5_pstage=%d p6_arow=%d p7_rout=%d p8_softmax2=%d p9_pstage2=%d p10_arow2=%d p11_rout2=%d p12_unused=%d p13_unused=%d p14_unused=%d\n",
+    printf("%s HQ=%d HKV=%d S=%d D=%d ret=%d ms=%.3f %s\n", FA_STD_TAG,HQ,HKV,gS,D,e,ms,fail?"FAIL":"OK");
+    printf("%s_EMIT_PROF ticks legacy0=%d stage=%d mm=%d unperm=%d wall=%d\n", FA_STD_TAG,p[0],p[1],p[2],p[3],p[4]);
+    printf("%s_POOL p0_kall=%d p1_vall=%d p2_qpro=%d p3_qasync=%d p4_softmax=%d p5_pstage=%d p6_arow=%d p7_rout=%d p8_softmax2=%d p9_pstage2=%d p10_arow2=%d p11_rout2=%d p12_unused=%d p13_unused=%d p14_unused=%d\n", FA_STD_TAG,
            p[5],p[6],p[7],p[8],p[9],p[10],p[11],p[12],p[13],p[14],p[15],p[16],p[17],p[18],p[19]);
     attnops_close(ah); rpcmem_free(slab); free_logical_kv(); return fail ? 1 : 0;
 }

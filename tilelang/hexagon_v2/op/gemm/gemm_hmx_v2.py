@@ -52,8 +52,8 @@ class GemmHMXv2(GemmBase):
             raise ValueError("hexagon_v2.hmx Phase-1 supports fp16 operands only")
         if str(self.accum_dtype) not in ("float32", "float16"):
             raise ValueError("hexagon_v2.hmx Phase-1 supports fp32/fp16 accumulator markers only")
-        if self.M % 32 or self.N % 256 or self.K % 64 or self.K > 4096:
-            raise ValueError("hexagon_v2.hmx requires M%32==0, N%256==0, K%64==0, K<=4096")
+        if self.M % 32 or self.N % 32 or self.K % 64 or self.K > 4096:
+            raise ValueError("hexagon_v2.hmx requires M%32==0, N%32==0, K%64==0, K<=4096")
         for buf in (self.A, self.B):
             if not str(buf.scope()).startswith("shared") and not str(buf.scope()).startswith("vtcm"):
                 raise ValueError("hexagon_v2.hmx operands must be shared/vtcm buffers")
