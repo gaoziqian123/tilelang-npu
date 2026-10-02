@@ -1,5 +1,9 @@
 # 标准 TileLang GDN prefill 设计任务书(gdn_std)
 
+> **已退役（2026-09-26）**：旧 emitter 的历史设计，不是现有后端能力声明。
+> 所引用的旧实现和示例已删除，不归档；不得执行下文旧命令。
+> 正规后端入口参见 `examples/hexagon/gemm/README.md`。
+
 目标:纯标准 TileLang 语言构造写 GDN prefill(T=1024, Hk=16, Hv=32, D=128, chunk=32),
 OnePlus 13 真机 fp64 对拍 max_rel<0.1,总耗时 < 45.35ms(手写 attnops_gdn.c 基线)。
 

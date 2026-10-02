@@ -1,5 +1,10 @@
 # Standard TileLang fused SwiGLU FFN design (`ffn_std`)
 
+> **Retired (2026-09-26):** historical statement-emitter design only.
+> The old implementation and examples have been deleted, not archived.
+> Paths, commands and capability claims below are no longer current.
+> See `examples/hexagon/gemm/README.md` for the standard backend entry point.
+
 Goal: emit a Hexagon C example for the fixed Qwen FFN anchor using only
 standard TileLang constructs, mirroring `examples/hexagon-legacy/gdn_std/gdn_std.py` in style:
 `T.copy`, `T.gemm`, `T.parallel`, `T.serial`, `T.vectorized`, standard scalar /

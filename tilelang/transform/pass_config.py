@@ -83,6 +83,35 @@ class PassConfigKey(str, Enum):
         if enabled, --use_fast_math will be passed to nvcc
     """
 
+    TL_HEXAGON_NUM_WORKERS = "tl.hexagon.num_workers"
+    """Positive worker-count override for the Hexagon launch estimator."""
+
+    TL_HEXAGON_PLAN_LOCAL_ROW_REDUCE = "tl.hexagon.plan_local_row_reduce"
+    """Explicit local-row FP order/replay planning. Default: False (opt-in)."""
+
+    TL_HEXAGON_FUSE_LOCAL_ROW_MAP = "tl.hexagon.fuse_local_row_map"
+    """Forward producer SSA into explicit row plans. Default: False (opt-in)."""
+
+    TL_DISABLE_FUSE_POINTWISE_STAGES = "tl.disable_fuse_pointwise_stages"
+
+    TL_ENABLE_ORDERED_ACCUMULATOR_PROMOTION = "tl.enable_ordered_accumulator_promotion"
+    """Opt-in ordered vector accumulator promotion. Default: False."""
+    TL_ORDERED_ACCUMULATOR_BUDGET_BYTES = "tl.ordered_accumulator_budget_bytes"
+    """Maximum promoted local accumulator bytes. Default: 128."""
+
+    TL_ENABLE_FUSE_CAST_COPY = "tl.enable_fuse_cast_copy"
+    """Opt-in native cast-to-Copy reaching-definition forwarding (default False)."""
+
+    TL_HEXAGON_TYPED_LAYOUT_COPY = "tl.hexagon.typed_layout_copy"
+    """Opt-in FP32 local to FP16 AH/WH Copy lowering (default False)."""
+    """Disable adjacent private pointwise forwarding. Default: True (opt-in).
+
+    Currently wired into Hexagon after DecoupleTypeCast, before vectorization.
+    """
+
+    TL_HEXAGON_JOB_PARTITION = "tl.hexagon.job_partition"
+    """Positive jobs-per-worker override for external Hexagon auto-tuning."""
+
     TL_PTXAS_REGISTER_USAGE_LEVEL = "tl.ptxas_register_usage_level"
     """The PTXAS register usage level in [0, 10], which controls the
     aggressiveness of optimizations that affect register usage. Default: None"""

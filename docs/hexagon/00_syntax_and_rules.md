@@ -1,5 +1,9 @@
 # TileLang Hexagon NPU Backend — 语法表与规则表 v0.1
 
+> **已退役（2026-09-26）**：旧 statement-emitter 语法及规则的历史记录。
+> 旧实现和示例已删除；下文的路径、命令与支持声明不再适用。
+> 正规后端使用 `target="hexagon"`，参见 `examples/hexagon/gemm/README.md`。
+
 目标生态位:TileLang 的 CUDA 路径生成 CUDA kernel;本 backend 以**相同的前端写法**
 生成 **Hexagon HVX/HMX intrinsic C kernel**(AOT,hexagon-clang 编译进 FastRPC skel)。
 目标硬件:OnePlus 13 / SM8750,Hexagon v79,VTCM 8MB,HVX 128B 向量,HMX 32×32

@@ -1564,7 +1564,12 @@ public:
       const PrimExpr last_dim_index = indices[indices.size() - 1];
       if (last_dim_index.dtype().lanes() == 1) {
         arith::ModularSet me = analyzer_.modular_set(last_dim_index);
-        var_info.scalar_read_dtype.emplace(access_dtype.with_lanes(me->coeff));
+        // Modular strides are not vector widths. Large packed-tile pointer
+        // strides (e.g. 32768 fp16 elements) overflow DLPack's fixed-lane
+        // encoding into the scalable-vector range. Keep such accesses scalar.
+        const int64_t lanes = me->coeff;
+        var_info.scalar_read_dtype.emplace(
+            access_dtype.with_lanes(lanes > 0 && lanes < 32768 ? lanes : 1));
         return;
       }
     }

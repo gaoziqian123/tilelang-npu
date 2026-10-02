@@ -541,9 +541,16 @@ private:
   }
 
   PrimExpr VisitExpr_(const SelectNode *node) final {
-    // Select stays an expression-level ternary. Constrain its vector width
-    // using the same condition-uniformity rule as IfThenElse.
-    CheckConditionVectorized(node->condition);
+    // Select is an eager, lane-wise value operation, not control flow.
+    // TLVectorizer broadcasts its operands and constructs a vector Select.
+    // Requiring a uniform predicate here unnecessarily scalarizes masks with
+    // an enclosing-loop-dependent boundary. Memory accesses in BOTH operands
+    // are still visited/validated below. Lazy if_then_else and statement-level
+    // guards retain the uniformity check: they may protect invalid accesses.
+    // Other backends retain their existing policy until their vector-mask
+    // codegen capability is established independently.
+    if (!TargetIsHexagon(Target::Current(false)))
+      CheckConditionVectorized(node->condition);
     return arith::IRMutatorWithAnalyzer::VisitExpr_(node);
   }
 

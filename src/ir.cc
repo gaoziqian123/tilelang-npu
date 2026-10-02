@@ -15,6 +15,7 @@
 #include <tvm/tirx/op.h>
 #include <tvm/tirx/op_attr_types.h>
 #include <tvm/tirx/stmt.h>
+#include <tvm/tirx/stmt_functor.h>
 
 #include <tvm/arith/analyzer.h>
 #include <tvm/script/ir_builder/tir/ir.h>
@@ -133,7 +134,17 @@ ForFrame PipelinedFor(PrimExpr start, const PrimExpr &stop, int num_stages,
     int n = vars.size();
     ICHECK(n == 1);
     Map<String, Any> anno = annotations;
-    if (num_stages > 0)
+    bool worker_pipeline = false;
+    tirx::PostOrderVisit(body, [&](const ObjectRef &node) {
+      if (const auto *attr = node.as<tirx::AttrStmtNode>())
+        worker_pipeline |= attr->attr_key == "tl.pipeline_stage";
+    });
+    if (worker_pipeline) {
+      CHECK_GT(num_stages, 0, ValueError) << "worker pipeline requires positive num_stages";
+      CHECK(order.empty() && stages.empty() && sync.empty() && groups.empty(), ValueError)
+          << "worker pipeline cannot mix manual software-pipeline schedules";
+      anno.Set("tl.workergroup_depth", Integer(num_stages));
+    } else if (num_stages > 0)
       anno.Set("num_stages", PrimExpr(num_stages));
     if (!order.empty())
       anno.Set("tl_pipeline_order", order);
@@ -409,6 +420,31 @@ TVM_FFI_STATIC_INIT_BLOCK() {
   namespace refl = reflection;
   refl::GlobalDef()
       .def("tl.WarpSpecialize", WarpSpecialize)
+      .def("tl.PipelineStage", [](String name, String engine, int64_t workers,
+                                  int64_t weight) {
+        CHECK(!name.empty(), ValueError) << "pipeline stage name must be nonempty";
+        CHECK(engine == "hvx" || engine == "hmx", ValueError) << "invalid pipeline engine";
+        CHECK((workers > 0 && weight == 0) || (weight > 0 && workers == 0), ValueError)
+            << "specify exactly one positive workers or weight";
+        CHECK(engine != "hmx" || workers == 1, ValueError)
+            << "HMX requires workers=1 (weights are HVX-only)";
+        Map<String, Any> spec{{"name", name}, {"engine", engine},
+                              {"workers", Integer(workers)},
+                              {"weight", Integer(weight)}};
+        return Attr(spec, "tl.pipeline_stage", Integer(1));
+      })
+      .def("tl.PipelineStageWithOwner", [](String name, String engine, int64_t workers,
+                                           int64_t weight, String owner) {
+        CHECK(!name.empty() && !owner.empty(), ValueError) << "stage and physical owner must be nonempty";
+        CHECK(engine == "hvx" || engine == "hmx", ValueError) << "invalid pipeline engine";
+        CHECK(workers > 0 && weight == 0, ValueError)
+            << "explicit physical owner requires an exact worker count";
+        CHECK(engine != "hmx" || workers == 1, ValueError) << "HMX singleton required";
+        Map<String, Any> spec{{"name", name}, {"engine", engine},
+                             {"workers", Integer(workers)}, {"weight", Integer(weight)},
+                             {"physical_owner", owner}};
+        return Attr(spec, "tl.pipeline_stage", Integer(1));
+      })
       .def("tl.SideEffect", tirx::SideEffect);
   KernelLaunchFrameNode::RegisterReflection();
   WarpSpecializeFrameNode::RegisterReflection();

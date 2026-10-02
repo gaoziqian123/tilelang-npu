@@ -29,6 +29,9 @@ TVM_REGISTER_PASS_CONFIG_OPTION(kLayoutCostModel, ffi::String);
 TVM_REGISTER_PASS_CONFIG_OPTION(kLayoutInferenceAnnotateParallelLoops, Bool);
 TVM_REGISTER_PASS_CONFIG_OPTION(kLayoutInferenceFillDefaultLayout, Bool);
 TVM_REGISTER_PASS_CONFIG_OPTION(kHexagonProf, Bool);
+// External tuner overrides for the Hexagon launch estimator.
+TVM_REGISTER_PASS_CONFIG_OPTION("tl.hexagon.num_workers", Integer);
+TVM_REGISTER_PASS_CONFIG_OPTION("tl.hexagon.job_partition", Integer);
 TVM_REGISTER_PASS_CONFIG_OPTION(kEnableVectorizePlannerVerbose, Bool);
 TVM_REGISTER_PASS_CONFIG_OPTION(kStorageRewriteDetectInplace, Bool);
 TVM_REGISTER_PASS_CONFIG_OPTION(kASTPrintEnable, Bool);

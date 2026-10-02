@@ -56,6 +56,7 @@ from .allocate import (
 from tvm.tirx.script.builder.ir import alloc_buffer as allocate  # noqa: F401
 from .copy_op import (  # noqa: F401
     copy,
+    transform,
     async_copy,
     transpose,
     im2col,
@@ -149,6 +150,7 @@ from .annotations import (  # noqa: F401
     ws_op,
 )
 
+from .pipeline_stage import pipeline_stage  # noqa: F401
 from .warp_specialize import (  # noqa: F401
     WSRole,
     WSPipeline,
@@ -232,6 +234,7 @@ _LOCAL_EXPORTS = (
     "annotate_ws_pipeline_depth",
     "annotate_ws_schedule",
     "ws_op",
+    "pipeline_stage",
     "any_of",
     "any_sync",
     "async_copy",
@@ -251,6 +254,7 @@ _LOCAL_EXPORTS = (
     "clamp",
     "clear",
     "copy",
+    "transform",
     "cummax",
     "cumsum",
     "dynamic",

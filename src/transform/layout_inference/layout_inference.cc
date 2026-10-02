@@ -4,6 +4,8 @@
  */
 
 #include "support/check.h"
+#include "../common/worker_group_context.h"
+#include <optional>
 #include <tvm/ir/cast.h>
 #include <tvm/ir/repr.h>
 #include <tvm/runtime/logging.h>
@@ -1107,6 +1109,13 @@ private:
   }
 
   void VisitStmt_(const AttrStmtNode *op) final {
+    if (op->attr_key == "tl.workergroup_local") {
+      CHECK(!worker_group_.has_value(), ValueError) << "nested worker group layout";
+      worker_group_ = WorkerGroupContext::From(op);
+      IRVisitorWithAnalyzer::VisitStmt_(op);
+      worker_group_.reset();
+      return;
+    }
     if (op->attr_key == tirx::attr::thread_extent) {
       IterVar iv = Downcast<IterVar>(op->node);
       if (iv->thread_tag == "threadIdx.x") {
@@ -1142,6 +1151,7 @@ private:
   }
 
   Range CurrentThreadBounds() const {
+    if (worker_group_) return worker_group_->bounds;
     return ComputeThreadBounds(thread_binding_, analyzer_);
   }
 
@@ -1149,6 +1159,7 @@ private:
   // threadIdx.x Var when a thread_extent binding exists, otherwise constant
   // 0 (e.g. CPU serial launch). Never an unbound synthetic Var.
   PrimExpr CurrentThreadIndex() const {
+    if (worker_group_) return worker_group_->local_id;
     if (thread_binding_.defined()) {
       return thread_binding_->var;
     }
@@ -1352,6 +1363,7 @@ private:
   // where the logical thread index is the constant 0 and thread bounds are
   // [0, 1) — no synthetic fallback Var is ever created.
   IterVar thread_binding_;
+  std::optional<WorkerGroupContext> worker_group_;
   std::vector<PrimExpr> thread_index_vec_;
   std::vector<Range> thread_bounds_vec_;
   std::vector<std::unique_ptr<arith::Analyzer>> analyzer_vec_;

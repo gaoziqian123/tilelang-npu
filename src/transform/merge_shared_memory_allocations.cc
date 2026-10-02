@@ -411,6 +411,24 @@ private:
   }
 
   void VisitExpr_(const CallNode *op) {
+    if (const auto *intrinsic = op->op.as<OpNode>()) {
+      if (intrinsic->name == "tl.hexagon.hmx_store_after") {
+        // HMX readout owns a complete 2KB crouton. Its destination must
+        // start at a crouton boundary, not merely an HVX register boundary.
+        PostOrderVisit(op->args[0], [this](const ObjectRef &node) {
+          const VarNode *var = node.as<VarNode>();
+          if (const auto *load = node.as<BufferLoadNode>())
+            var = load->buffer->data.get();
+          if (var && var->type_annotation.as<PointerTypeNode>()) {
+            auto scope = GetPtrStorageScope(GetRef<Var>(var));
+            if (scope == "shared" || scope == "shared.dyn") {
+              int &slot = shmem_alignment_map_[var];
+              slot = std::max(slot, 2048);
+            }
+          }
+        });
+      }
+    }
     if (op->op.same_as(tl::tma_load()) || op->op.same_as(tl::tma_store()) ||
         op->op.same_as(tl::initialize_wgmma_descriptor()) ||
         op->op.same_as(tl::initialize_tcgen05_descriptor())) {

@@ -4,6 +4,7 @@
  */
 
 #include "support/check.h"
+#include "common/worker_group_context.h"
 #include <optional>
 #include <tvm/ir/cast.h>
 #include <tvm/relax/analysis.h>
@@ -1158,6 +1159,13 @@ private:
   }
 
   Stmt VisitStmt_(const AttrStmtNode *op) final {
+    if (op->attr_key == "tl.workergroup_local") {
+      CHECK(!worker_group_.has_value(), ValueError) << "nested worker group lowering";
+      worker_group_ = WorkerGroupContext::From(op);
+      Stmt result = arith::IRMutatorWithAnalyzer::VisitStmt_(op);
+      worker_group_.reset();
+      return result;
+    }
     if (op->attr_key == tirx::attr::thread_extent) {
       IterVar iv = Downcast<IterVar>(op->node);
       ICHECK_NE(iv->thread_tag.length(), 0U);
@@ -1209,6 +1217,15 @@ private:
 
     // First visit the body.
     For for_node = Downcast<For>(arith::IRMutatorWithAnalyzer::VisitStmt_(op));
+    if (op->annotations.count("tl.workergroup_slots")) {
+      Array<Map<String, Any>> slots;
+      for (auto spec : op->annotations.at("tl.workergroup_slots").cast<Array<Map<String, Any>>>()) {
+        auto buffer = spec.at("buffer").cast<Buffer>();
+        if (buffer_remap_.count(buffer)) spec.Set("buffer", buffer_remap_[buffer]);
+        slots.push_back(spec);
+      }
+      for_node.CopyOnWrite()->annotations.Set("tl.workergroup_slots", slots);
+    }
     if (pushed_loop_mbar_phase) {
       loop_mbar_phase_stack_.pop_back();
     }
@@ -1313,6 +1330,20 @@ private:
           has_non_local_store = true;
         }
       } else if (const auto *call = obj.as<CallNode>()) {
+        // Inspect logical TileOp regions before their lowering. In particular,
+        // copy(row_private, global[row]) is a write, not a local-only loop.
+        // Looking only for BufferStore misses this effect and replicates the
+        // complete row loop on every worker instead of applying its layout.
+        auto tile = ParseOperator(GetRef<Call>(call));
+        if (tile.defined()) {
+          auto regions = tile->GetAccessRegions();
+          for (auto region : regions.writes) {
+            has_non_local_store |= !IsLocalBuffer(region->buffer);
+            has_fragment_access |= IsFragmentBuffer(region->buffer);
+          }
+          for (auto region : regions.reads)
+            has_fragment_access |= IsFragmentBuffer(region->buffer);
+        }
         if (call->op.same_as(builtin::tvm_access_ptr())) {
           // tvm_access_ptr format: (dtype, data, offset, extent, rw_mask)
           auto buffer_var = call->args[1].as<VarNode>();
@@ -1385,6 +1416,7 @@ private:
   }
 
   Range CurrentThreadBounds() const {
+    if (worker_group_) return worker_group_->bounds;
     return ComputeThreadBounds(thread_binding_, *analyzer_);
   }
 
@@ -1392,6 +1424,7 @@ private:
   // Var when a thread_extent binding exists, otherwise constant 0 (e.g. CPU
   // serial launch). Never an unbound synthetic Var.
   PrimExpr CurrentThreadIndex() const {
+    if (worker_group_) return worker_group_->local_id;
     if (thread_binding_.defined()) {
       return thread_binding_->var;
     }
@@ -1419,6 +1452,7 @@ private:
   // Real threadIdx.x binding of the enclosing thread_extent scope, when one
   // exists. Stays undefined for targets without thread bindings (e.g. CPU).
   IterVar thread_binding_;
+  std::optional<WorkerGroupContext> worker_group_;
   size_t thread_block_size_ = 0;
   // Product of cluster_dims from block annotation (default 1).
   int cluster_size_ = 1;

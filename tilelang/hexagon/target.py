@@ -1,49 +1,45 @@
-"""Hexagon target 归一化。"""
-
 from __future__ import annotations
 
 from tvm.target import Target
-
 from tilelang.backend.target import TargetLike, register_target_normalizer
 
 
-def _hexagon_target_config() -> dict[str, object]:
-    """构造 v1 Hexagon target 属性。
-
-    TVM 已内置 ``hexagon`` kind；这里仅补齐 TileLang 需要稳定携带的 key 与
-    Android host 语义。真正的 aarch64-linux-android host codegen/打包由后续
-    C++/toolchain 层实现。
-    """
-
-    return {
-        "kind": "hexagon",
-        "keys": ["hexagon", "cpu"],
-        "mtriple": "hexagon-unknown-none-elf",
-        "host": {"kind": "llvm", "mtriple": "aarch64-linux-android"},
-        "vtcm-capacity": 8 * 1024 * 1024,
-    }
-
-
-def normalize_hexagon_target(target: TargetLike) -> Target | None:
-    """让 ``target=\"hexagon\"`` / ``{"kind":"hexagon"}`` 走同一条路。"""
-
-    if isinstance(target, Target):
-        return target if target.kind.name == "hexagon" else None
-    if isinstance(target, dict):
-        if target.get("kind") != "hexagon":
-            return None
-        merged = _hexagon_target_config()
-        merged.update(target)
-        return Target(merged)
-    if target.strip() != "hexagon":
-        return None
-    return Target(_hexagon_target_config())
+_REMOVED_TARGETS = {"hexagon_legacy", "hexagon_v2"}
 
 
 def target_is_hexagon(target: Target) -> bool:
-    """轻量谓词，供后续 Python pass / codegen 分支复用。"""
-
-    return target.kind.name == "hexagon"
+    return target.kind.name == "hexagon" and target.tag not in _REMOVED_TARGETS and not (_REMOVED_TARGETS & set(target.keys))
 
 
+def normalize_hexagon_target(target: TargetLike) -> Target | None:
+    if isinstance(target, Target):
+        identifiers = {target.kind.name, target.tag, *target.keys}
+    elif isinstance(target, dict):
+        keys = target.get("keys", [])
+        identifiers = {target.get("kind"), target.get("tag"), *(keys.split(",") if isinstance(keys, str) else keys)}
+    else:
+        identifiers = set(target.replace("=", " ").replace(",", " ").split())
+    if identifiers & _REMOVED_TARGETS:
+        raise ValueError("Removed Hexagon legacy/v2 target; use the standard hexagon backend explicitly")
+    if isinstance(target, Target):
+        if not target_is_hexagon(target):
+            return None
+        config = dict(target.export())
+    elif isinstance(target, dict):
+        if target.get("kind") != "hexagon":
+            return None
+        config = dict(target)
+    elif target.strip() and target.strip().split()[0] == "hexagon":
+        config = dict(Target(target).export())
+    else:
+        return None
+    config.setdefault("mcpu", "hexagonv79")
+    config.setdefault("mtriple", "hexagon-unknown-none-elf")
+    config.setdefault("mattr", ["+hvxv79", "+hvx-length128b", "+hmx"])
+    config.setdefault("vtcm-capacity", 8 * 1024 * 1024)
+    config.setdefault("host", "llvm")
+    return Target(config)
+
+
+# Cross compilation is explicit: do not auto-detect a DSP on the build server.
 register_target_normalizer("hexagon", normalize_hexagon_target, override=True)

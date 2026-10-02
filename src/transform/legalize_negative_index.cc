@@ -9,6 +9,7 @@
 #include <tvm/tirx/op.h>
 #include <tvm/tirx/stmt_functor.h>
 #include <tvm/tirx/transform.h>
+#include <tvm/target/target.h>
 
 #include <unordered_map>
 #include <variant>
@@ -155,12 +156,23 @@ public:
   static PrimFunc Apply(PrimFunc func, const LoadStore2StateMap &states) {
     arith::Analyzer analyzer;
     NegativeIndexRewriter rewriter(&analyzer, states);
+    auto target = func->GetAttr<Target>(tvm::attr::kTarget);
+    rewriter.preserve_physical_gemm_ =
+        target.defined() && target.value()->kind->name == "hexagon";
     PrimFuncNode *func_node = func.CopyOnWrite();
     func_node->body = rewriter.VisitStmt(func_node->body);
     return func;
   }
 
 private:
+  // HMX regions are physical tiles. Preserve their original indices until
+  // GemmNode's loop-aware bounds proof; Python wrapping would hide negatives.
+  PrimExpr VisitExpr_(const CallNode *op) final {
+    if (preserve_physical_gemm_ && op->op.same_as(Op::Get("tl.tileop.gemm")))
+      return GetRef<PrimExpr>(op);
+    return arith::IRMutatorWithAnalyzer::VisitExpr_(op);
+  }
+
   NegativeIndexRewriter(arith::Analyzer *analyzer,
                         const LoadStore2StateMap &states)
       : arith::IRMutatorWithAnalyzer(analyzer), states_(states) {}
@@ -259,6 +271,7 @@ private:
 
 private:
   const LoadStore2StateMap &states_;
+  bool preserve_physical_gemm_{false};
 };
 
 PrimFunc LegalizeNegativeIndex(PrimFunc func) {

@@ -16,6 +16,7 @@ def test_builtin_backend_modules_are_explicit():
         "cpu": (("c", "llvm"), ["cython", "tvm_ffi"]),
         "hexagon": (("hexagon",), ["aot"]),
         "metal": (("metal",), ["torch", "tvm_ffi"]),
+        "opencl": (("opencl",), ["tvm_ffi"]),
         "webgpu": (("webgpu",), ["tvm_ffi"]),
     }
 

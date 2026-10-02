@@ -32,6 +32,27 @@ std::vector<GemmImpl> &GemmImplRegistry() {
   return registry;
 }
 
+// Use the lowering caller's analyzer: it contains enclosing loop bounds. A fresh
+// Python analyzer cannot prove resident-panel slices, and divisibility alone
+// does not establish safety (negative aligned indices wrap in packed layouts).
+void ValidateHMXRegions(const GemmNode &op, Target target,
+                        arith::Analyzer *analyzer) {
+  if (target->kind->name != "hexagon") return;
+  for (const auto &region : {op.aRegion_, op.bRegion_, op.cRegion_}) {
+    const auto &buffer = region->buffer;
+    ICHECK_EQ(region->region.size(), buffer->shape.size());
+    for (size_t i = 0; i < buffer->shape.size(); ++i) {
+      const auto &axis = region->region[i];
+      for (const auto &condition : {axis->extent > 0, axis->min >= 0,
+                                   axis->min + axis->extent <= buffer->shape[i]}) {
+        ICHECK(analyzer->CanProve(condition, arith::ProofStrength::kSymbolicBound))
+            << "HMX region bounds cannot be proven: " << buffer->name
+            << " axis " << i << ": " << condition;
+      }
+    }
+  }
+}
+
 const GemmImpl &ResolveGemmImpl(Target target) {
   const auto &registry = GemmImplRegistry();
   const GemmImpl *matched_impl = nullptr;
@@ -197,6 +218,7 @@ std::pair<int, int> GemmWarpPolicyNode::ComputeWarpPartition(
 
 Stmt GemmNode::Lower(const LowerArgs &lower_args,
                      arith::Analyzer *analyzer) const {
+  ValidateHMXRegions(*this, lower_args.target, analyzer);
   if (const auto f = Function::GetGlobal("tl.gemm.lower")) {
     PrimExpr mbar_phase = lower_args.mbar_phase_expr;
     if (auto explicit_phase = GetAnnotatedMbarPhaseExpr(annotations_)) {

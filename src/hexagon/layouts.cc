@@ -80,9 +80,10 @@ const HexagonLayoutSpec *FindHexagonLayoutSpec(HexagonLayoutMode mode) {
 Layout MakeHexagonZip16Layout2D(int64_t rows, int64_t cols) {
   // HMX AH stores a row-major matrix as 32x32 fp16 tiles.  Inside each tile
   // the storage is 16 HVX vectors of 64 fp16 lanes.  Vector `rp` contains source
-  // rows `2*rp` and `2*rp+1`; `Q6_Vh_vshuff_Vh` maps a lane as
-  //   lane = 32 * (col % 2) + row_in_pair + 2 * floor((col % 32) / 2)
-  // which is exactly the zip16 row-pair interleave used by hrt_stage_act_hvx.
+  // rows `2*rp` and `2*rp+1`, interleaved by column:
+  //   element_offset = 64 * floor(row / 2) + 2 * col + row % 2.
+  // This is the production hrt_stage_act_hvx/attnops_gemm_nt AH contract;
+  // there is no additional even/odd column permutation.
   Var i = InputPlaceholder(0);
   Var j = InputPlaceholder(1);
 
@@ -92,7 +93,7 @@ Layout MakeHexagonZip16Layout2D(int64_t rows, int64_t cols) {
   PrimExpr col = FloorMod(j, 32);
   PrimExpr row_pair = FloorDiv(row, 2);
   PrimExpr row_in_pair = FloorMod(row, 2);
-  PrimExpr lane = FloorMod(col, 2) * 32 + row_in_pair + FloorDiv(col, 2) * 2;
+  PrimExpr lane = col * 2 + row_in_pair;
 
   return Layout(Array<PrimExpr>{Integer(rows), Integer(cols)},
                 {row_tile, col_tile, row_pair, lane});

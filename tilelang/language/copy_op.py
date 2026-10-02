@@ -140,6 +140,21 @@ def copy(
     return tirx.call_intrin("handle", tirx.op.Op.get("tl.tileop.copy"), src, dst, annotations=ann)
 
 
+def transform(src: BufferLikeType, dst: BufferLikeType):
+    """Logical elementwise layout/dtype conversion, with copy (not alias) semantics.
+
+    Hexagon requires a provable vector mapping; unsupported maps fail closed.
+    Buffer dtypes select conversion semantics. Layouts come from annotate_layout.
+    """
+    src_extent, dst_extent = get_extent(src), get_extent(dst)
+    if src_extent is None or dst_extent is None:
+        raise ValueError("T.transform requires explicit regions with equal logical shapes")
+    ir.assert_structural_equal(list(src_extent), list(dst_extent))
+    src = to_buffer_region(src, access_type="r", extents=list(src_extent))
+    dst = to_buffer_region(dst, access_type="w", extents=list(dst_extent))
+    return tirx.call_intrin("handle", tirx.op.Op.get("tl.tileop.transform"), src, dst)
+
+
 def copy_cluster(
     src: BufferLikeType,
     dst: BufferLikeType,

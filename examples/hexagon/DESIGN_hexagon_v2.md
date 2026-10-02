@@ -1,5 +1,10 @@
 # Hexagon NPU 后端 v2 设计：从 statement emitter 到 target codegen
 
+> **已退役（2026-09-26）**：本文仅保留历史设计证据，不是当前实现或运行指南。
+> 旧 v2/legacy 实现和示例已删除，不归档、不兼容，也不得用旧 target 别名启动新后端。
+> 当前正规后端为 `tilelang/hexagon/`，使用 `target="hexagon"`；入口见
+> `gemm/README.md`。下文所有旧路径、支持状态和执行命令均为历史记录。
+
 > 目标：调研 TileLang 上游 CUDA 后端的架构，并把可迁移的编译器结构落到 Hexagon HMX/HVX/VTCM 后端重写方案。本文只定义设计，不改变代码。
 
 ## 0. 背景与设计原则

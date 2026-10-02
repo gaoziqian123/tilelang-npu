@@ -9,6 +9,7 @@ from tvm.ir.transform import PassContext  # noqa: F401
 from .add_bufstore_wrapper import AddWrapperForSingleBufStore  # noqa: F401
 from .hoist_broadcast_values import HoistBroadcastValues  # noqa: F401
 from .decouple_type_cast import DecoupleTypeCast  # noqa: F401
+from .fuse_pointwise_stages import FusePointwiseStages  # noqa: F401
 
 
 def get_pass_context():
@@ -36,6 +37,16 @@ def LayoutInference():
         The result pass
     """
     return _ffi_api.LayoutInference()  # type: ignore
+
+
+def PromoteOrderedAccumulator():
+    """Promote bounded independent vector updates without changing reduction order."""
+    return _ffi_api.PromoteOrderedAccumulator()
+
+
+def FuseCastCopy():
+    """Forward dead private cast versions into adjacent standard Copy regions."""
+    return _ffi_api.FuseCastCopy()
 
 
 def LowerTileOp():
@@ -393,6 +404,19 @@ def VerifyReducerEpoch():
         tvm.transform.Pass: The verification pass.
     """
     return _ffi_api.VerifyReducerEpoch()  # type: ignore
+
+
+def PlanLocalRowReduce():
+    """Plan flattened Hexagon local rows with explicit FP order/replay ABI.
+
+    Independent of local.reducer epochs; does not fuse or erase producers.
+    """
+    return _ffi_api.PlanLocalRowReduce()
+
+
+def FuseLocalRowMap():
+    """Forward pure map SSA into explicit local-row plans, retaining replay stores."""
+    return _ffi_api.FuseLocalRowMap()
 
 
 def ReducerPlanAndMaterialize():

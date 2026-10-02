@@ -615,6 +615,15 @@ TIR_REGISTER_TL_TILE_OP(Copy, copy)
     .set_attr<TCallEffectKind>("TCallEffectKind",
                                Integer(CallEffectKind::kOpaque));
 
+TVM_REGISTER_OP("tl.tileop.transform")
+    .set_attr<TScriptPrinterName>("TScriptPrinterName", "transform")
+    .set_attr<OpBuilderFunc>("TLOpBuilder", [](Array<PrimExpr> args, Map<String,ObjectRef> ann) {
+      ann.Set("tl.logical_transform", Integer(1));
+      return Copy(args, ann);
+    })
+    .set_num_inputs(5)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque));
+
 TVM_REGISTER_OP("tl.tileop.async_copy")
     .set_attr<TScriptPrinterName>("TScriptPrinterName", "async_copy")
     .set_attr<OpBuilderFunc>("TLOpBuilder",

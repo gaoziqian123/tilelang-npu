@@ -318,7 +318,11 @@ class JITKernel(Generic[_P, _T]):
         target = self.target
         compile_flags = self.compile_flags
 
-        if execution_backend == "tvm_ffi":
+        if execution_backend == "aot":
+            from tilelang.jit.adapter.aot import AOTKernelAdapter
+
+            adapter = create_adapter(AOTKernelAdapter, artifact=artifact, result_idx=out_idx)
+        elif execution_backend == "tvm_ffi":
             # Use TVMFFIKernelAdapter for interoperability with PyTorch via DLPack.
             # But we need to ensure that the runtime is enabled and the runtime module is not None.
             assert artifact.rt_mod is not None, "tvm_ffi backend requires a runtime module."
